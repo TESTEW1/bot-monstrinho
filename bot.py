@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 import asyncio
 import os
+from datetime import timedelta
 
 # ================= INTENTS =================
 
@@ -28,6 +29,7 @@ CANAL_LIBERACAO = "✅・chat-staff-liberação"
 CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
+CANAL_ADVERTENCIAS = "⚠️・advertências" # Canal para registro de punições
 
 # GIFs
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -52,6 +54,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ============== DADOS =================
 
 tickets = {}
+avisos_usuarios = {} # Dicionário para contar avisos: {id_do_usuario: quantidade}
 
 # ============== PALAVRAS PROIBIDAS =================
 
@@ -62,6 +65,32 @@ PALAVRAS_PROIBIDAS = [
     "filho da puta","se mata","se fode","fdp","vsf","krl","pqp","prr","tmnc",
     "buceta","carai","karalho"
 ]
+
+# ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
+
+class LiberarCastigoView(discord.ui.View):
+    def __init__(self, membro_id: int):
+        super().__init__(timeout=None)
+        self.membro_id = membro_id
+
+    @discord.ui.button(label="🔓 Remover Castigo", style=discord.ButtonStyle.success, custom_id="remover_castigo")
+    async def remover(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.moderate_members:
+            return await interaction.response.send_message("❌ Apenas a staff pode remover castigos!", ephemeral=True)
+        
+        guild = interaction.guild
+        membro = guild.get_member(self.membro_id)
+        
+        if membro:
+            await membro.timeout(None)
+            avisos_usuarios[self.membro_id] = 0 # Reseta os avisos ao liberar
+            await interaction.response.send_message(f"✅ Castigo de {membro.mention} removido com sucesso!", ephemeral=True)
+            
+            canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+            if canal_geral:
+                await canal_geral.send(f"⚠️ **{membro.mention} foi liberado pela staff, mas continue se comportando! 🐲💚**")
+        else:
+            await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
 
 # ============== VIEW DE APROVAÇÃO =================
 
@@ -236,6 +265,7 @@ async def on_ready():
 
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
+    bot.add_view(LiberarCastigoView(0)) # Registra a view para botões persistentes
 
     for guild in bot.guilds:
         canal = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
@@ -260,7 +290,22 @@ async def on_member_join(member):
             view=AprovarMembroView(member.id)
         )
 
-# ============== CENSURA + CATÁLOGO =================
+# ============== LOGS DE MENSAGENS APAGADAS =================
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot:
+        return
+    
+    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
+    if canal_log:
+        embed = discord.Embed(title="🗑️ Mensagem Deletada", color=discord.Color.red())
+        embed.add_field(name="Autor:", value=message.author.mention, inline=True)
+        embed.add_field(name="Canal:", value=message.channel.mention, inline=True)
+        embed.add_field(name="Conteúdo:", value=message.content or "Nenhum conteúdo de texto.", inline=False)
+        await canal_log.send(embed=embed)
+
+# ============== CENSURA + CATÁLOGO + ADVERTÊNCIAS =================
 
 @bot.event
 async def on_message(message):
@@ -289,10 +334,36 @@ async def on_message(message):
     for palavra in PALAVRAS_PROIBIDAS:
         if palavra in texto:
             await message.delete()
-            await message.channel.send(f"😳🐲 {message.author.mention} palavrão não podeee 😭💚")
+            
+            # Gerenciamento de Advertências
+            user_id = message.author.id
+            avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
+            qtd = avisos_usuarios[user_id]
+            
+            canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
+
+            if qtd == 1:
+                await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
+            elif qtd == 2:
+                await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
+            elif qtd >= 3:
+                try:
+                    # Aplica castigo de 1 dia (timeout)
+                    await message.author.timeout(timedelta(days=1), reason="Acúmulo de 3 advertências por palavreado.")
+                    
+                    if canal_adv:
+                        await canal_adv.send(
+                            f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} atingiu 3 advertências e foi silenciado por 1 dia.",
+                            view=LiberarCastigoView(user_id)
+                        )
+                    
+                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
+                except:
+                    await message.channel.send(f"❌ Erro ao silenciar {message.author.mention}. Verifique minhas permissões!")
+            
             return
 
     await bot.process_commands(message)
 
 # ============== START =================
-bot.run(os.getenv("TOKEN"))
+bot.run(TOKEN)
