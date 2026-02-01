@@ -40,9 +40,6 @@ CARGO_MEMBROS = "Membros. 🦇"
 CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
-CARGO_EXTRA_1 = "────────・Membros・────────"
-CARGO_EXTRA_2 = "────────・Registro・────────"
-
 # ============== BOT SETUP =================
 
 intents = discord.Intents.default()
@@ -93,8 +90,6 @@ class AprovarMembroView(discord.ui.View):
         cargos = [
             discord.utils.get(guild.roles, name=CARGO_MEMBRO_NOVO),
             discord.utils.get(guild.roles, name=CARGO_MEMBROS),
-            discord.utils.get(guild.roles, name=CARGO_EXTRA_1),
-            discord.utils.get(guild.roles, name=CARGO_EXTRA_2),
         ]
 
         for c in cargos:
