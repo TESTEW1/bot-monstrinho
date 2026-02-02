@@ -310,7 +310,19 @@ async def on_message(message):
                         await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
                     elif qtd >= 3:
                         try:
+                            # Tenta mandar a DM brava/fofa antes do timeout
+                            try:
+                                await message.author.send(
+                                    "**Poxa vida... o Monstrinho tá MUITO triste com você!** 😡🐲🔥\n\n"
+                                    "Eu já tinha avisado que falar essas coisas feias não pode aqui na CSI! "
+                                    "Agora você vai ter que ficar de castigo por 1 dia pra pensar no que fez... "
+                                    "Poxa, o monstrinho só quer dar carinho e biscoitos, não me faça ficar bravo de novo, tá bom? 😭💚✨\n\n"
+                                    "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
+                                )
+                            except: pass # Se a DM estiver fechada, ignora
+
                             await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
+                            
                             if canal_adv:
                                 await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
                             await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
