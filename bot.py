@@ -54,7 +54,7 @@ PALAVRAS_PROIBIDAS = [
     "idiota", "burro", "imbecil", "otário", "retardado", "lixo", "nojento", 
     "arrombado", "viado", "bicha", "piranha", "vai se fuder", "vai se foder", 
     "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", 
-    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho", "cu"
+    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
 ]
 
 # ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
