@@ -44,7 +44,7 @@ CARGO_ANJO = "Anjo. 🦇"
 tickets = {}
 avisos_usuarios = {} 
 
-# ============== PALAVRAS PROIBIDAS (REMOVIDAS) =================
+# ============== PALAVRAS PROIBIDAS (LIMPO) =================
 
 PALAVRAS_PROIBIDAS = []
 
@@ -293,7 +293,7 @@ async def on_message(message):
                     await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
                     if canal_adv:
                         await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
-                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi silenciado por 1 dia! 🐲🔥")
+                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
                 except: pass
             return
 
