@@ -6,8 +6,6 @@ import os
 from datetime import timedelta
 
 # ================= INTENTS =================
-
-# ================= INTENTS =================
 # ============== BOT SETUP =================
 
 intents = discord.Intents.default()
@@ -20,16 +18,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ================= CONFIG =================
 
 TOKEN = os.getenv("TOKEN")
-
 DONO_ID = 769951556388257812
-
 
 CANAL_GERAL = "💭・chat-geral"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
 CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
-CANAL_ADVERTENCIAS = "⚠️・advertências" # Canal para registro de punições
+CANAL_ADVERTENCIAS = "⚠️・advertências" 
 
 # GIFs
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -42,25 +38,15 @@ CARGO_MEMBROS = "Membros. 🦇"
 CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
-# ============== BOT SETUP =================
-
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.guilds = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ============== DADOS =================
 
 tickets = {}
-avisos_usuarios = {} # Dicionário para contar avisos: {id_do_usuario: quantidade}
+avisos_usuarios = {} 
 
-# ============== PALAVRAS PROIBIDAS =================
+# ============== PALAVRAS PROIBIDAS (REMOVIDAS) =================
 
-PALAVRAS_PROIBIDAS = [
-
-]
+PALAVRAS_PROIBIDAS = []
 
 # ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
 
@@ -79,7 +65,7 @@ class LiberarCastigoView(discord.ui.View):
         
         if membro:
             await membro.timeout(None)
-            avisos_usuarios[self.membro_id] = 0 # Reseta os avisos ao liberar
+            avisos_usuarios[self.membro_id] = 0 
             await interaction.response.send_message(f"✅ Castigo de {membro.mention} removido com sucesso!", ephemeral=True)
             
             canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
@@ -148,7 +134,6 @@ class AprovarMembroView(discord.ui.View):
     async def aguardar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🕒 Em análise 💚🐲", ephemeral=True)
 
-        # ✅ NOVO — DM FOFINHA PRO MEMBRO
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
@@ -160,8 +145,6 @@ class AprovarMembroView(discord.ui.View):
     @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger, custom_id="recusar_membro")
     async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("❌ Recusado.", ephemeral=True)
-
-        # ✅ NOVO — EXPULSAR MEMBRO
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
@@ -199,23 +182,18 @@ class TicketSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-
         guild = interaction.guild
         user = interaction.user
         tipo = self.values[0]
-
         cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
-
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
-
         if cargo_mod:
             overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         categoria = interaction.channel.category
-
         canal = await guild.create_text_channel(
             name=f"🎟️┃{tipo}-{user.name}".lower(),
             category=categoria,
@@ -227,24 +205,13 @@ class TicketSelect(discord.ui.Select):
         if tipo == "namorados":
             await canal.send(f"💘 **EVENTO DOS NAMORADOS**\n\n{user.mention}")
             await canal.send(GIF_NAMORADOS)
-
         elif tipo == "catalogo":
-            await canal.send(
-                f"📸 **EVENTO CATÁLOGO**\n\n{user.mention}, envie **APENAS A FOTO**."
-            )
+            await canal.send(f"📸 **EVENTO CATÁLOGO**\n\n{user.mention}, envie **APENAS A FOTO**.")
             await canal.send(GIF_CATALOGO)
-
         elif tipo == "lider_torcida":
-            await canal.send(
-                f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida e o que pretende fazer no servidor! 💚🐲",
-                view=FecharTicketView()
-            )
-
+            await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🐲", view=FecharTicketView())
         else:
-            await canal.send(
-                f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}",
-                view=FecharTicketView()
-            )
+            await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
 
         await interaction.response.send_message("✅ Ticket criado! Veja o novo canal 😎🐲", ephemeral=True)
 
@@ -258,41 +225,27 @@ class TicketView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f"🐲 Ligado como {bot.user}")
-
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
-    bot.add_view(LiberarCastigoView(0)) # Registra a view para botões persistentes
+    bot.add_view(LiberarCastigoView(0))
 
     for guild in bot.guilds:
         canal = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
         if canal:
-            try:
-                await canal.purge(limit=20)
-            except:
-                pass
-
-            await canal.send(
-                "🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲",
-                view=TicketView()
-            )
+            try: await canal.purge(limit=5)
+            except: pass
+            await canal.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
             await canal.send(BANNER_TICKET)
 
 @bot.event
 async def on_member_join(member):
     canal_lib = discord.utils.get(member.guild.text_channels, name=CANAL_LIBERACAO)
     if canal_lib:
-        await canal_lib.send(
-            f"🔔 **NOVO MEMBRO**\n👤 {member.mention}\n\nA staff autoriza?",
-            view=AprovarMembroView(member.id)
-        )
-
-# ============== LOGS DE MENSAGENS APAGADAS =================
+        await canal_lib.send(f"🔔 **NOVO MEMBRO**\n👤 {member.mention}\n\nA staff autoriza?", view=AprovarMembroView(member.id))
 
 @bot.event
 async def on_message_delete(message):
-    if message.author.bot:
-        return
-    
+    if message.author.bot: return
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if canal_log:
         embed = discord.Embed(title="🗑️ Mensagem Deletada", color=discord.Color.red())
@@ -301,12 +254,9 @@ async def on_message_delete(message):
         embed.add_field(name="Conteúdo:", value=message.content or "Nenhum conteúdo de texto.", inline=False)
         await canal_log.send(embed=embed)
 
-# ============== CENSURA + CATÁLOGO + ADVERTÊNCIAS =================
-
 @bot.event
 async def on_message(message):
-    if message.author.bot:
-        return
+    if message.author.bot: return
 
     if message.channel.id in tickets:
         info = tickets.get(message.channel.id)
@@ -318,7 +268,6 @@ async def on_message(message):
                     for at in message.attachments:
                         file = await at.to_file()
                         await canal_evento.send(file=file)
-
                 await message.channel.send("✅ Foto enviada! Fechando ticket...")
                 await asyncio.sleep(3)
                 await message.channel.delete()
@@ -330,12 +279,9 @@ async def on_message(message):
     for palavra in PALAVRAS_PROIBIDAS:
         if palavra in texto:
             await message.delete()
-            
-            # Gerenciamento de Advertências
             user_id = message.author.id
             avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
             qtd = avisos_usuarios[user_id]
-            
             canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
 
             if qtd == 1:
@@ -344,19 +290,11 @@ async def on_message(message):
                 await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
             elif qtd >= 3:
                 try:
-                    # Aplica castigo de 1 dia (timeout)
-                    await message.author.timeout(timedelta(days=1), reason="Acúmulo de 3 advertências por palavreado.")
-                    
+                    await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
                     if canal_adv:
-                        await canal_adv.send(
-                            f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} atingiu 3 advertências e foi silenciado por 1 dia.",
-                            view=LiberarCastigoView(user_id)
-                        )
-                    
-                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
-                except:
-                    await message.channel.send(f"❌ Erro ao silenciar {message.author.mention}. Verifique minhas permissões!")
-            
+                        await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
+                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi silenciado por 1 dia! 🐲🔥")
+                except: pass
             return
 
     await bot.process_commands(message)
