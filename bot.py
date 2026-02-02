@@ -39,7 +39,7 @@ CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 
-# --- ADICIONADO: CARGOS IMUNES (Nomes simplificados para evitar erro de caractere) ---
+# --- ADICIONADO: CARGOS IMUNES ---
 CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. 🦇", "Moderador. 🦇", "DIRETOR. 🦇"]
 
 # ============== DADOS =================
@@ -47,7 +47,7 @@ CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. 🦇", "Moderado
 tickets = {}
 avisos_usuarios = {} 
 
-# ============== PALAVRAS PROIBIDAS (RESTAURADAS) =================
+# ============== PALAVRAS PROIBIDAS =================
 
 PALAVRAS_PROIBIDAS = [
     "porra", "caralho", "merda", "bosta", "puta", "puto", "vadia", "desgraça", 
@@ -253,6 +253,25 @@ async def on_member_join(member):
         await canal_lib.send(f"🔔 **NOVO MEMBRO**\n👤 {member.mention}\n\nA staff autoriza?", view=AprovarMembroView(member.id))
 
 @bot.event
+async def on_member_remove(member):
+    """Evento disparado quando alguém sai do servidor"""
+    try:
+        mensagem_despedida = (
+            f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
+            f"Poxa, {member.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
+            f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
+            f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
+            f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
+            f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
+            f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
+            f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
+            f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
+        )
+        await member.send(mensagem_despedida)
+    except:
+        pass # Se a DM estiver fechada, o bot apenas ignora para não dar erro
+
+@bot.event
 async def on_message_delete(message):
     if message.author.bot: return
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
@@ -284,16 +303,11 @@ async def on_message(message):
                 tickets.pop(message.channel.id, None)
                 return
 
-    # --- CENSURA COM FILTRO DE STAFF MELHORADO ---
+    # --- CENSURA COM FILTRO DE STAFF ---
     texto = message.content.lower()
-    
-    # 1. IMUNIDADE POR ID (Você/Dono)
     eh_dono = message.author.id == DONO_ID
-    
-    # 2. IMUNIDADE POR CARGO (Verifica se qualquer cargo do autor está na lista imune)
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
 
-    # Só processa a censura se NÃO for dono e NÃO for staff
     if not eh_dono and not eh_staff:
         for palavra in PALAVRAS_PROIBIDAS:
             if palavra in texto:
@@ -310,7 +324,6 @@ async def on_message(message):
                         await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
                     elif qtd >= 3:
                         try:
-                            # Tenta mandar a DM brava/fofa antes do timeout
                             try:
                                 await message.author.send(
                                     "**Poxa vida... o Monstrinho tá MUITO triste com você!** 😡🐲🔥\n\n"
@@ -319,7 +332,7 @@ async def on_message(message):
                                     "Poxa, o monstrinho só quer dar carinho e biscoitos, não me faça ficar bravo de novo, tá bom? 😭💚✨\n\n"
                                     "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
                                 )
-                            except: pass # Se a DM estiver fechada, ignora
+                            except: pass
 
                             await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
                             
@@ -328,7 +341,7 @@ async def on_message(message):
                             await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
                         except: pass
                     return
-                except: pass # Evita crash se o bot não puder deletar
+                except: pass
 
     await bot.process_commands(message)
 
