@@ -39,14 +39,23 @@ CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 
+# --- ADICIONADO: CARGOS IMUNES ---
+CARGOS_IMUNES = ["Admin. 🦇", "Moderador. 🦇", "DIRETOR. 🦇"]
+
 # ============== DADOS =================
 
 tickets = {}
 avisos_usuarios = {} 
 
-# ============== PALAVRAS PROIBIDAS (LIMPO) =================
+# ============== PALAVRAS PROIBIDAS (RESTAURADAS) =================
 
-PALAVRAS_PROIBIDAS = []
+PALAVRAS_PROIBIDAS = [
+    "porra", "caralho", "merda", "bosta", "puta", "puto", "vadia", "desgraça", 
+    "idiota", "burro", "imbecil", "otário", "retardado", "lixo", "nojento", 
+    "arrombado", "viado", "bicha", "piranha", "vai se fuder", "vai se foder", 
+    "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", 
+    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
+]
 
 # ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
 
@@ -258,6 +267,7 @@ async def on_message_delete(message):
 async def on_message(message):
     if message.author.bot: return
 
+    # --- TICKET / CATALOGO ---
     if message.channel.id in tickets:
         info = tickets.get(message.channel.id)
         if info["tipo"] == "catalogo" and message.author.id == info["user"]:
@@ -274,28 +284,34 @@ async def on_message(message):
                 tickets.pop(message.channel.id, None)
                 return
 
+    # --- CENSURA COM FILTRO DE STAFF ---
     texto = message.content.lower()
+    
+    # Verifica se o autor possui algum dos cargos imunes
+    eh_staff = any(role.name in CARGOS_IMUNES for role in message.author.roles)
 
-    for palavra in PALAVRAS_PROIBIDAS:
-        if palavra in texto:
-            await message.delete()
-            user_id = message.author.id
-            avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
-            qtd = avisos_usuarios[user_id]
-            canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
+    # Só processa a censura se NÃO for staff
+    if not eh_staff:
+        for palavra in PALAVRAS_PROIBIDAS:
+            if palavra in texto:
+                await message.delete()
+                user_id = message.author.id
+                avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
+                qtd = avisos_usuarios[user_id]
+                canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
 
-            if qtd == 1:
-                await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
-            elif qtd == 2:
-                await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
-            elif qtd >= 3:
-                try:
-                    await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
-                    if canal_adv:
-                        await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
-                    await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
-                except: pass
-            return
+                if qtd == 1:
+                    await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
+                elif qtd == 2:
+                    await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
+                elif qtd >= 3:
+                    try:
+                        await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
+                        if canal_adv:
+                            await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
+                        await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
+                    except: pass
+                return
 
     await bot.process_commands(message)
 
