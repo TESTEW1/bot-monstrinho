@@ -255,26 +255,21 @@ async def on_member_join(member):
 @bot.event
 async def on_member_remove(member):
     """Evento disparado quando alguém sai do servidor"""
-    # Criamos a mensagem fofa e triste
-    mensagem_despedida = (
-        f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
-        f"Poxa, **{member.name}**, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
-        f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
-        f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
-        f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
-        f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
-        f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
-        f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
-        f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
-    )
-
-    # Tenta enviar para o privado. Se falhar (DM fechada), o bot não trava.
     try:
-        # Criamos uma tarefa para tentar enviar a mensagem imediatamente
+        mensagem_despedida = (
+            f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
+            f"Poxa, {member.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
+            f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
+            f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
+            f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
+            f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
+            f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
+            f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
+            f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
+        )
         await member.send(mensagem_despedida)
-        print(f"✅ Despedida enviada para {member.name}")
-    except Exception as e:
-        print(f"❌ Não consegui enviar DM para {member.name} (provavelmente DM fechada). Erro: {e}")
+    except:
+        pass
 
 @bot.event
 async def on_message_delete(message):
@@ -286,6 +281,28 @@ async def on_message_delete(message):
         embed.add_field(name="Canal:", value=message.channel.mention, inline=True)
         embed.add_field(name="Conteúdo:", value=message.content or "Nenhum conteúdo de texto.", inline=False)
         await canal_log.send(embed=embed)
+
+# ============== COMANDOS ADICIONAIS =================
+
+@bot.command()
+async def testepv(ctx):
+    """Comando para testar a mensagem de adeus no PV"""
+    mensagem_despedida = (
+        f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
+        f"Poxa, {ctx.author.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
+        f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
+        f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
+        f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
+        f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
+        f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
+        f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
+        f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
+    )
+    try:
+        await ctx.author.send(mensagem_despedida)
+        await ctx.send("✅ Enviei a mensagem no seu PV! Dá uma olhadinha lá 🐲💚")
+    except:
+        await ctx.send("❌ Não consegui enviar! Verifique se seu privado está aberto nas configurações de privacidade. 😭")
 
 @bot.event
 async def on_message(message):
@@ -338,9 +355,7 @@ async def on_message(message):
                                     "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
                                 )
                             except: pass
-
                             await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
-                            
                             if canal_adv:
                                 await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
                             await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
