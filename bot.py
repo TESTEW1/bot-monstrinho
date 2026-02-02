@@ -59,11 +59,7 @@ avisos_usuarios = {} # Dicionário para contar avisos: {id_do_usuario: quantidad
 # ============== PALAVRAS PROIBIDAS =================
 
 PALAVRAS_PROIBIDAS = [
-    "porra","caralho","merda","bosta","puta","puto","vadia","desgraça","idiota",
-    "burro","imbecil","otário","retardado","lixo","nojento","arrombado","viado",
-    "bicha","piranha","vai se fuder","vai se foder","vai tomar no cu","tomar no cu",
-    "filho da puta","se mata","se fode","fdp","vsf","krl","pqp","prr","tmnc",
-    "buceta","carai","karalho"
+
 ]
 
 # ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
