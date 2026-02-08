@@ -45,7 +45,17 @@ CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 
-CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. Bat", "Moderador. Bat", "DIRETOR. Bat"]
+CARGOS_IMUNES_NOMES = [
+    "Admin", 
+    "Moderador", 
+    "DIRETOR", 
+    "Admin. Bat", 
+    "Moderador. Bat", 
+    "DIRETOR. Bat",
+    "Admin. 🦇",
+    "Moderador. 🦇"
+]
+
 
 # ============== DADOS =================
 
