@@ -27,14 +27,14 @@ CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
-CANAL_DESABAFOS = "😮‍💨・desabafos" # Canal onde a censura será ignorada
-CANAL_ANJOS_LOG = "👼・chat-dos-anjos" # Nome do canal onde o log com o botão vai aparecer
+CANAL_DESABAFOS = "😮‍💨・desabafos"
+CANAL_CHAT_ANJO = "🪽・chat-anjo" # Canal de avisos para os anjos
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
 GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
 GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
-AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png" # Substitua pelo link real se tiver
+AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -43,7 +43,6 @@ CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 
-# --- ADICIONADO: CARGOS IMUNES ---
 CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. Bat", "Moderador. Bat", "DIRETOR. Bat"]
 
 # ============== DADOS =================
@@ -61,39 +60,7 @@ PALAVRAS_PROIBIDAS = [
     "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
 ]
 
-# ============== VIEW DE ASSUMIR TICKET (NOS ANJOS) =================
-
-class AssumirTicketAnjoView(discord.ui.View):
-    def __init__(self, canal_id: int):
-        super().__init__(timeout=None)
-        self.canal_id = canal_id
-
-    @discord.ui.button(label="🧤 Assumir Chamado", style=discord.ButtonStyle.primary, custom_id="assumir_anjo_btn")
-    async def assumir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Verifica se quem clicou é Anjo ou Staff
-        eh_anjo_ou_staff = any(role.name in CARGOS_IMUNES_NOMES or role.name == CARGO_ANJO for role in interaction.user.roles)
-        
-        if not eh_anjo_ou_staff:
-            return await interaction.response.send_message("❌ Apenas Anjos ou Staff podem assumir tickets!", ephemeral=True)
-
-        canal_ticket = interaction.guild.get_channel(self.canal_id)
-        if not canal_ticket:
-            return await interaction.response.send_message("❌ Esse ticket não existe mais.", ephemeral=True)
-
-        # Dá permissão ao anjo no canal do ticket
-        await canal_ticket.set_permissions(interaction.user, view_channel=True, send_messages=True, manage_channels=True)
-        
-        # Envia aviso no canal do ticket
-        await canal_ticket.send(f"✅ O Anjo {interaction.user.mention} assumiu este ticket e já vai te atender! 🐲💚")
-        
-        # Atualiza a mensagem no chat dos anjos
-        button.label = f"Assumido por {interaction.user.display_name}"
-        button.style = discord.ButtonStyle.secondary
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
 # ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
-
 class LiberarCastigoView(discord.ui.View):
     def __init__(self, membro_id: int):
         super().__init__(timeout=None)
@@ -103,15 +70,12 @@ class LiberarCastigoView(discord.ui.View):
     async def remover(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.moderate_members:
             return await interaction.response.send_message("❌ Apenas a staff pode remover castigos!", ephemeral=True)
-        
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
-        
         if membro:
             await membro.timeout(None)
             avisos_usuarios[self.membro_id] = 0 
             await interaction.response.send_message(f"✅ Castigo de {membro.mention} removido com sucesso!", ephemeral=True)
-            
             canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
             if canal_geral:
                 await canal_geral.send(f"⚠️ **{membro.mention} foi liberado pela staff, mas continue se comportando! 🐲💚**")
@@ -119,7 +83,6 @@ class LiberarCastigoView(discord.ui.View):
             await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
 
 # ============== VIEW DE APROVAÇÃO =================
-
 class AprovarMembroView(discord.ui.View):
     def __init__(self, membro_id: int):
         super().__init__(timeout=None)
@@ -134,57 +97,34 @@ class AprovarMembroView(discord.ui.View):
     @discord.ui.button(label="✅ Liberar", style=discord.ButtonStyle.success, custom_id="liberar_membro")
     async def liberar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
-
         if not membro:
             await interaction.followup.send("❌ Membro não encontrado.", ephemeral=True)
             return
-
-        cargos = [
-            discord.utils.get(guild.roles, name=CARGO_MEMBRO_NOVO),
-            discord.utils.get(guild.roles, name=CARGO_MEMBROS),
-        ]
-
+        cargos = [discord.utils.get(guild.roles, name=CARGO_MEMBRO_NOVO), discord.utils.get(guild.roles, name=CARGO_MEMBROS)]
         for c in cargos:
-            if c:
-                await membro.add_roles(c)
-
-        try:
-            await membro.send("AAAA 😭🐲💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
-        except:
-            pass
-
+            if c: await membro.add_roles(c)
+        try: await membro.send("AAAA 😭🐲💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
+        except: pass
         canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
         cargo_anjo = discord.utils.get(guild.roles, name=CARGO_ANJO)
         cargo_recrutador = discord.utils.get(guild.roles, name=CARGO_RECRUTADOR)
-
         mencoes = []
-        if cargo_anjo:
-            mencoes.append(cargo_anjo.mention)
-        if cargo_recrutador:
-            mencoes.append(cargo_recrutador.mention)
-
+        if cargo_anjo: mencoes.append(cargo_anjo.mention)
+        if cargo_recrutador: mencoes.append(cargo_recrutador.mention)
         if canal_geral:
-            await canal_geral.send(
-                f"AAAA 😭🐲💚 {membro.mention} foi LIBERADO!\n"
-                f"{' '.join(mencoes)} venham dar boas-vindas pro neném do monstrinhooo 🐲💚✨"
-            )
-
+            await canal_geral.send(f"AAAA 😭🐲💚 {membro.mention} foi LIBERADO!\n{' '.join(mencoes)} venham dar boas-vindas pro neném do monstrinhooo 🐲💚✨")
         await interaction.followup.send("✅ Liberado com sucesso!", ephemeral=True)
 
     @discord.ui.button(label="⏳ Aguardar", style=discord.ButtonStyle.secondary, custom_id="aguardar_membro")
     async def aguardar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🕒 Em análise 💚🐲", ephemeral=True)
-
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
-            try:
-                await member.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
-            except:
-                pass
+            try: await member.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
+            except: pass
 
     @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger, custom_id="recusar_membro")
     async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -192,10 +132,8 @@ class AprovarMembroView(discord.ui.View):
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
-            try:
-                await membro.kick(reason="Pedido de entrada recusado pela staff.")
-            except:
-                pass
+            try: await membro.kick(reason="Pedido de entrada recusado pela staff.")
+            except: pass
 
 # ============== TICKET =================
 
@@ -209,6 +147,40 @@ class FecharTicketView(discord.ui.View):
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
+# --- REAJUSTADO: View que fica no canal dos Anjos para assumir o ticket ---
+class ReivindicarAnjoView(discord.ui.View):
+    def __init__(self, canal_ticket_id: int):
+        super().__init__(timeout=None)
+        self.canal_ticket_id = canal_ticket_id
+
+    @discord.ui.button(label="🤝 Assumir Chamado", style=discord.ButtonStyle.success, custom_id="reivindicar_anjo")
+    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
+        eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
+        
+        if cargo_anjo not in interaction.user.roles and not eh_staff:
+            return await interaction.response.send_message("❌ Apenas um Anjo ou Staff pode fazer isso! 🪽", ephemeral=True)
+
+        canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
+        if not canal_ticket:
+            return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
+
+        # Dá permissão ao anjo no canal do ticket
+        await canal_ticket.set_permissions(interaction.user, view_channel=True, send_messages=True)
+        
+        # Avisa no canal do ticket que o anjo chegou
+        embed_no_ticket = discord.Embed(
+            description=f"✨ **O Anjo {interaction.user.mention} abriu as asinhas e chegou para te ajudar!** 🪽💚\n\nFique tranquilo(a), agora você está sob a proteção desse anjinho!",
+            color=0x00FF7F
+        )
+        await canal_ticket.send(embed=embed_no_ticket)
+        
+        # Desativa o botão no canal dos anjos
+        button.label = f"Assumido por {interaction.user.display_name}"
+        button.style = discord.ButtonStyle.secondary
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
 class TicketSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -218,6 +190,7 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(label="💘 Evento dos Namorados", value="namorados"),
             discord.SelectOption(label="📸 Evento Catálogo", value="catalogo"),
             discord.SelectOption(label="📣 Líder de Torcida", value="lider_torcida"),
+            discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"), 
         ]
         super().__init__(
             placeholder="🎟️ Selecione o tipo de ticket",
@@ -229,36 +202,52 @@ class TicketSelect(discord.ui.Select):
         guild = interaction.guild
         user = interaction.user
         tipo = self.values[0]
-        cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-        }
-        if cargo_mod:
-            overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        
+        if tipo == "anjos":
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            }
+        else:
+            cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            }
+            if cargo_mod:
+                overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         categoria = interaction.channel.category
         canal = await guild.create_text_channel(
-            name=f"🎟️┃{tipo}-{user.name}".lower(),
+            name=f"👼┃{tipo}-{user.name}".lower() if tipo == "anjos" else f"🎟️┃{tipo}-{user.name}".lower(),
             category=categoria,
             overwrites=overwrites
         )
 
         tickets[canal.id] = {"user": user.id, "tipo": tipo}
 
-        # --- ADICIONADO: LOG NO CHAT DOS ANJOS COM BOTÃO ---
-        canal_anjos = discord.utils.get(guild.text_channels, name=CANAL_ANJOS_LOG)
-        if canal_anjos:
-            embed_anjo = discord.Embed(
-                title="👼 Novo Chamado Angelical!",
-                description=f"O membro {user.mention} abriu um ticket do tipo: **{tipo.upper()}**\n\nClique no botão abaixo para assumir!",
-                color=0x00FF00,
-                timestamp=datetime.now()
+        if tipo == "anjos":
+            embed_user = discord.Embed(
+                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo, logo ele vai aparecer voando aqui para te dar todo o carinho e suporte do mundo! 🪽💚",
+                color=0xFFB6C1
             )
-            embed_anjo.set_footer(text="CSI - Sistema de Tickets")
-            await canal_anjos.send(embed=embed_anjo, view=AssumirTicketAnjoView(canal.id))
+            await canal.send(embed=embed_user, view=FecharTicketView())
+            
+            # REAJUSTADO: O botão agora vai para o canal de avisos dos anjos
+            canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
+            if canal_anjo_logs:
+                cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
+                embed_anjo = discord.Embed(
+                    title="🪽 Novo Chamado Angelical!",
+                    description=f"O(A) pequeno(a) {user.mention} abriu um ticket e precisa de acolhimento!\n\n📍 **Canal do Ticket:** {canal.mention}",
+                    color=0x87CEEB,
+                    timestamp=datetime.now()
+                )
+                embed_anjo.set_footer(text="CSI - Sistema de Anjos")
+                # O botão de reivindicar é enviado APENAS para o canal dos anjos
+                await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
 
-        if tipo == "namorados":
+        elif tipo == "namorados":
             await canal.send(f"💘 **EVENTO DOS NAMORADOS**\n\n{user.mention}")
             await canal.send(GIF_NAMORADOS)
         elif tipo == "catalogo":
@@ -301,7 +290,6 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    """Evento disparado quando alguém sai do servidor"""
     try:
         mensagem_despedida = (
             f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
@@ -323,30 +311,20 @@ async def on_message_delete(message):
     if message.author.bot: return
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if canal_log:
-        # Layout Estilo Loritta / Aprimorado
         embed = discord.Embed(
             title="📝 Mensagem de texto deletada", 
             description=f"**Canal de texto:** {message.channel.mention}\n\n**Mensagem:**",
-            color=0xFF0000, # Vermelho Loritta
+            color=0xFF0000,
             timestamp=datetime.now()
         )
-        
-        # O "quadro" de visualização da mensagem
         conteudo = message.content or "Mensagem sem texto (verifique se há mídia abaixo)"
         embed.add_field(name="\u200b", value=f"```\n{conteudo}\n```", inline=False)
-        
-        # --- ADICIONADO: SUPORTE PARA IMAGEM APAGADA ---
         if message.attachments:
-            # Pega a URL da primeira imagem anexada
             anexo = message.attachments[0]
             if any(anexo.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
                 embed.set_image(url=anexo.proxy_url)
-
-        # Miniatura do Monstrinho ou Autor (estilo Loritta usa o autor no topo)
         embed.set_author(name=f"{message.author}", icon_url=message.author.display_avatar.url)
-        embed.set_thumbnail(url=AVATAR_MONSTRINHO) # Foto do monstrinho no canto
-        
-        # Informações técnicas igual a imagem da Loritta
+        embed.set_thumbnail(url=AVATAR_MONSTRINHO)
         info_footer = (
             f"ID do usuário\n{message.author.id}\n\n"
             f"ID do servidor\n{message.guild.id}\n\n"
@@ -354,17 +332,11 @@ async def on_message_delete(message):
             f"ID da mensagem\n{message.id}"
         )
         embed.add_field(name="\u200b", value=f"**{info_footer}**", inline=False)
-        
-        # Rodapé final
         embed.set_footer(text=f"Feito com carinho pelo Monstrinho 🐲 • ID do usuário: {message.author.id}")
-        
         await canal_log.send(embed=embed)
-
-# ============== COMANDOS ADICIONAIS =================
 
 @bot.command()
 async def testepv(ctx):
-    """Comando para testar a mensagem de adeus no PV"""
     mensagem_despedida = (
         f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
         f"Poxa, {ctx.author.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
@@ -385,8 +357,6 @@ async def testepv(ctx):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
-
-    # --- TICKET / CATALOGO ---
     if message.channel.id in tickets:
         info = tickets.get(message.channel.id)
         if info["tipo"] == "catalogo" and message.author.id == info["user"]:
@@ -403,13 +373,10 @@ async def on_message(message):
                 tickets.pop(message.channel.id, None)
                 return
 
-    # --- CENSURA COM FILTRO DE STAFF E CANAL EXCEÇÃO ---
     texto = message.content.lower()
     eh_dono = message.author.id == DONO_ID
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
     eh_canal_desabafo = message.channel.name == CANAL_DESABAFOS
-
-    # Só aplica censura se NÃO for dono, NÃO for staff e NÃO for no canal de desabafos
     if not eh_dono and not eh_staff and not eh_canal_desabafo:
         for palavra in PALAVRAS_PROIBIDAS:
             if palavra in texto:
@@ -419,7 +386,6 @@ async def on_message(message):
                     avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
                     qtd = avisos_usuarios[user_id]
                     canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
-
                     if qtd == 1:
                         await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
                     elif qtd == 2:
@@ -442,7 +408,6 @@ async def on_message(message):
                         except: pass
                     return
                 except: pass
-
     await bot.process_commands(message)
 
 # ============== START =================
