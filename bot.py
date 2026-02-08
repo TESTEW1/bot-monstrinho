@@ -569,8 +569,15 @@ async def on_message(message):
             user_id = message.author.id
             pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 100
             
-            await message.reply(f"🎉 **PARABÉNS NENÉM!** 🎉\n\n{message.author.mention}, você foi muito rápido(a) e acertou! O Monstrinho está muito orgulhoso! 🐲💚\nVocê ganhou **100 Monstrinho-Coins**!\n\n{GIF_ACERTO_MONSTRINHO}")
-            
+            embed = discord.Embed(
+    title="🎉 PARABÉNS NENÉM! 🎉",
+    description=f"{message.author.mention}, você foi muito rápido(a) e acertou!\nO Monstrinho está muito orgulhoso! 🐲💚\n\nVocê ganhou **100 Monstrinho-Coins**!",
+    color=0x00FF7F
+)
+embed.set_image(url=GIF_ACERTO_MONSTRINHO)
+
+await message.reply(embed=embed)
+
             await atualizar_ranking(message.guild)
             return
 
