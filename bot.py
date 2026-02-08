@@ -43,7 +43,7 @@ CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 
 # --- ADICIONADO: CARGOS IMUNES ---
-CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. 🦇", "Moderador. 🦇", "DIRETOR. 🦇"]
+CARGOS_IMUNES_NOMES = ["Admin", "Moderador", "DIRETOR", "Admin. Bat", "Moderador. Bat", "DIRETOR. Bat"]
 
 # ============== DADOS =================
 
@@ -288,9 +288,16 @@ async def on_message_delete(message):
         )
         
         # O "quadro" de visualização da mensagem
-        conteudo = message.content or "Mensagem sem texto (apenas mídia)"
+        conteudo = message.content or "Mensagem sem texto (verifique se há mídia abaixo)"
         embed.add_field(name="\u200b", value=f"```\n{conteudo}\n```", inline=False)
         
+        # --- ADICIONADO: SUPORTE PARA IMAGEM APAGADA ---
+        if message.attachments:
+            # Pega a URL da primeira imagem anexada
+            anexo = message.attachments[0]
+            if any(anexo.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
+                embed.set_image(url=anexo.proxy_url)
+
         # Miniatura do Monstrinho ou Autor (estilo Loritta usa o autor no topo)
         embed.set_author(name=f"{message.author}", icon_url=message.author.display_avatar.url)
         embed.set_thumbnail(url=AVATAR_MONSTRINHO) # Foto do monstrinho no canto
