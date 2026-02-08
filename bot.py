@@ -26,6 +26,7 @@ CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
+CANAL_DESABAFOS = "😮‍💨・desabafos" # Canal onde a censura será ignorada
 
 # GIFs
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -147,7 +148,7 @@ class AprovarMembroView(discord.ui.View):
         membro = guild.get_member(self.membro_id)
         if membro:
             try:
-                await membro.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
+                await member.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
             except:
                 pass
 
@@ -276,10 +277,14 @@ async def on_message_delete(message):
     if message.author.bot: return
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if canal_log:
-        embed = discord.Embed(title="🗑️ Mensagem Deletada", color=discord.Color.red())
-        embed.add_field(name="Autor:", value=message.author.mention, inline=True)
-        embed.add_field(name="Canal:", value=message.channel.mention, inline=True)
-        embed.add_field(name="Conteúdo:", value=message.content or "Nenhum conteúdo de texto.", inline=False)
+        # Layout inspirado na Loritta
+        embed = discord.Embed(
+            title="📝 Mensagem de texto deletada", 
+            description=f"**Canal de texto:** {message.channel.mention}\n\n**Mensagem:**\n```\n{message.content or 'Mensagem sem texto (apenas mídia)'}\n```",
+            color=discord.Color.red()
+        )
+        embed.set_author(name=f"{message.author}", icon_url=message.author.display_avatar.url)
+        embed.set_footer(text=f"ID do usuário: {message.author.id} • ID da mensagem: {message.id}")
         await canal_log.send(embed=embed)
 
 # ============== COMANDOS ADICIONAIS =================
@@ -325,12 +330,14 @@ async def on_message(message):
                 tickets.pop(message.channel.id, None)
                 return
 
-    # --- CENSURA COM FILTRO DE STAFF ---
+    # --- CENSURA COM FILTRO DE STAFF E CANAL EXCEÇÃO ---
     texto = message.content.lower()
     eh_dono = message.author.id == DONO_ID
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
+    eh_canal_desabafo = message.channel.name == CANAL_DESABAFOS
 
-    if not eh_dono and not eh_staff:
+    # Só aplica censura se NÃO for dono, NÃO for staff e NÃO for no canal de desabafos
+    if not eh_dono and not eh_staff and not eh_canal_desabafo:
         for palavra in PALAVRAS_PROIBIDAS:
             if palavra in texto:
                 try:
