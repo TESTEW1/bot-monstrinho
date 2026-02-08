@@ -4,6 +4,7 @@ import random
 import asyncio
 import os
 from datetime import timedelta
+from datetime import datetime
 
 # ================= INTENTS =================
 # ============== BOT SETUP =================
@@ -28,10 +29,11 @@ CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
 CANAL_DESABAFOS = "😮‍💨・desabafos" # Canal onde a censura será ignorada
 
-# GIFs
+# GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
 GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
 GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
+AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png" # Substitua pelo link real se tiver
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -277,14 +279,34 @@ async def on_message_delete(message):
     if message.author.bot: return
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if canal_log:
-        # Layout inspirado na Loritta
+        # Layout Estilo Loritta / Aprimorado
         embed = discord.Embed(
             title="📝 Mensagem de texto deletada", 
-            description=f"**Canal de texto:** {message.channel.mention}\n\n**Mensagem:**\n```\n{message.content or 'Mensagem sem texto (apenas mídia)'}\n```",
-            color=discord.Color.red()
+            description=f"**Canal de texto:** {message.channel.mention}\n\n**Mensagem:**",
+            color=0xFF0000, # Vermelho Loritta
+            timestamp=datetime.now()
         )
+        
+        # O "quadro" de visualização da mensagem
+        conteudo = message.content or "Mensagem sem texto (apenas mídia)"
+        embed.add_field(name="\u200b", value=f"```\n{conteudo}\n```", inline=False)
+        
+        # Miniatura do Monstrinho ou Autor (estilo Loritta usa o autor no topo)
         embed.set_author(name=f"{message.author}", icon_url=message.author.display_avatar.url)
-        embed.set_footer(text=f"ID do usuário: {message.author.id} • ID da mensagem: {message.id}")
+        embed.set_thumbnail(url=AVATAR_MONSTRINHO) # Foto do monstrinho no canto
+        
+        # Informações técnicas igual a imagem da Loritta
+        info_footer = (
+            f"ID do usuário\n{message.author.id}\n\n"
+            f"ID do servidor\n{message.guild.id}\n\n"
+            f"ID do canal\n{message.channel.id}\n\n"
+            f"ID da mensagem\n{message.id}"
+        )
+        embed.add_field(name="\u200b", value=f"**{info_footer}**", inline=False)
+        
+        # Rodapé final
+        embed.set_footer(text=f"Feito com carinho pelo Monstrinho 🐲 • ID do usuário: {message.author.id}")
+        
         await canal_log.send(embed=embed)
 
 # ============== COMANDOS ADICIONAIS =================
