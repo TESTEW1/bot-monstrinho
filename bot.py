@@ -320,7 +320,7 @@ class AprovarMembroView(discord.ui.View):
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
-            try: await member.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
+            try: await membro.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
             except: pass
 
     @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger, custom_id="recusar_membro")
@@ -439,11 +439,17 @@ class TicketSelect(discord.ui.Select):
                 await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
 
         elif tipo == "namorados":
-            await canal.send(f"💘 **EVENTO DOS NAMORADOS**\n\n{user.mention}")
-            await canal.send(GIF_NAMORADOS)
+            embed_namo = discord.Embed(title="💘 EVENTO DOS NAMORADOS", color=0xFF69B4)
+            embed_namo.description = f"{user.mention}"
+            embed_namo.set_image(url=GIF_NAMORADOS)
+            await canal.send(embed=embed_namo)
+            
         elif tipo == "catalogo":
-            await canal.send(f"📸 **EVENTO CATÁLOGO**\n\n{user.mention}, envie **APENAS A FOTO**.")
-            await canal.send(GIF_CATALOGO)
+            embed_cat = discord.Embed(title="📸 EVENTO CATÁLOGO", color=0x00FFFF)
+            embed_cat.description = f"{user.mention}, envie **APENAS A FOTO**."
+            embed_cat.set_image(url=GIF_CATALOGO)
+            await canal.send(embed=embed_cat)
+            
         elif tipo == "lider_torcida":
             await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🐲", view=FecharTicketView())
         else:
@@ -474,7 +480,11 @@ async def on_ready():
             try: await canal.purge(limit=5)
             except: pass
             await canal.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
-            await canal.send(BANNER_TICKET)
+            
+            # Banner enviado em Embed para esconder o link
+            embed_banner = discord.Embed(color=0x2b2d31)
+            embed_banner.set_image(url=BANNER_TICKET)
+            await canal.send(embed=embed_banner)
 
 @bot.event
 async def on_member_join(member):
@@ -569,14 +579,13 @@ async def on_message(message):
             user_id = message.author.id
             pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 100
             
-            embed = discord.Embed(
-    title="🎉 PARABÉNS NENÉM! 🎉",
-    description=f"{message.author.mention}, você foi muito rápido(a) e acertou!\nO Monstrinho está muito orgulhoso! 🐲💚\n\nVocê ganhou **100 Monstrinho-Coins**!",
-    color=0x00FF7F
-)
-embed.set_image(url=GIF_ACERTO_MONSTRINHO)
-
-await message.reply(embed=embed)
+            embed_acerto = discord.Embed(
+                title="🎉 PARABÉNS NENÉM! 🎉",
+                description=f"{message.author.mention}, você foi muito rápido(a) e acertou!\nO Monstrinho está muito orgulhoso! 🐲💚\n\nVocê ganhou **100 Monstrinho-Coins**!",
+                color=0x00FF7F
+            )
+            embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
+            await message.reply(embed=embed_acerto)
 
             await atualizar_ranking(message.guild)
             return
@@ -611,30 +620,28 @@ await message.reply(embed=embed)
                     user_id = message.author.id
                     avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
                     qtd = avisos_usuarios[user_id]
-                    canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
                     if qtd == 1:
                         await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
                     elif qtd == 2:
                         await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
                     elif qtd >= 3:
                         try:
-                            try:
-                                await message.author.send(
-                                    "**Poxa vida... o Monstrinho tá MUITO triste com você!** 😡🐲🔥\n\n"
-                                    "Eu já tinha avisado que falar essas coisas feias não pode aqui na CSI! "
-                                    "Agora você vai ter que ficar de castigo por 1 dia pra pensar no que fez... "
-                                    "Poxa, o monstrinho só quer dar carinho e biscoitos, não me faça ficar bravo de novo, tá bom? 😭💚✨\n\n"
-                                    "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
-                                )
-                            except: pass
-                            await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado.")
-                            if canal_adv:
-                                await canal_adv.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.", view=LiberarCastigoView(user_id))
-                            await message.channel.send(f"❌ {message.author.mention} atingiu o limite de avisos e foi colocado de castigo por 1 dia! 🐲🔥")
+                            await message.author.send(
+                                "**Poxa vida... o Monstrinho tá MUITO triste com você!** 😡🐲🔥\n\n"
+                                "Eu já tinha avisado que falar essas coisas feias não pode aqui na CSI! "
+                                "Agora você vai ter que ficar de castigo por 1 dia pra pensar no que fez... "
+                                "Poxa, o monstrinho só quer dar carinho e biscoitos, não me faça ficar bravo de novo, tá bom? 😭💚✨\n\n"
+                                "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
+                            )
                         except: pass
+                        await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado")
+                        
+                        canal_staff = discord.utils.get(message.guild.text_channels, name=CANAL_LIBERACAO)
+                        if canal_staff:
+                            await canal_staff.send(f"🚨 **MEMBRO EM CASTIGO**\n👤 {message.author.mention} atingiu 3 avisos.\n\nDeseja liberar antes do tempo?", view=LiberarCastigoView(message.author.id))
                     return
                 except: pass
+
     await bot.process_commands(message)
 
-# ============== START =================
 bot.run(TOKEN)
