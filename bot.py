@@ -550,6 +550,7 @@ async def on_message(message):
                     
                     canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
                     
+                    # Avisos no CHAT LOCAL (onde a pessoa falou)
                     if qtd == 1:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **1º AVISO**. Xingamentos não são permitidos aqui! 😭💚", delete_after=15)
                     elif qtd == 2:
@@ -557,12 +558,13 @@ async def on_message(message):
                     elif qtd == 3:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **3º AVISO**. **ÚLTIMA CHANCE!** O próximo é castigo! 🔥🐲", delete_after=15)
                     
+                    # Aplicação de CASTIGO (4º aviso)
                     elif qtd >= 4:
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
                         avisos_usuarios[user_id] = 0 
                         
-                        # Mensagem fofa e triste no chat onde aconteceu o erro
-                        await message.channel.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.\n\n*Poxa... o Monstrinho ficou muito triste com o seu comportamento... espero que você volte melhor amanhã!* 🥺💔🐲", view=LiberarCastigoView(user_id))
+                        # Mensagem curta no CHAT LOCAL para informar a punição
+                        await message.channel.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.\n\n*Poxa... o Monstrinho ficou triste. Detalhes em {canal_adv.mention if canal_adv else 'advertências'}.* 🥺💔🐲", delete_after=20)
                         
                         try:
                             await message.author.send(f"**Poxa... o Monstrinho tá triste!** 😡🐲\nVocê ignorou todos os avisos e foi silenciado por 1 dia.")
@@ -570,7 +572,7 @@ async def on_message(message):
                         
                         await message.author.timeout(timedelta(days=1), reason="Atingiu o limite de 4 advertências por palavreado")
                         
-                        # Log no canal de advertências (Igual à imagem enviada)
+                        # Log detalhado EXCLUSIVO no canal de ADVERTÊNCIAS
                         if canal_adv:
                             embed_castigo = discord.Embed(
                                 title="🚨 BUM! CASTIGO APLICADO 🚨",
@@ -579,7 +581,7 @@ async def on_message(message):
                                 timestamp=datetime.now()
                             )
                             embed_castigo.set_thumbnail(url=AVATAR_MONSTRINHO)
-                            # Enviando com o botão de remover castigo
+                            # Enviando com o botão de remover castigo apenas aqui no log
                             await canal_adv.send(embed=embed_castigo, view=LiberarCastigoView(user_id))
 
                         if total_castigos_usuario[user_id] >= 5:
