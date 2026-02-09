@@ -29,6 +29,8 @@ CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
 CANAL_DESABAFOS = "😮‍💨・desabafos"
 CANAL_CHAT_ANJO = "🪽・chat-anjo"
+CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
+CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "ranking-monstrinho"
 
 # GIFs e Imagens
@@ -44,6 +46,8 @@ CARGO_MEMBROS = "Membros. 🦇"
 CARGO_MODERADOR = "Moderador. 🦇"
 CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
+CARGO_CUPIDOS = "Cupidos"
+CARGO_STAFF_EQUIPE = "Equipe Staff. 🦇"
 
 CARGOS_IMUNES_NOMES = [
     "Admin", 
@@ -61,131 +65,13 @@ CARGOS_IMUNES_NOMES = [
 
 tickets = {}
 avisos_usuarios = {} 
+total_castigos_usuario = {} # Contador de castigos total
 pontuacao_monstrinho = {} # Guardar os pontos
 jogo_em_andamento = {"pergunta": None, "resposta": None, "venceu": False}
 
 # Perguntas do Monstrinho
 LISTA_PERGUNTAS = [
-    ("Qual é o super-herói que tem medo de morcego?", "batman"),
-    ("Quem é o bruxo mais famoso de Hogwarts?", "harry potter"),
-    ("Qual o nome do encanador da Nintendo?", "mario"),
-    ("Quem é o melhor amigo do Bob Esponja?", "patrick estrela"),
-    ("Qual o filme do navio que afundou e fez todo mundo chorar?", "titanic"),
-    ("Quem canta “Billie Jean”?", "michael jackson"),
-    ("Qual o nome do robô dourado de Star Wars?", "c-3po"),
-    ("Quem é o rival do Goku?", "vegeta"),
-    ("Qual o jogo onde você constrói tudo com blocos?", "minecraft"),
-    ("Quem é o personagem principal de Shrek?", "shrek"),
-    ("Qual herói usa escudo?", "capitão américa"),
-    ("Quem canta “Shape of You”?", "ed sheeran"),
-    ("Qual o nome do dragão da Daenerys mais famoso?", "drogon"),
-    ("Quem é o dono do martelo Mjölnir?", "thor"),
-    ("Qual o pokémon elétrico mais famoso?", "pikachu"),
-    ("Quem é o palhaço vilão do Batman?", "coringa"),
-    ("Qual o nome do filme dos dinossauros?", "jurassic park"),
-    ("Quem é o melhor amigo do Woody?", "buzz lightyear"),
-    ("Qual o nome do vilão roxo da Marvel?", "thanos"),
-    ("Quem é o personagem amarelo que mora num abacaxi?", "bob esponja"),
-    ("Qual o carro mais famoso de Velozes e Furiosos?", "dodge charger"),
-    ("Quem canta “Bad Romance”?", "lady gaga"),
-    ("Qual o nome do mago de barba branca do Senhor dos Anéis?", "gandalf"),
-    ("Quem é o líder dos Vingadores?", "capitão américa"),
-    ("Qual o nome do planeta do Superman?", "krypton"),
-    ("Quem é o melhor amigo do Chaves?", "quico"),
-    ("Qual o nome do boneco assassino?", "chucky"),
-    ("Quem canta “Blinding Lights”?", "the weeknd"),
-    ("Qual o nome do detetive de chapéu e lupa?", "sherlock holmes"),
-    ("Quem é o rei dos monstros?", "godzilla"),
-    ("Qual o anime dos ninjas?", "naruto"),
-    ("Quem canta “Thriller”?", "michael jackson"),
-    ("Qual o nome do cachorro do Scooby-Doo?", "scooby-doo"),
-    ("Quem é o homem mais rápido da DC?", "flash"),
-    ("Qual o nome do vilão careca dos X-Men?", "magneto"),
-    ("Quem canta “Rolling in the Deep”?", "adele"),
-    ("Qual o nome do ogro verde famoso?", "shrek"),
-    ("Quem é o pai do Simba?", "mufasa"),
-    ("Qual o jogo do encanador que pula em tartarugas?", "super mario"),
-    ("Quem é o rei do pop?", "michael jackson"),
-    ("Qual o nome do rato mais famoso da Disney?", "mickey mouse"),
-    ("Quem canta “Baby”?", "justin bieber"),
-    ("Qual o nome da escola de magia do Harry Potter?", "hogwarts"),
-    ("Quem é o vilão principal do Homem-Aranha?", "duende verde"),
-    ("Qual o nome do robô que se apaixona no espaço?", "wall-e"),
-    ("Quem canta “Uptown Funk”?", "bruno mars"),
-    ("Qual o nome do amigo do Naruto que vira rival?", "sasuke"),
-    ("Quem é o deus da trapaça na Marvel?", "loki"),
-    ("Qual o nome do panda lutador de kung fu?", "po"),
-    ("Quem canta “Firework”?", "katy perry"),
-    ("Qual o nome do castelo da Disney?", "castelo da cinderela"),
-    ("Quem é o protagonista de Matrix?", "neo"),
-    ("Qual o nome do carro falante da Pixar?", "relâmpago mcqueen"),
-    ("Quem canta “Poker Face”?", "lady gaga"),
-    ("Qual o nome do alienígena azul que gosta de bicicleta?", "stitch"),
-    ("Quem é o melhor amigo do Homem de Ferro nos Vingadores?", "máquina de combate"),
-    ("Qual o nome do tubarão de Procurando Nemo?", "bruce"),
-    ("Quem canta “Hello”?", "adele"),
-    ("Qual o nome do vampiro que brilha no sol?", "edward cullen"),
-    ("Quem é o maior vilão de Star Wars?", "darth vader"),
-    ("Qual o nome do herói que encolhe?", "homem-formiga"),
-    ("Quem canta “Levitating”?", "dua lipa"),
-    ("Qual o nome do robô gigante dos Transformers?", "optimus prime"),
-    ("Quem é o melhor amigo do Shrek?", "burro"),
-    ("Qual o nome do desenho dos monstrinhos de bolso?", "pokémon"),
-    ("Quem canta “Shake It Off”?", "taylor swift"),
-    ("Qual o nome do herói cego da Marvel?", "demolidor"),
-    ("Quem é o líder das Tartarugas Ninja?", "leonardo"),
-    ("Qual o nome do filme do leão rei?", "o rei leão"),
-    ("Quem canta “Stay”?", "the kid laroi e justin bieber"),
-    ("Qual o nome do vilão verde do Homem-Aranha?", "duende verde"),
-    ("Quem é o bruxo de barba longa de Harry Potter?", "dumbledore"),
-    ("Qual o nome do jogo de tiro com bombinhas e parede?", "bomberman"),
-    ("Quem canta “Hips Don’t Lie”?", "shakira"),
-    ("Qual o nome do vilão que congela tudo?", "sr frio"),
-    ("Quem é o melhor amigo do Goku?", "kuririn"),
-    ("Qual o nome do planeta de Star Wars cheio de areia?", "tatooine"),
-    ("Quem canta “Waka Waka”?", "shakira"),
-    ("Qual o nome do filme dos carros que viram robôs?", "transformers"),
-    ("Quem é o herói com garras de metal?", "wolverine"),
-    ("Qual o nome do desenho dos carrinhos de corrida da Pixar?", "carros"),
-    ("Quem canta “Sorry”?", "justin bieber"),
-    ("Qual o nome do vilão roxo do Homem de Ferro 3?", "mandarim"),
-    ("Quem é o herói com escudo de vibranium?", "capitão américa"),
-    ("Qual o nome do filme do palhaço assassino do esgoto?", "it a coisa"),
-    ("Quem canta “Roar”?", "katy perry"),
-    ("Qual o nome do boneco de neve de Frozen?", "olaf"),
-    ("Quem é a irmã da Elsa?", "anna"),
-    ("Qual o nome do dragão de Como Treinar o Seu Dragão?", "banguela"),
-    ("Quem canta “Counting Stars”?", "onerepublic"),
-    ("Qual o nome do detetive de Pokémon?", "pikachu"),
-    ("Quem é o herói com arco e flecha dos Vingadores?", "gavião arqueiro"),
-    ("Qual o nome do filme do robô gigante contra monstros?", "círculo de fogo"),
-    ("Quem canta “Believer”?", "imagine dragons"),
-    ("Qual o nome do personagem verde que odeia o Natal?", "grinch"),
-    ("Quem é o melhor amigo do Homem-Aranha?", "ned"),
-    ("Qual o nome do mago de oz?", "o mágico de oz"),
-    ("Quem canta “As It Was”?", "harry styles"),
-    ("Qual o nome do vilão careca do Superman?", "lex luthor"),
-    ("Quem é o herói bilionário da Marvel?", "homem de ferro"),
-    ("Qual o nome do desenho do menino com relógio alienígena?", "ben 10"),
-    ("Quem canta “Take on Me”?", "a-ha"),
-    ("Qual o nome do robô de exterminador do futuro?", "t-800"),
-    ("Quem é o melhor amigo do sonic?", "tails"),
-    ("Qual o nome do vilão de pantera negra?", "killmonger"),
-    ("Quem canta “Old Town Road”?", "lil nas x"),
-    ("Qual o nome do cavaleiro negro de star wars?", "darth vader"),
-    ("Quem é o rei de wakanda?", "pantera negra"),
-    ("Qual o nome do jogo de batalha com 100 jogadores?", "fortnite"),
-    ("Quem canta “Radioactive”?", "imagine dragons"),
-    ("Qual o nome do personagem que fala “eu sou groot”?", "groot"),
-    ("Quem é o vilão de vingadores ultimato?", "thanos"),
-    ("Qual o nome do desenho dos heróis adolescentes da dc?", "jovens titãs"),
-    ("Quem canta “senorita”?", "shawn mendes e camila cabello"),
-    ("Qual o nome do alien do filme de terror no espaço?", "xenomorfo"),
-    ("Quem é o herói que solta teia?", "homem-aranha"),
-    ("Qual o nome do dragão de a casa do dragão mais famoso?", "vhagar"),
-    ("Quem canta “happy”?", "pharrell williams"),
-    ("Qual o nome do jogo do urso animatrônico de terror?", "five nights at freddy’s"),
-    ("Quem é o herói que vira gigante verde quando fica bravo?", "hulk")
+    ("Qual é o super-herói que tem medo de morcego?", "batman")
 ]
 
 # ============== PALAVRAS PROIBIDAS =================
@@ -224,7 +110,6 @@ async def atualizar_ranking(guild):
     embed.description += f"\n\n{texto_rank if texto_rank else 'Ninguém pontuou ainda... 🥺'}"
     embed.set_footer(text="CSI - Sistema de Jogos")
 
-    # Tenta achar a última mensagem do bot para editar, ou manda uma nova e limpa o canal
     await canal_rank.purge(limit=5)
     await canal_rank.send(embed=embed)
 
@@ -247,7 +132,6 @@ async def disparar_pergunta(guild):
     
     msg_pergunta = await canal_geral.send(embed=embed)
 
-    # Espera 5 minutos ou até alguém ganhar
     for _ in range(300): # 300 segundos = 5 min
         if jogo_em_andamento["venceu"]: break
         await asyncio.sleep(1)
@@ -258,16 +142,16 @@ async def disparar_pergunta(guild):
 
 # ============== LOOP DO JOGO =================
 
-@tasks.loop(hours=3) # Base de 3 horas, mas vamos variar dentro do task
+@tasks.loop(hours=3)
 async def loop_jogo_monstrinho():
-    # Espera um tempo aleatório entre 0 e 2 horas extras (totalizando 3 a 5 horas)
     espera_extra = random.randint(0, 7200)
     await asyncio.sleep(espera_extra)
     
     for guild in bot.guilds:
         await disparar_pergunta(guild)
 
-# ============== VIEW DE LIBERAÇÃO DE ADVERTÊNCIA =================
+# ============== VIEWS =================
+
 class LiberarCastigoView(discord.ui.View):
     def __init__(self, membro_id: int):
         super().__init__(timeout=None)
@@ -289,7 +173,6 @@ class LiberarCastigoView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
 
-# ============== VIEW DE APROVAÇÃO =================
 class AprovarMembroView(discord.ui.View):
     def __init__(self, membro_id: int):
         super().__init__(timeout=None)
@@ -384,6 +267,36 @@ class ReivindicarAnjoView(discord.ui.View):
         button.disabled = True
         await interaction.response.edit_message(view=self)
 
+class ReivindicarCupidoView(discord.ui.View):
+    def __init__(self, canal_ticket_id: int):
+        super().__init__(timeout=None)
+        self.canal_ticket_id = canal_ticket_id
+
+    @discord.ui.button(label="🏹 Assumir Ticket", style=discord.ButtonStyle.danger, custom_id="reivindicar_cupido")
+    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        cargo_cupido = discord.utils.get(interaction.guild.roles, name=CARGO_CUPIDOS)
+        eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
+        
+        if cargo_cupido not in interaction.user.roles and not eh_staff:
+            return await interaction.response.send_message("❌ Apenas um Cupido ou Staff pode fazer isso! 🏹💘", ephemeral=True)
+
+        canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
+        if not canal_ticket:
+            return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
+
+        await canal_ticket.set_permissions(interaction.user, view_channel=True, send_messages=True)
+        
+        embed_no_ticket = discord.Embed(
+            description=f"🏹 **O Cupido {interaction.user.mention} preparou o arco e chegou para te ajudar com o amor!** 💘✨\n\nAguarde, o romance está no ar!",
+            color=0xFF69B4
+        )
+        await canal_ticket.send(embed=embed_no_ticket)
+        
+        button.label = f"Assumido por {interaction.user.display_name}"
+        button.style = discord.ButtonStyle.secondary
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
 class TicketSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -406,23 +319,20 @@ class TicketSelect(discord.ui.Select):
         user = interaction.user
         tipo = self.values[0]
         
-        if tipo == "anjos":
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-            }
-        else:
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+        }
+
+        if tipo != "anjos" and tipo != "namorados":
             cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-            }
             if cargo_mod:
                 overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         categoria = interaction.channel.category
+        pref = "👼┃" if tipo == "anjos" else "💘┃" if tipo == "namorados" else "🎟️┃"
         canal = await guild.create_text_channel(
-            name=f"👼┃{tipo}-{user.name}".lower() if tipo == "anjos" else f"🎟️┃{tipo}-{user.name}".lower(),
+            name=f"{pref}{tipo}-{user.name}".lower(),
             category=categoria,
             overwrites=overwrites
         )
@@ -431,28 +341,36 @@ class TicketSelect(discord.ui.Select):
 
         if tipo == "anjos":
             embed_user = discord.Embed(
-                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo, logo ele vai aparecer voando aqui para te dar todo o carinho e suporte do mundo! 🪽💚",
+                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui! 🪽💚",
                 color=0xFFB6C1
             )
             await canal.send(embed=embed_user, view=FecharTicketView())
-            
             canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
             if canal_anjo_logs:
                 cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
                 embed_anjo = discord.Embed(
                     title="🪽 Novo Chamado Angelical!",
-                    description=f"O(A) pequeno(a) {user.mention} abriu um ticket e precisa de acolhimento!\n\n📍 **Canal do Ticket:** {canal.mention}",
+                    description=f"O(A) pequeno(a) {user.mention} precisa de acolhimento!\n📍 **Canal:** {canal.mention}",
                     color=0x87CEEB,
                     timestamp=datetime.now()
                 )
-                embed_anjo.set_footer(text="CSI - Sistema de Anjos")
                 await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
 
         elif tipo == "namorados":
-            embed_namo = discord.Embed(title="💘 EVENTO DOS NAMORADOS", color=0xFF69B4)
-            embed_namo.description = f"{user.mention}"
+            embed_namo = discord.Embed(title="💘 EVENTO DOS NAMORADOS", description=f"Oii {user.mention}! Um Cupido foi chamado para te flechar! ✨🏹", color=0xFF69B4)
             embed_namo.set_image(url=GIF_NAMORADOS)
-            await canal.send(embed=embed_namo)
+            await canal.send(embed=embed_namo, view=FecharTicketView())
+            
+            canal_cupido_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_CUPIDOS)
+            if canal_cupido_logs:
+                cargo_cupido_mencao = discord.utils.get(guild.roles, name=CARGO_CUPIDOS)
+                embed_cupido = discord.Embed(
+                    title="🏹 Novo Ticket de Amor!",
+                    description=f"O(A) {user.mention} abriu um ticket dos namorados! Vá espalhar o amor! 💘\n📍 **Canal:** {canal.mention}",
+                    color=0xFF1493,
+                    timestamp=datetime.now()
+                )
+                await canal_cupido_logs.send(content=cargo_cupido_mencao.mention if cargo_cupido_mencao else None, embed=embed_cupido, view=ReivindicarCupidoView(canal.id))
             
         elif tipo == "catalogo":
             embed_cat = discord.Embed(title="📸 EVENTO CATÁLOGO", color=0x00FFFF)
@@ -465,7 +383,7 @@ class TicketSelect(discord.ui.Select):
         else:
             await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
 
-        await interaction.response.send_message("✅ Ticket criado! Veja o novo canal 😎🐲", ephemeral=True)
+        await interaction.response.send_message("✅ Ticket criado com sucesso! 💚🐲", ephemeral=True)
 
 class TicketView(discord.ui.View):
     def __init__(self):
@@ -490,8 +408,6 @@ async def on_ready():
             try: await canal.purge(limit=5)
             except: pass
             await canal.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
-            
-            # Banner enviado em Embed para esconder o link
             embed_banner = discord.Embed(color=0x2b2d31)
             embed_banner.set_image(url=BANNER_TICKET)
             await canal.send(embed=embed_banner)
@@ -509,16 +425,10 @@ async def on_member_remove(member):
             f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
             f"Poxa, {member.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
             f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
-            f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
-            f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
-            f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
-            f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
-            f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
             f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
         )
         await member.send(mensagem_despedida)
-    except:
-        pass
+    except: pass
 
 @bot.event
 async def on_message_delete(message):
@@ -526,55 +436,34 @@ async def on_message_delete(message):
     canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if canal_log:
         embed = discord.Embed(
-            title="📝 Mensagem de texto deletada", 
-            description=f"**Canal de texto:** {message.channel.mention}\n\n**Mensagem:**",
+            title="📝 Mensagem Deletada", 
             color=0xFF0000,
             timestamp=datetime.now()
         )
-        conteudo = message.content or "Mensagem sem texto (verifique se há mídia abaixo)"
-        embed.add_field(name="\u200b", value=f"```\n{conteudo}\n```", inline=False)
+        embed.set_author(name=f"Autor: {message.author.name}", icon_url=message.author.display_avatar.url)
+        embed.add_field(name="📍 Canal", value=message.channel.mention, inline=True)
+        embed.add_field(name="👤 ID do Autor", value=f"`{message.author.id}`", inline=True)
+        
+        conteudo = message.content or "Mensagem sem texto ou apenas mídia."
+        embed.add_field(name="💬 Conteúdo", value=f"```\n{conteudo}\n```", inline=False)
+        
         if message.attachments:
             anexo = message.attachments[0]
             if any(anexo.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
                 embed.set_image(url=anexo.proxy_url)
-        embed.set_author(name=f"{message.author}", icon_url=message.author.display_avatar.url)
+
         embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-        info_footer = (
-            f"ID do usuário\n{message.author.id}\n\n"
-            f"ID do servidor\n{message.guild.id}\n\n"
-            f"ID do canal\n{message.channel.id}\n\n"
-            f"ID da mensagem\n{message.id}"
-        )
-        embed.add_field(name="\u200b", value=f"**{info_footer}**", inline=False)
-        embed.set_footer(text=f"Feito com carinho pelo Monstrinho 🐲 • ID do usuário: {message.author.id}")
+        embed.set_footer(text=f"Monstrinho Logs 🐲")
         await canal_log.send(embed=embed)
 
-# ============== COMANDO JOGO (DONO) =================
+# ============== COMANDOS =================
+
 @bot.command()
 async def jogo(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
     await ctx.send("🐲 Iniciando rodada de teste para você, papai!")
     await disparar_pergunta(ctx.guild)
-
-@bot.command()
-async def testepv(ctx):
-    mensagem_despedida = (
-        f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
-        f"Poxa, {ctx.author.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
-        f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
-        f"Saiba que enquanto você caminha por novos mundos aí fora, eu vou estar aqui cuidando de cada cantinho do nosso clã. "
-        f"Vou fazer de tudo pra CSI ficar ainda mais incrível, cheia de brilho e amor, só pra que se um dia você decidir voltar, "
-        f"tenha o **retorno triunfante** que você merece! ✨🐲\n\n"
-        f"Vou ficar aqui torcendo muito pelo seu sucesso, tá bom? Não esquece que você já foi um pedacinho desse sonho verde! "
-        f"Vai lá brilhar, mas saiba que se bater a saudade, meu abraço de monstrinho e um biscoito quentinho vão estar sempre te esperando! 🫂🍪✨\n\n"
-        f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
-    )
-    try:
-        await ctx.author.send(mensagem_despedida)
-        await ctx.send("✅ Enviei a mensagem no seu PV! Dá uma olhadinha lá 🐲💚")
-    except:
-        await ctx.send("❌ Não consegui enviar! Verifique se seu privado está aberto nas configurações de privacidade. 😭")
 
 @bot.event
 async def on_message(message):
@@ -591,12 +480,11 @@ async def on_message(message):
             
             embed_acerto = discord.Embed(
                 title="🎉 PARABÉNS NENÉM! 🎉",
-                description=f"{message.author.mention}, você foi muito rápido(a) e acertou!\nO Monstrinho está muito orgulhoso! 🐲💚\n\nVocê ganhou **100 Monstrinho-Coins**!",
+                description=f"{message.author.mention}, você acertou!\nVocê ganhou **100 Monstrinho-Coins**! 🐲💚",
                 color=0x00FF7F
             )
             embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
             await message.reply(embed=embed_acerto)
-
             await atualizar_ranking(message.guild)
             return
 
@@ -619,10 +507,10 @@ async def on_message(message):
 
     # --- PALAVRAS PROIBIDAS ---
     texto = message.content.lower()
-    eh_dono = message.author.id == DONO_ID
-    eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
+    eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
     eh_canal_desabafo = message.channel.name == CANAL_DESABAFOS
-    if not eh_dono and not eh_staff and not eh_canal_desabafo:
+    
+    if not eh_imune and not eh_canal_desabafo:
         for palavra in PALAVRAS_PROIBIDAS:
             if palavra in texto:
                 try:
@@ -630,25 +518,33 @@ async def on_message(message):
                     user_id = message.author.id
                     avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
                     qtd = avisos_usuarios[user_id]
+                    
+                    canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
+                    
                     if qtd == 1:
-                        await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
+                        if canal_adv: await canal_adv.send(f"⚠️ {message.author.mention} recebeu o **1º AVISO**. Xingamentos não são permitidos! 😭💚")
                     elif qtd == 2:
-                        await message.channel.send(f"⚠️ {message.author.mention} você recebeu o **2º AVISO**. Se continuar, será silenciado por 1 dia! 😡🐲")
+                        if canal_adv: await canal_adv.send(f"⚠️ {message.author.mention} recebeu o **2º AVISO**. Se continuar, será silenciado! 😡🐲")
                     elif qtd >= 3:
+                        # Processo de Castigo
+                        total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
+                        avisos_usuarios[user_id] = 0 # Reseta avisos após o castigo
+                        
                         try:
-                            await message.author.send(
-                                "**Poxa vida... o Monstrinho tá MUITO triste com você!** 😡🐲🔥\n\n"
-                                "Eu já tinha avisado que falar essas coisas feias não pode aqui na CSI! "
-                                "Agora você vai ter que ficar de castigo por 1 dia pra pensar no que fez... "
-                                "Poxa, o monstrinho só quer dar carinho e biscoitos, não me faça ficar bravo de novo, tá bom? 😭💚✨\n\n"
-                                "*Espero que quando você voltar, seu coração esteja limpinho de palavras ruins!*"
-                            )
+                            await message.author.send(f"**Poxa... o Monstrinho tá triste!** 😡🐲\nVocê foi silenciado por 1 dia por excesso de avisos.")
                         except: pass
+                        
                         await message.author.timeout(timedelta(days=1), reason="3 advertências por palavreado")
                         
-                        canal_staff = discord.utils.get(message.guild.text_channels, name=CANAL_LIBERACAO)
-                        if canal_staff:
-                            await canal_staff.send(f"🚨 **MEMBRO EM CASTIGO**\n👤 {message.author.mention} atingiu 3 avisos.\n\nDeseja liberar antes do tempo?", view=LiberarCastigoView(message.author.id))
+                        if canal_adv:
+                            await canal_adv.send(f"🚨 **MEMBRO EM CASTIGO**\n👤 {message.author.mention} foi silenciado por 1 dia.\n🔢 Total de castigos acumulados: `{total_castigos_usuario[user_id]}`")
+
+                        # Alerta Staff 5 Castigos
+                        if total_castigos_usuario[user_id] >= 5:
+                            canal_staff = discord.utils.get(message.guild.text_channels, name=CANAL_CHAT_STAFF_GERAL)
+                            cargo_staff = discord.utils.get(message.guild.roles, name=CARGO_STAFF_EQUIPE)
+                            if canal_staff:
+                                await canal_staff.send(f"🚨 {cargo_staff.mention if cargo_staff else '@Staff'}! O membro {message.author.mention} atingiu o limite de **5 CASTIGOS**. Tomem uma atitude! 🐲🔥")
                     return
                 except: pass
 
