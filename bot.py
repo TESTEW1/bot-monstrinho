@@ -308,7 +308,7 @@ class ReivindicarAnjoView(discord.ui.View):
             description=f"✨ **O Anjo {interaction.user.mention} abriu as asinhas e chegou para te ajudar!** 🪽💚\n\nFique tranquilo(a), agora você está sob a proteção desse anjinho!",
             color=0x00FF7F
         )
-        await canal_ticket.send(embed=embed_no_ticket)
+        await canal_ticket.send(embed_no_ticket)
         
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
@@ -338,7 +338,7 @@ class ReivindicarCupidoView(discord.ui.View):
             description=f"🏹 **O Cupido {interaction.user.mention} preparou o arco e chegou para te ajudar com o amor!** 💘✨\n\nAguarde, o romance está no ar!",
             color=0xFF69B4
         )
-        await canal_ticket.send(embed=embed_no_ticket)
+        await canal_ticket.send(embed_no_ticket)
         
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
@@ -513,6 +513,17 @@ async def jogo(ctx):
         return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
     await ctx.send("🐲 Iniciando rodada de teste para você, papai!")
     await disparar_pergunta(ctx.guild)
+
+@bot.command()
+async def resetar_ranking(ctx):
+    if ctx.author.id != DONO_ID:
+        return await ctx.send("❌ Só meu papai pode resetar o ranking! 🐲😤")
+    
+    global pontuacao_monstrinho
+    pontuacao_monstrinho = {} # Limpa o dicionário de pontos
+    
+    await atualizar_ranking(ctx.guild)
+    await ctx.send("✅ **O Ranking de Monstrinho-Coins foi resetado com sucesso!** 🐲✨ Todos voltam ao zero!")
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
