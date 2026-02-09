@@ -1,3 +1,4 @@
+from jogos import sortear_pergunta, atualizar_ranking, jogo_em_andamento, pontuacao_monstrinho
 import discord
 from discord.ext import commands, tasks
 import random
