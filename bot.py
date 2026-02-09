@@ -563,8 +563,14 @@ async def on_message(message):
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
                         avisos_usuarios[user_id] = 0 
                         
-                        # Mensagem curta no CHAT LOCAL para informar a punição
-                        await message.channel.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.\n\n*Poxa... o Monstrinho ficou triste. Detalhes em {canal_adv.mention if canal_adv else 'advertências'}.* 🥺💔🐲", delete_after=20)
+                        # Mensagem fofa e triste no CHAT LOCAL conforme solicitado
+                        mensagem_punicao_local = (
+                            f"🚨 **USUÁRIO PUNIDO**\n"
+                            f"O membro {message.author.mention} foi silenciado por 1 dia.\n\n"
+                            f"*Poxa... o Monstrinho ficou com o coraçãozinho partido com o seu comportamento... 💔🐉\n"
+                            f"Agora a nossa Staff vai analisar a sua situação com muito cuidado. Esperamos que você volte melhor!* 🥺✨"
+                        )
+                        await message.channel.send(mensagem_punicao_local, delete_after=20)
                         
                         try:
                             await message.author.send(f"**Poxa... o Monstrinho tá triste!** 😡🐲\nVocê ignorou todos os avisos e foi silenciado por 1 dia.")
