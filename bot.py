@@ -40,7 +40,7 @@ GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56
 AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png"
 GIF_ACERTO_MONSTRINHO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 
-# NOVOS GIFS DOS JOGOS
+# NOVOS GIFS JOGOS
 GIF_ADIVINHE_NUMERO = "https://pixmidia.com.br/wp-content/uploads/2020/08/alvo.gif"
 GIF_PPT = "https://c.tenor.com/CACaU3WIOQYAAAAd/friends-monica-geller.gif"
 GIF_CARA_COROA = "https://usagif.com/wp-content/uploads/gifs/coin-flip-18.gif"
@@ -73,12 +73,10 @@ tickets = {}
 avisos_usuarios = {} 
 total_castigos_usuario = {} # Contador de castigos total
 pontuacao_monstrinho = {} # Guardar os pontos
-jogo_em_andamento = {"tipo": "pergunta", "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
+jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
 
-# Listas Extras para Eventos Rápidos
-LISTA_PERGUNTAS = [
-    ("Qual é o super-herói que tem medo de morcego?", "batman")
-]
+# Listas de Jogos
+LISTA_PERGUNTAS = [("Qual é o super-herói que tem medo de morcego?", "batman")]
 LISTA_PALAVRAS_RAPIDAS = ["ABACAXI", "MONSTRINHO", "BATMAN", "CSI", "DRAGAO", "AVENTURA", "ESTRELA"]
 LISTA_EMOJIS_RAPIDOS = ["🐸", "🐲", "🐢", "🦖", "🐍", "🦎", "🍀"]
 
@@ -125,12 +123,11 @@ async def disparar_pergunta(guild):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
     if not canal_geral: return
 
-    # Sorteia qual tipo de evento vai acontecer
+    # Sorteio do tipo de jogo
     tipo_evento = random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji"])
-    
-    jogo_em_andamento["venceu"] = False
     jogo_em_andamento["tipo"] = tipo_evento
-    jogo_em_andamento["participantes_tentaram"] = [] # Reset para o jogo do número
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
 
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
@@ -140,46 +137,44 @@ async def disparar_pergunta(guild):
         jogo_em_andamento["pergunta"] = pergunta
         jogo_em_andamento["resposta"] = response_str.lower()
         embed.title = "🐲 HORA DO JOGUINHO DO MONSTRINHO! 🐲"
-        embed.description = f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar nos próximos **5 minutos** ganha **100 monstrinho-coins**! Boa sorte! 💚🐉"
+        embed.description = f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar ganha **100 monstrinho-coins**! Boa sorte! 💚🐉"
 
     elif tipo_evento == "numero":
-        numero_sorteado = random.randint(1, 50)
-        jogo_em_andamento["resposta"] = str(numero_sorteado)
+        res = random.randint(1, 50)
+        jogo_em_andamento["resposta"] = str(res)
         embed.title = "🎯 Evento: Adivinhe o número!"
-        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n\n💰 **Prêmio:** 500 coins\n❌ **Erro:** perde 50 coins (apenas 1 chance!)"
+        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 500 coins | ❌ **Erro:** -50 coins"
         embed.set_image(url=GIF_ADIVINHE_NUMERO)
 
     elif tipo_evento == "ppt":
-        jogo_em_andamento["resposta"] = "ppt_logic"
+        jogo_em_andamento["resposta"] = "logic_ppt"
         embed.title = "✊ Evento: Pedra, Papel ou Tesoura!"
-        embed.description = "Digite: **pedra, papel ou tesoura**\n\nO primeiro que vencer o bot ganha!\n\n💰 **Vitória:** 300 coins\n❌ **Derrota:** perde 100 coins\n🤝 **Empate:** perde 50 coins"
+        embed.description = "Digite: **pedra, papel ou tesoura**\n\nO primeiro que vencer o bot ganha!\n💰 **Prêmio:** 300 | ❌ **Perde:** 100 | 🤝 **Empate:** -50"
         embed.set_image(url=GIF_PPT)
 
     elif tipo_evento == "cara_coroa":
-        resultado_sorteado = random.choice(["cara", "coroa"])
-        jogo_em_andamento["resposta"] = resultado_sorteado
+        jogo_em_andamento["resposta"] = random.choice(["cara", "coroa"])
         embed.title = "🪙 Evento: Cara ou Coroa!"
-        embed.description = "Digite **cara** ou **coroa**\n\nO primeiro que acertar vence!\n\n💰 **Vitória:** 300 coins\n❌ **Erro:** perde 150 coins"
+        embed.description = "Digite **cara** ou **coroa**\n\nO primeiro que acertar vence!\n💰 **Prêmio:** 300 | ❌ **Perde:** 150"
         embed.set_image(url=GIF_CARA_COROA)
 
     elif tipo_evento == "dado":
-        dado_sorteado = random.randint(1, 6)
-        jogo_em_andamento["resposta"] = str(dado_sorteado)
+        jogo_em_andamento["resposta"] = str(random.randint(1, 6))
         embed.title = "🎲 Evento: Dado da sorte!"
-        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n\n💰 **Vitória:** 70 coins\n❌ **Erro:** perde 20 coins"
+        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 70 | ❌ **Perde:** 20"
         embed.set_image(url=GIF_DADO)
 
     elif tipo_evento == "palavra":
-        palavra_sorteada = random.choice(LISTA_PALAVRAS_RAPIDAS)
-        jogo_em_andamento["resposta"] = palavra_sorteada.lower()
+        palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
+        jogo_em_andamento["resposta"] = palavra.lower()
         embed.title = "⚡ Evento rápido!"
-        embed.description = f"Primeiro a digitar:\n**{palavra_sorteada}**\n\nvence! Ganha **100 coins**"
+        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence! Ganha **100 coins**"
 
     elif tipo_evento == "emoji":
-        emoji_sorteado = random.choice(LISTA_EMOJIS_RAPIDOS)
-        jogo_em_andamento["resposta"] = emoji_sorteado
+        emoji = random.choice(LISTA_EMOJIS_RAPIDOS)
+        jogo_em_andamento["resposta"] = emoji
         embed.title = "⚡ Evento de emoji!"
-        embed.description = f"Primeiro a mandar:\n\n**{emoji_sorteado}**\n\nvence! Ganha **100 coins**"
+        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **100 coins**"
 
     embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
     await canal_geral.send(embed=embed)
@@ -189,6 +184,7 @@ async def disparar_pergunta(guild):
         await asyncio.sleep(1)
     
     if not jogo_em_andamento["venceu"]:
+        jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
         await canal_geral.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Monstrinho ficou triste, mas logo eu volto com outra! 🐲💔")
 
@@ -550,7 +546,7 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
 async def on_message(message):
     if message.author.bot: return
 
-    # --- LÓGICA DO JOGUINHO (TODOS OS JOGOS) ---
+    # --- LÓGICA DO JOGUINHO (REVISADA COM 1 TENTATIVA) ---
     if jogo_em_andamento["resposta"] and message.channel.name == CANAL_GERAL:
         user_id = message.author.id
         msg_content = message.content.lower().strip()
@@ -558,75 +554,65 @@ async def on_message(message):
         ganhou = False
         premio = 0
 
-        # 1. ADIVINHE O NÚMERO
-        if tipo == "numero":
-            if user_id in jogo_em_andamento["participantes_tentaram"]:
-                pass # Já tentou, ignora
-            else:
-                jogo_em_andamento["participantes_tentaram"].append(user_id)
-                if msg_content == jogo_em_andamento["resposta"]:
-                    ganhou = True
-                    premio = 500
+        # Bloqueio de tentativas repetidas
+        if user_id in jogo_em_andamento["participantes_tentaram"]:
+            return
+
+        # Validação para não queimar tentativa com conversas aleatórias
+        filtros = {
+            "numero": lambda m: m.isdigit(),
+            "ppt": lambda m: m in ["pedra", "papel", "tesoura"],
+            "cara_coroa": lambda m: m in ["cara", "coroa"],
+            "dado": lambda m: m.isdigit() and 1 <= int(m) <= 6,
+            "pergunta": lambda m: True, "palavra": lambda m: True, "emoji": lambda m: True
+        }
+
+        if filtros[tipo](msg_content):
+            jogo_em_andamento["participantes_tentaram"].append(user_id)
+
+            # Lógica dos resultados
+            if tipo == "numero":
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 500
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.add_reaction("❌")
+                    await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... O Monstrinho tá com o coraçãozinho partido, mas não desiste! 💚")
 
-        # 2. PEDRA PAPEL TESOURA
-        elif tipo == "ppt":
-            opcoes = ["pedra", "papel", "tesoura"]
-            if msg_content in opcoes:
-                bot_choice = random.choice(opcoes)
+            elif tipo == "ppt":
+                bot_choice = random.choice(["pedra", "papel", "tesoura"])
                 if msg_content == bot_choice:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply(f"🤝 Empatamos! Eu também escolhi **{bot_choice}**. Você perdeu **50 coins**! 🐲")
-                elif (msg_content == "pedra" and bot_choice == "tesoura") or \
-                     (msg_content == "papel" and bot_choice == "pedra") or \
-                     (msg_content == "tesoura" and bot_choice == "papel"):
-                    ganhou = True
-                    premio = 300
-                    await message.reply(f"🎉 Você venceu! Eu escolhi **{bot_choice}**!")
+                    await message.reply(f"🤝 Empatamos! Eu também escolhi **{bot_choice}**. Você perdeu **50 coins** e sua chance acabou... 🥺")
+                elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
+                    ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    await message.reply(f"😜 Eu venci! Escolhi **{bot_choice}**. Você perdeu **100 coins**! 🐲")
+                    await message.reply(f"😜 Eu venci! Escolhi **{bot_choice}**. Poxa, você perdeu seus coins e não pode tentar de novo agora... 🐲💔")
 
-        # 3. CARA OU COROA
-        elif tipo == "cara_coroa":
-            if msg_content in ["cara", "coroa"]:
-                if msg_content == jogo_em_andamento["resposta"]:
-                    ganhou = True
-                    premio = 300
+            elif tipo == "cara_coroa":
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 150
-                    await message.reply(f"❌ Errou! O resultado era **{jogo_em_andamento['resposta']}**. Perdeu **150 coins**!")
+                    await message.reply(f"❌ Errou! O resultado era **{jogo_em_andamento['resposta']}**. Minhas asinhas murcharam por você... perdeu sua única chance! 🥺💔")
 
-        # 4. DADO
-        elif tipo == "dado":
-            if msg_content.isdigit() and 1 <= int(msg_content) <= 6:
-                if msg_content == jogo_em_andamento["resposta"]:
-                    ganhou = True
-                    premio = 70
+            elif tipo == "dado":
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 70
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 20
-                    await message.add_reaction("🎲")
+                    await message.reply(f"🎲 O dado caiu em **{jogo_em_andamento['resposta']}**! Que pena, você errou e o Monstrinho ficou triste... 🥺")
 
-        # 5. PERGUNTA / PALAVRA / EMOJI
-        elif msg_content == jogo_em_andamento["resposta"]:
-            ganhou = True
-            premio = 100
+            elif msg_content == jogo_em_andamento["resposta"]:
+                ganhou, premio = True, 100
+            else:
+                await message.reply("🥺 Poxa, não foi dessa vez! O Monstrinho queria muito te dar o prêmio, mas você errou... 🐲💔")
 
-        if ganhou:
-            jogo_em_andamento["venceu"] = True
-            jogo_em_andamento["resposta"] = None
-            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio
-            
-            embed_acerto = discord.Embed(
-                title="🎉 PARABÉNS NENÉM! 🎉",
-                description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Monstrinho-Coins**! 🐲💚",
-                color=0x00FF7F
-            )
-            embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
-            await message.reply(embed=embed_acerto)
-            await atualizar_ranking(message.guild)
+            if ganhou:
+                jogo_em_andamento["venceu"] = True
+                jogo_em_andamento["resposta"] = None
+                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio
+                embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Monstrinho-Coins**! 🐲💚", color=0x00FF7F)
+                embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
+                await message.reply(embed=embed_acerto)
+                await atualizar_ranking(message.guild)
             return
 
     # --- TICKET CATALOGO ---
@@ -670,7 +656,6 @@ async def on_message(message):
                     elif qtd == 3:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **3º AVISO**. **ÚLTIMA CHANCE!** O próximo é castigo! 🔥🐲", delete_after=15)
                     
-                    # Aplicação de CASTIGO (4º aviso)
                     elif qtd >= 4:
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
                         avisos_usuarios[user_id] = 0 
@@ -692,7 +677,7 @@ async def on_message(message):
                         if canal_adv:
                             embed_castigo = discord.Embed(
                                 title="🚨 BUM! CASTIGO APLICADO 🚨",
-                                description=f"O membro {message.author.mention} foi silenciado por **1 dia** após ignorar 4 avisos.\n\n🔢 Total de castigos acumulados: `{total_castigos_usuario[user_id]}`",
+                                description=f"O membro {message.author.mention} foi silenciado por **1 dia**.\n\n🔢 Total de castigos acumulados: `{total_castigos_usuario[user_id]}`",
                                 color=0xFF0000,
                                 timestamp=datetime.now()
                             )
