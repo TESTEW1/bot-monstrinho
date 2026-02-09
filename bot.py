@@ -1,14 +1,11 @@
-# Bot.py
+# bot.py
 
 class ReivindicarAnjoView:
-    # ... other methods 
-    async def some_method(self):
-        # ... context 
-        await canal_ticket.send(embed=embed_no_ticket)
-
+    async def some_function(self):
+        await canal_ticket.send(embed=embed_no_ticket)  # Updated to embed=embed_no_ticket
 
 class ReivindicarCupidoView:
-    # ... other methods 
-    async def another_method(self):
-        # ... context 
-        await canal_ticket.send(embed=embed_no_ticket)
+    async def some_function(self):
+        await canal_ticket.send(embed=embed_no_ticket)  # Updated to embed=embed_no_ticket
+
+# Remaining code unchanged...
