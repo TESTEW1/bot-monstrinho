@@ -117,9 +117,9 @@ async def disparar_pergunta(guild):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
     if not canal_geral: return
 
-    pergunta, resposta = random.choice(LISTA_PERGUNTAS)
+    pergunta, response_str = random.choice(LISTA_PERGUNTAS)
     jogo_em_andamento["pergunta"] = pergunta
-    jogo_em_andamento["resposta"] = resposta.lower()
+    jogo_em_andamento["resposta"] = response_str.lower()
     jogo_em_andamento["venceu"] = False
 
     embed = discord.Embed(
@@ -465,6 +465,38 @@ async def jogo(ctx):
     await ctx.send("🐲 Iniciando rodada de teste para você, papai!")
     await disparar_pergunta(ctx.guild)
 
+@bot.command(name="removercastigo")
+async def remover_castigo_manual(ctx, membro: discord.Member):
+    # Verifica se quem usou o comando é Staff ou Dono
+    eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles) or ctx.author.id == DONO_ID
+    
+    if not eh_staff:
+        return await ctx.send("❌ Você não tem permissão para usar esse comando! 🐲😤")
+
+    try:
+        # Tira o timeout (castigo)
+        await membro.timeout(None)
+        # Reseta os avisos do dicionário
+        avisos_usuarios[membro.id] = 0
+        
+        embed = discord.Embed(
+            title="🔓 CASTIGO REMOVIDO MANUALMENTE",
+            description=f"O membro {membro.mention} teve seus avisos resetados e o castigo removido por {ctx.author.mention}. 🐲💚",
+            color=0x00FF7F,
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+        await ctx.send(embed=embed)
+        
+        # Tenta avisar o usuário no DM
+        try:
+            await membro.send(f"Oii! Seu castigo no servidor CSI foi removido pela staff! Comporte-se agora, hein? 🐲✨")
+        except:
+            pass
+            
+    except Exception as e:
+        await ctx.send(f"❌ Ocorreu um erro ao tentar remover o castigo: {e}")
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -505,7 +537,7 @@ async def on_message(message):
                 tickets.pop(message.channel.id, None)
                 return
 
-    # --- PALAVRAS PROIBIDAS (LÓGICA DE 4 AVISOS ADICIONADA) ---
+    # --- PALAVRAS PROIBIDAS ---
     texto = message.content.lower()
     eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
     eh_canal_desabafo = message.channel.name == CANAL_DESABAFOS
@@ -521,7 +553,6 @@ async def on_message(message):
                     
                     canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
                     
-                    # Avisos no chat onde a mensagem foi dita (apagam em 15s)
                     if qtd == 1:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **1º AVISO**. Xingamentos não são permitidos aqui! 😭💚", delete_after=15)
                     elif qtd == 2:
@@ -529,7 +560,6 @@ async def on_message(message):
                     elif qtd == 3:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **3º AVISO**. **ÚLTIMA CHANCE!** O próximo é castigo! 🔥🐲", delete_after=15)
                     
-                    # 4º AVISO: BUM! Castigo aplicado e log no canal de advertências
                     elif qtd >= 4:
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
                         avisos_usuarios[user_id] = 0 # Reseta avisos após o castigo
@@ -550,7 +580,6 @@ async def on_message(message):
                             embed_castigo.set_thumbnail(url=AVATAR_MONSTRINHO)
                             await canal_adv.send(embed=embed_castigo)
 
-                        # Alerta Staff 5 Castigos
                         if total_castigos_usuario[user_id] >= 5:
                             canal_staff = discord.utils.get(message.guild.text_channels, name=CANAL_CHAT_STAFF_GERAL)
                             cargo_staff = discord.utils.get(message.guild.roles, name=CARGO_STAFF_EQUIPE)
