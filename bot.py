@@ -38,7 +38,6 @@ BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148e
 GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
 GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
 AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png"
-GIF_ACERTO_MONSTRINHO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -60,19 +59,11 @@ CARGOS_IMUNES_NOMES = [
     "Moderador. 🦇"
 ]
 
-
 # ============== DADOS =================
 
 tickets = {}
 avisos_usuarios = {} 
 total_castigos_usuario = {} # Contador de castigos total
-pontuacao_monstrinho = {} # Guardar os pontos
-jogo_em_andamento = {"pergunta": None, "resposta": None, "venceu": False}
-
-# Perguntas do Monstrinho
-LISTA_PERGUNTAS = [
-    ("Qual é o super-herói que tem medo de morcego?", "batman")
-]
 
 # ============== PALAVRAS PROIBIDAS =================
 
@@ -83,72 +74,6 @@ PALAVRAS_PROIBIDAS = [
     "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", 
     "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
 ]
-
-# ============== FUNÇÕES AUXILIARES JOGO =================
-
-async def atualizar_ranking(guild):
-    canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_MONSTRINHO)
-    if not canal_rank: return
-    
-    # Ordenar ranking
-    rank_ordenado = sorted(pontuacao_monstrinho.items(), key=lambda item: item[1], reverse=True)
-    
-    embed = discord.Embed(
-        title="🏆 RANKING MONSTRINHO-COINS 🏆",
-        description="Aqui estão os maiores gênios do nosso servidor! 🐲💚",
-        color=0x00FF7F,
-        timestamp=datetime.now()
-    )
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    
-    texto_rank = ""
-    for i, (user_id, pontos) in enumerate(rank_ordenado[:15], 1):
-        user = guild.get_member(user_id)
-        nome = user.display_name if user else f"Usuário Desconhecido ({user_id})"
-        texto_rank += f"**{i}º** | {nome} — `{pontos} Coins` 🐲\n"
-    
-    embed.description += f"\n\n{texto_rank if texto_rank else 'Ninguém pontuou ainda... 🥺'}"
-    embed.set_footer(text="CSI - Sistema de Jogos")
-
-    await canal_rank.purge(limit=5)
-    await canal_rank.send(embed=embed)
-
-async def disparar_pergunta(guild):
-    canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-    if not canal_geral: return
-
-    pergunta, response_str = random.choice(LISTA_PERGUNTAS)
-    jogo_em_andamento["pergunta"] = pergunta
-    jogo_em_andamento["resposta"] = response_str.lower()
-    jogo_em_andamento["venceu"] = False
-
-    embed = discord.Embed(
-        title="🐲 HORA DO JOGUINHO DO MONSTRINHO! 🐲",
-        description=f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar nos próximos **5 minutos** ganha **100 monstrinho-coins**! Boa sorte! 💚🐉",
-        color=0xADFF2F
-    )
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
-    
-    msg_pergunta = await canal_geral.send(embed=embed)
-
-    for _ in range(300): # 300 segundos = 5 min
-        if jogo_em_andamento["venceu"]: break
-        await asyncio.sleep(1)
-    
-    if not jogo_em_andamento["venceu"]:
-        jogo_em_andamento["pergunta"] = None
-        await canal_geral.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Monstrinho ficou triste, mas logo eu volto com outra! 🐲💔")
-
-# ============== LOOP DO JOGO =================
-
-@tasks.loop(hours=3)
-async def loop_jogo_monstrinho():
-    espera_extra = random.randint(0, 7200)
-    await asyncio.sleep(espera_extra)
-    
-    for guild in bot.guilds:
-        await disparar_pergunta(guild)
 
 # ============== VIEWS =================
 
@@ -397,11 +322,7 @@ async def on_ready():
     print(f"🐲 Ligado como {bot.user}")
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
-    # Importante: No on_ready, passamos 0 apenas para registrar a view globalmente
     bot.add_view(LiberarCastigoView(0))
-    
-    if not loop_jogo_monstrinho.is_running():
-        loop_jogo_monstrinho.start()
 
     for guild in bot.guilds:
         canal = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
@@ -459,13 +380,6 @@ async def on_message_delete(message):
 
 # ============== COMANDOS =================
 
-@bot.command()
-async def jogo(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
-    await ctx.send("🐲 Iniciando rodada de teste para você, papai!")
-    await disparar_pergunta(ctx.guild)
-
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles) or ctx.author.id == DONO_ID
@@ -497,25 +411,6 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
-
-    # --- LÓGICA DO JOGUINHO ---
-    if jogo_em_andamento["pergunta"] and message.channel.name == CANAL_GERAL:
-        if message.content.lower() == jogo_em_andamento["resposta"]:
-            jogo_em_andamento["venceu"] = True
-            jogo_em_andamento["pergunta"] = None
-            
-            user_id = message.author.id
-            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 100
-            
-            embed_acerto = discord.Embed(
-                title="🎉 PARABÉNS NENÉM! 🎉",
-                description=f"{message.author.mention}, você acertou!\nVocê ganhou **100 Monstrinho-Coins**! 🐲💚",
-                color=0x00FF7F
-            )
-            embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
-            await message.reply(embed=embed_acerto)
-            await atualizar_ranking(message.guild)
-            return
 
     # --- TICKET CATALOGO ---
     if message.channel.id in tickets:
@@ -550,7 +445,6 @@ async def on_message(message):
                     
                     canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
                     
-                    # Avisos no CHAT LOCAL (onde a pessoa falou)
                     if qtd == 1:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **1º AVISO**. Xingamentos não são permitidos aqui! 😭💚", delete_after=15)
                     elif qtd == 2:
@@ -558,12 +452,10 @@ async def on_message(message):
                     elif qtd == 3:
                         await message.channel.send(f"⚠️ {message.author.mention} recebeu o **3º AVISO**. **ÚLTIMA CHANCE!** O próximo é castigo! 🔥🐲", delete_after=15)
                     
-                    # Aplicação de CASTIGO (4º aviso)
                     elif qtd >= 4:
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
                         avisos_usuarios[user_id] = 0 
                         
-                        # Mensagem fofa e triste no CHAT LOCAL conforme solicitado
                         mensagem_punicao_local = (
                             f"🚨 **USUÁRIO PUNIDO**\n"
                             f"O membro {message.author.mention} foi silenciado por 1 dia.\n\n"
@@ -578,7 +470,6 @@ async def on_message(message):
                         
                         await message.author.timeout(timedelta(days=1), reason="Atingiu o limite de 4 advertências por palavreado")
                         
-                        # Log detalhado EXCLUSIVO no canal de ADVERTÊNCIAS
                         if canal_adv:
                             embed_castigo = discord.Embed(
                                 title="🚨 BUM! CASTIGO APLICADO 🚨",
@@ -587,7 +478,6 @@ async def on_message(message):
                                 timestamp=datetime.now()
                             )
                             embed_castigo.set_thumbnail(url=AVATAR_MONSTRINHO)
-                            # Enviando com o botão de remover castigo apenas aqui no log
                             await canal_adv.send(embed=embed_castigo, view=LiberarCastigoView(user_id))
 
                         if total_castigos_usuario[user_id] >= 5:
