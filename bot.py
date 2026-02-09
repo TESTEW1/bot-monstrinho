@@ -397,6 +397,7 @@ async def on_ready():
     print(f"🐲 Ligado como {bot.user}")
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
+    # Importante: No on_ready, passamos 0 apenas para registrar a view globalmente
     bot.add_view(LiberarCastigoView(0))
     
     if not loop_jogo_monstrinho.is_running():
@@ -467,16 +468,13 @@ async def jogo(ctx):
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
-    # Verifica se quem usou o comando é Staff ou Dono
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles) or ctx.author.id == DONO_ID
     
     if not eh_staff:
         return await ctx.send("❌ Você não tem permissão para usar esse comando! 🐲😤")
 
     try:
-        # Tira o timeout (castigo)
         await membro.timeout(None)
-        # Reseta os avisos do dicionário
         avisos_usuarios[membro.id] = 0
         
         embed = discord.Embed(
@@ -488,7 +486,6 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
         embed.set_thumbnail(url=AVATAR_MONSTRINHO)
         await ctx.send(embed=embed)
         
-        # Tenta avisar o usuário no DM
         try:
             await membro.send(f"Oii! Seu castigo no servidor CSI foi removido pela staff! Comporte-se agora, hein? 🐲✨")
         except:
@@ -562,7 +559,10 @@ async def on_message(message):
                     
                     elif qtd >= 4:
                         total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
-                        avisos_usuarios[user_id] = 0 # Reseta avisos após o castigo
+                        avisos_usuarios[user_id] = 0 
+                        
+                        # Mensagem fofa e triste no chat onde aconteceu o erro
+                        await message.channel.send(f"🚨 **USUÁRIO PUNIDO**\nO membro {message.author.mention} foi silenciado por 1 dia.\n\n*Poxa... o Monstrinho ficou muito triste com o seu comportamento... espero que você volte melhor amanhã!* 🥺💔🐲", view=LiberarCastigoView(user_id))
                         
                         try:
                             await message.author.send(f"**Poxa... o Monstrinho tá triste!** 😡🐲\nVocê ignorou todos os avisos e foi silenciado por 1 dia.")
@@ -570,6 +570,7 @@ async def on_message(message):
                         
                         await message.author.timeout(timedelta(days=1), reason="Atingiu o limite de 4 advertências por palavreado")
                         
+                        # Log no canal de advertências (Igual à imagem enviada)
                         if canal_adv:
                             embed_castigo = discord.Embed(
                                 title="🚨 BUM! CASTIGO APLICADO 🚨",
@@ -578,7 +579,8 @@ async def on_message(message):
                                 timestamp=datetime.now()
                             )
                             embed_castigo.set_thumbnail(url=AVATAR_MONSTRINHO)
-                            await canal_adv.send(embed=embed_castigo)
+                            # Enviando com o botão de remover castigo
+                            await canal_adv.send(embed=embed_castigo, view=LiberarCastigoView(user_id))
 
                         if total_castigos_usuario[user_id] >= 5:
                             canal_staff = discord.utils.get(message.guild.text_channels, name=CANAL_CHAT_STAFF_GERAL)
