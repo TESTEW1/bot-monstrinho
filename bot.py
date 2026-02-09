@@ -440,7 +440,7 @@ class ReivindicarAnjoView(discord.ui.View):
             description=f"✨ **O Anjo {interaction.user.mention} abriu as asinhas e chegou para te ajudar!** 🪽💚\n\nFique tranquilo(a), agora você está sob a proteção desse anjinho!",
             color=0x00FF7F
         )
-        await canal_ticket.send(embed_no_ticket)
+        await canal_ticket.send(embed=embed_no_ticket)
         
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
