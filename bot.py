@@ -470,7 +470,7 @@ class ReivindicarCupidoView(discord.ui.View):
             description=f"🏹 **O Cupido {interaction.user.mention} preparou o arco e chegou para te ajudar com o amor!** 💘✨\n\nAguarde, o romance está no ar!",
             color=0xFF69B4
         )
-        await canal_ticket.send(embed_no_ticket)
+        await canal_ticket.send(embed=embed_no_ticket)
         
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
