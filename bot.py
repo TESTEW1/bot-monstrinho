@@ -281,12 +281,12 @@ async def disparar_roleta(guild):
         jogo_em_andamento["resposta"] = None
         await canal_geral.send("🥺 A roleta parou de girar e ninguém tentou a sorte... O Monstrinho ficou triste! 🐲💔")
 
-async def disparar_pergunta(guild):
+async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
     if not canal_geral: return
 
-    # Sorteio do tipo de jogo
-    tipo_evento = random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa"])
+    # Sorteio do tipo de jogo ou uso do tipo escolhido
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa"])
     jogo_em_andamento["tipo"] = tipo_evento
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -688,14 +688,68 @@ async def on_message_delete(message):
         embed.set_footer(text=f"Monstrinho Logs 🐲")
         await canal_log.send(embed=embed)
 
-# ============== COMANDOS =================
+# ============== COMANDOS DE JOGOS INDIVIDUAIS =================
 
 @bot.command()
 async def jogo(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
-    await ctx.send("🐲 Iniciando rodada de teste para você, papai!")
+    await ctx.send("🐲 Iniciando rodada aleatória para você, papai!")
     await disparar_pergunta(ctx.guild)
+
+@bot.command()
+async def pergunta(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "pergunta")
+
+@bot.command()
+async def numero(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "numero")
+
+@bot.command()
+async def ppt(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "ppt")
+
+@bot.command()
+async def caracoroa(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "cara_coroa")
+
+@bot.command()
+async def dado(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "dado")
+
+@bot.command()
+async def palavra(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "palavra")
+
+@bot.command()
+async def emoji(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "emoji")
+
+@bot.command()
+async def embaralhada(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "embaralhada")
+
+@bot.command()
+async def caixa(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "caixa")
+
+@bot.command()
+async def roleta(ctx):
+    if ctx.author.id != DONO_ID:
+        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
+    await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
+    await disparar_roleta(ctx.guild)
+
+# ============== COMANDOS ADMINISTRATIVOS =================
 
 @bot.command()
 async def resetar_ranking(ctx):
@@ -705,13 +759,6 @@ async def resetar_ranking(ctx):
     pontuacao_monstrinho = {}
     await atualizar_ranking(ctx.guild)
     await ctx.send("✅ **O Ranking de Monstrinho-Coins foi resetado com sucesso!** 🐲✨ Todos voltam ao zero!")
-
-@bot.command()
-async def roleta(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
-    await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
-    await disparar_roleta(ctx.guild)
 
 @bot.command()
 async def bauadm(ctx):
@@ -726,7 +773,7 @@ async def bauadm(ctx):
         pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 1000
         embed = discord.Embed(
             title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            description=f"O meu papai escolher você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
             color=0xFFD700
         )
         embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
