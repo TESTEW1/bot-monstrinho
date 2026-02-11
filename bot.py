@@ -47,6 +47,7 @@ GIF_CARA_COROA = "https://usagif.com/wp-content/uploads/gifs/coin-flip-18.gif"
 GIF_DADO = "https://miro.medium.com/v2/resize:fit:1080/1*n4_Ic0t_s8YJN4YhHxb5xw.gif"
 GIF_ROLETA_GIRANDO = "https://i.pinimg.com/originals/30/16/25/30162543258ca8058fe7bc4003be2a33.gif"
 GIF_DERROTA = "https://i.pinimg.com/originals/ca/c9/81/cac9814161057dbc9bb2ae0ba0dbdfc0.gif"
+GIF_BAU_COINS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -764,12 +765,15 @@ async def on_message(message):
                 if resultado == "1000":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 1000
                     embed_rol = discord.Embed(title="💎 MEU DEUS! O PRÊMIO MÁXIMO!", description=f"{message.author.mention}, você é muito sortudo! A roleta parou em **1000 Coins**! 🐲✨", color=0x00FFFF)
+                    embed_rol.set_image(url=GIF_BAU_COINS)
                     await message.reply(embed=embed_rol)
                 
                 elif resultado in ["100", "200"]:
                     valor = int(resultado)
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + valor
-                    await message.reply(f"🎉 A roleta parou e você ganhou **{valor} Coins**! 🐲💚")
+                    embed_vitoria = discord.Embed(description=f"🎉 A roleta parou e você ganhou **{valor} Coins**! 🐲💚", color=0x00FF7F)
+                    embed_vitoria.set_image(url=GIF_BAU_COINS)
+                    await message.reply(embed=embed_vitoria)
 
                 elif resultado == "perder":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 200
