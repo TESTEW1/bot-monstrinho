@@ -558,7 +558,7 @@ class TicketSelect(discord.ui.Select):
                 description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui! 🪽💚",
                 color=0xFFB6C1
             )
-            await canal.send(embed=embed_user, view=FecharTicketView())
+            await canal.send(embed=user, view=FecharTicketView())
             canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
             if canal_anjo_logs:
                 cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
@@ -697,6 +697,37 @@ async def roleta(ctx):
         return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
     await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
     await disparar_roleta(ctx.guild)
+
+@bot.command()
+async def bauadm(ctx):
+    if ctx.author.id != DONO_ID:
+        return await ctx.send("❌ Só meu papai pode abrir o Baú do ADM! 🐲💎")
+
+    await ctx.send("💰 **BAÚ DO ADM!** 💰\n\nMeu papai, para quem você quer abrir o baú? Mencione (@) a pessoa sortuda agora! 🐲✨")
+
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel and len(m.mentions) > 0
+
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=30)
+        alvo = msg.mentions[0]
+        
+        # Adiciona os coins
+        pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 1000
+        
+        embed = discord.Embed(
+            title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
+            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            color=0xFFD700
+        )
+        embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
+        embed.set_footer(text="Presente especial do Administrador!")
+        
+        await ctx.send(embed=embed)
+        await atualizar_ranking(ctx.guild)
+
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ O tempo acabou e ninguém foi escolhido para o baú! 🐲")
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
