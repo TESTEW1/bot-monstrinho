@@ -31,7 +31,7 @@ CANAL_DESABAFOS = "😮‍💨・desabafos"
 CANAL_CHAT_ANJO = "🪽・chat-anjo"
 CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
 CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
-CANAL_RANKING_MONSTRINHO = "ranking-monstrinho"
+CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
 CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
 
