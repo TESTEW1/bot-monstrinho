@@ -145,7 +145,7 @@ LISTA_PERGUNTAS = [
 ("Qual o nome da boneca do Toy Story?", "jessie"),
 ("Quem é o capitão dos Vingadores?", "capitao america"),
 ("Qual o nome do filme do robô gigante?", "transformers"),
-("Quem é o rei dos monstros?", "godzilla"),
+("Quem é o rei dos monsters?", "godzilla"),
 ("Qual o nome do dinossauro verde do Mario?", "yoshi"),
 ("Quem é o herói de Wakanda?", "pantera negra"),
 ("Qual o nome do robô vilão de Transformers?", "megatron"),
@@ -209,8 +209,8 @@ LISTA_EMOJIS_RAPIDOS = [
 "🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦒",
 "🦘","🦬","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐",
 "🦌","🐕","🐩","🦮","🐕‍🦺","🐈","🐓","🦃","🦚","🦜",
-"🦢","🕊","🐇","🦝","🦨","🦡","🦫","🦦","🦥","🐁","🐀",
-"🐿","🦔"
+"Swan","Dove","Rabbit","Raccoon","Skunk","Badger","Beaver","Otter","Sloth","Mouse","Rat",
+"Squirrel","Hedgehog"
 ]
 
 
@@ -252,6 +252,32 @@ async def atualizar_ranking(guild):
 
     await canal_rank.purge(limit=5)
     await canal_rank.send(embed=embed)
+
+async def disparar_roleta(guild):
+    canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+    if not canal_geral: return
+
+    jogo_em_andamento["tipo"] = "roleta"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = "roleta"
+
+    embed = discord.Embed(color=0xADFF2F)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = "🎡 EVENTO: ROLETA DA SORTE!"
+    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 100 ou 200 Coins\n• Outro Jogo Aleatório\n• Perder 200 Coins\n• ROUBAR 300 Coins de alguém!"
+    embed.set_image(url=GIF_ROLETA_GIRANDO)
+    embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
+    
+    await canal_geral.send(embed=embed)
+
+    for _ in range(300):
+        if jogo_em_andamento["venceu"]: break
+        await asyncio.sleep(1)
+    
+    if not jogo_em_andamento["venceu"]:
+        jogo_em_andamento["resposta"] = None
+        await canal_geral.send("🥺 A roleta parou de girar e ninguém tentou a sorte... O Monstrinho ficou triste! 🐲💔")
 
 async def disparar_pergunta(guild):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
@@ -326,7 +352,7 @@ async def disparar_pergunta(guild):
     if not jogo_em_andamento["venceu"]:
         jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
-        await canal_geral.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Monstrinho ficou triste, mas logo eu volto com outra! 🐲💔")
+        await canal_geral.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Monstrinho queria muito te dar um prêmio! 🐲💔")
 
 # ============== LOOP DO JOGO =================
 
@@ -664,6 +690,13 @@ async def resetar_ranking(ctx):
     
     await atualizar_ranking(ctx.guild)
     await ctx.send("✅ **O Ranking de Monstrinho-Coins foi resetado com sucesso!** 🐲✨ Todos voltam ao zero!")
+
+@bot.command()
+async def roleta(ctx):
+    if ctx.author.id != DONO_ID:
+        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
+    await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
+    await disparar_roleta(ctx.guild)
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
