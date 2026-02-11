@@ -81,6 +81,10 @@ total_castigos_usuario = {} # Contador de castigos total
 pontuacao_monstrinho = {} # Guardar os pontos
 jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
 
+# Lógica Evento Silencioso
+contador_mensagens_silencioso = 0
+meta_mensagens_silencioso = random.randint(1, 20)
+
 # Listas de Jogos
 LISTA_PERGUNTAS = [
 ("Qual o nome do bruxo de Harry Potter?", "harry potter"),
@@ -433,7 +437,7 @@ class LojaSelect(discord.ui.Select):
         )
         await interaction.response.send_message(embed=embed_sucesso, ephemeral=True)
 
-        # Notificar Direção
+        # Notificar Direção (SEM MENSAGEM DE EVERYONE)
         canal_dir = discord.utils.get(interaction.guild.text_channels, name=CANAL_DIRECAO)
         if canal_dir:
             embed_staff = discord.Embed(
@@ -442,7 +446,7 @@ class LojaSelect(discord.ui.Select):
                 color=0xFFD700,
                 timestamp=datetime.now()
             )
-            await canal_dir.send(content="@everyone", embed=embed_staff)
+            await canal_dir.send(embed=embed_staff)
 
 class LojaView(discord.ui.View):
     def __init__(self):
@@ -587,7 +591,7 @@ class ReivindicarCupidoView(discord.ui.View):
         
         embed_no_ticket = discord.Embed(
             description=f"🏹 **O Cupido {interaction.user.mention} preparou o arco e chegou para te ajudar com o amor!** 💘✨\n\nAguarde, o romance está no ar!",
-            color=0xFF69B4
+            color=0xFF1493
         )
         await canal_ticket.send(embed=embed_no_ticket)
         
@@ -913,6 +917,27 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
+
+    # --- LÓGICA EVENTO SILENCIOSO ---
+    global contador_mensagens_silencioso, meta_mensagens_silencioso
+    if message.channel.name == CANAL_GERAL:
+        contador_mensagens_silencioso += 1
+        if contador_mensagens_silencioso >= meta_mensagens_silencioso:
+            user_id = message.author.id
+            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 400
+            
+            embed_silencioso = discord.Embed(
+                title="🐲 EVENTO SILENCIOSO! 🐲",
+                description=f"Surpresa! {message.author.mention}, você foi o sortudo da vez e enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **400 Monstrinho-Coins**! 💎✨",
+                color=0xFFD700
+            )
+            embed_silencioso.set_thumbnail(url=AVATAR_MONSTRINHO)
+            await message.channel.send(embed=embed_silencioso)
+            
+            # Reset do evento
+            contador_mensagens_silencioso = 0
+            meta_mensagens_silencioso = random.randint(1, 20)
+            await atualizar_ranking(message.guild)
 
     # --- LÓGICA DO JOGUINHO ---
     if jogo_em_andamento["resposta"] and message.channel.name == CANAL_GERAL:
