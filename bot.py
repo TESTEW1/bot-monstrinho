@@ -31,7 +31,9 @@ CANAL_DESABAFOS = "😮‍💨・desabafos"
 CANAL_CHAT_ANJO = "🪽・chat-anjo"
 CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
 CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
-CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
+CANAL_RANKING_MONSTRINHO = "ranking-monstrinho"
+CANAL_LOJA_INFO = "💾・info-monstrinho"
+CANAL_DIRECAO = "👑・chat-direção"
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -382,6 +384,71 @@ async def loop_jogo_monstrinho():
     for guild in bot.guilds:
         await disparar_pergunta(guild)
 
+# ============== SISTEMA DE LOJA =================
+
+PRECOS_LOJA = {
+    "cargo_7dias": 5000,
+    "cargo_colorido": 8000,
+    "evento_oficial": 12000,
+    "dar_apelido": 6000,
+    "item_jogo": 15000,
+    "robux": 30000,
+    "nitro": 90000
+}
+
+class LojaSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Cargo Exclusivo (7 dias)", value="cargo_7dias", description="🏷️ 5.000 Coins"),
+            discord.SelectOption(label="Cargo Colorido Personalizado", value="cargo_colorido", description="🏷️ 8.000 Coins"),
+            discord.SelectOption(label="Criar Evento Oficial", value="evento_oficial", description="🎉 12.000 Coins"),
+            discord.SelectOption(label="Dar Apelido em Alguém", value="dar_apelido", description="🎉 6.000 Coins"),
+            discord.SelectOption(label="Item de Jogo", value="item_jogo", description="🎮 15.000 Coins"),
+            discord.SelectOption(label="Robux", value="robux", description="🎮 30.000 Coins"),
+            discord.SelectOption(label="Discord Nitro (1 mês)", value="nitro", description="🎮 90.000 Coins"),
+        ]
+        super().__init__(placeholder="🎁 Escolha seu prêmio aqui...", options=options, custom_id="loja_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+        item = self.values[0]
+        custo = PRECOS_LOJA[item]
+        saldo = pontuacao_monstrinho.get(user_id, 0)
+
+        if saldo < custo:
+            embed_erro = discord.Embed(
+                description=f"🥺 Oh, meu bem... você ainda não tem coins suficientes para esse prêmio! 🐲💔\n\nVocê tem: `{saldo} Coins` | Precisa de: `{custo} Coins`",
+                color=0xFF0000
+            )
+            return await interaction.response.send_message(embed=embed_erro, ephemeral=True)
+
+        # Processar Compra
+        pontuacao_monstrinho[user_id] -= custo
+        await atualizar_ranking(interaction.guild)
+
+        embed_sucesso = discord.Embed(
+            title="🎁 RESGATE REALIZADO! 🐲💚",
+            description=f"AAAA que felicidade, {interaction.user.mention}! ✨\n\nVocê resgatou: **{item.replace('_', ' ').title()}**!\n\nAgora é só aguardar um pouquinho que a staff já foi avisada e vai cuidar de tudo para você! Seu saldo foi atualizado. 🐲💖",
+            color=0x00FF7F
+        )
+        await interaction.response.send_message(embed=embed_sucesso, ephemeral=True)
+
+        # Notificar Direção
+        canal_dir = discord.utils.get(interaction.guild.text_channels, name=CANAL_DIRECAO)
+        if canal_dir:
+            embed_staff = discord.Embed(
+                title="🛍️ NOVA COMPRA NA LOJA",
+                description=f"👤 **Membro:** {interaction.user.mention} ({interaction.user.id})\n🎁 **Item:** {item.replace('_', ' ').title()}\n💰 **Custo:** {custo} Coins",
+                color=0xFFD700,
+                timestamp=datetime.now()
+            )
+            await canal_dir.send(content="@everyone", embed=embed_staff)
+
+class LojaView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(LojaSelect())
+
 # ============== VIEWS =================
 
 class LiberarCastigoView(discord.ui.View):
@@ -630,19 +697,46 @@ async def on_ready():
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
     bot.add_view(LiberarCastigoView(0))
+    bot.add_view(LojaView())
     
     if not loop_jogo_monstrinho.is_running():
         loop_jogo_monstrinho.start()
 
     for guild in bot.guilds:
-        canal = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
-        if canal:
-            try: await canal.purge(limit=5)
+        # Inicializar Tickets
+        canal_tkt = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
+        if canal_tkt:
+            try: await canal_tkt.purge(limit=5)
             except: pass
-            await canal.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
+            await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
             embed_banner = discord.Embed(color=0x2b2d31)
             embed_banner.set_image(url=BANNER_TICKET)
-            await canal.send(embed=embed_banner)
+            await canal_tkt.send(embed=embed_banner)
+
+        # Inicializar Loja
+        canal_loja = discord.utils.get(guild.text_channels, name=CANAL_LOJA_INFO)
+        if canal_loja:
+            try: await canal_loja.purge(limit=10)
+            except: pass
+            embed_loja = discord.Embed(
+                title="🪙 Loja de Monstrinhos Coins do Servidor",
+                description=(
+                    "🏷️ **Cargos**\n"
+                    "• Cargo exclusivo por 7 dias — `5.000 coins`\n"
+                    "• Cargo colorido personalizado — `8.000 coins`\n\n"
+                    "🎉 **Interações**\n"
+                    "• Criar um evento oficial (analisado pela staff) — `12.000 coins`\n"
+                    "• Dar apelido em alguém (com regras) — `6.000 coins`\n\n"
+                    "🎮 **Recompensas externas**\n"
+                    "• Item de jogo (dependendo do jogo) — `15.000 coins`\n"
+                    "• Robux — `30.000 coins`\n"
+                    "• Discord Nitro (1 mês) — `90.000 coins`"
+                ),
+                color=0xFFD700
+            )
+            embed_loja.set_thumbnail(url=AVATAR_MONSTRINHO)
+            embed_loja.set_footer(text="Escolha seu item no menu abaixo! 🐲💚")
+            await canal_loja.send(embed=embed_loja, view=LojaView())
 
 @bot.event
 async def on_member_join(member):
@@ -836,7 +930,7 @@ async def on_message(message):
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply("🥺 Errou a palavra! O Monstrinho ficou triste e você perdeu **50 coins**! 🐲💔")
-                    await atualizar_ranking(message.guild) # Atualiza no erro
+                    await atualizar_ranking(message.guild) 
                     return
 
             elif tipo == "caixa":
@@ -868,7 +962,7 @@ async def on_message(message):
                                     await message.reply("❌ Você não tem coins suficientes para doar! O Monstrinho ficou confuso. 🐲")
                             except asyncio.TimeoutError:
                                 await message.reply("⏰ Tempo de doação acabou!")
-                        await atualizar_ranking(message.guild) # Atualiza após escolha da caixa
+                        await atualizar_ranking(message.guild)
                     except asyncio.TimeoutError:
                         await message.reply("⏰ Você demorou demais e a caixa se fechou! 🐲")
 
@@ -878,7 +972,7 @@ async def on_message(message):
                 elif resultado_caixa == "perder":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
                     await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **100 coins**! 🐲💔")
-                    await atualizar_ranking(message.guild) # Atualiza na perda
+                    await atualizar_ranking(message.guild) 
                 
                 if not ganhou: return
 
@@ -887,34 +981,34 @@ async def on_message(message):
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -50 coins! 💚")
-                    await atualizar_ranking(message.guild) # Atualiza no erro
+                    await atualizar_ranking(message.guild)
 
             elif tipo == "ppt":
                 bot_choice = random.choice(["pedra", "papel", "tesoura"])
                 if msg_content == bot_choice:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -50 coins... 🥺")
-                    await atualizar_ranking(message.guild) # Atualiza no empate
+                    await atualizar_ranking(message.guild)
                 elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
                     ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
                     await message.reply(f"😜 Eu venci com **{bot_choice}**! -100 coins... 🐲💔")
-                    await atualizar_ranking(message.guild) # Atualiza na derrota
+                    await atualizar_ranking(message.guild)
 
             elif tipo == "cara_coroa":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 150
                     await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -150 coins! 🥺💔")
-                    await atualizar_ranking(message.guild) # Atualiza no erro
+                    await atualizar_ranking(message.guild)
 
             elif tipo == "dado":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 70
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 20
                     await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -20 coins! 🥺")
-                    await atualizar_ranking(message.guild) # Atualiza no erro
+                    await atualizar_ranking(message.guild)
 
             elif tipo == "roleta":
                 jogo_em_andamento["venceu"] = True
@@ -934,9 +1028,6 @@ async def on_message(message):
                 elif resultado == "jogo":
                     await message.reply("🎡 Outro jogo vindo aí! 🐲🔥")
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
-                elif resultado == "roubar":
-                    await message.reply("🥷 Mencione alguém para roubar 300 coins! (30s)")
-                    # Lógica de roubo omitida para brevidade, mas deve atualizar se implementada
                 await atualizar_ranking(message.guild); return
 
             elif msg_content == jogo_em_andamento["resposta"]:
@@ -949,7 +1040,7 @@ async def on_message(message):
                 embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Monstrinho-Coins**! 🐲💚", color=0x00FF7F)
                 embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
                 await message.reply(embed=embed_acerto)
-                await atualizar_ranking(message.guild) # Atualiza na vitória
+                await atualizar_ranking(message.guild) 
             return
 
     # --- PALAVRAS PROIBIDAS ---
