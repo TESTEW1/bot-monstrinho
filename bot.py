@@ -17,7 +17,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================= CONFIG =================
-#oi
+
 TOKEN = os.getenv("TOKEN")
 DONO_ID = 769951556388257812
 
@@ -145,7 +145,7 @@ LISTA_PERGUNTAS = [
 ("Qual o nome da boneca do Toy Story?", "jessie"),
 ("Quem é o capitão dos Vingadores?", "capitao america"),
 ("Qual o nome do filme do robô gigante?", "transformers"),
-("Quem é o rei dos monstros?", "godzilla"),
+("Quem é o rei dos monsters?", "godzilla"),
 ("Qual o nome do dinossauro verde do Mario?", "yoshi"),
 ("Quem é o herói de Wakanda?", "pantera negra"),
 ("Qual o nome do robô vilão de Transformers?", "megatron"),
@@ -497,7 +497,6 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"), 
         ]
         super().__init__(
-         import discord
 from discord.ext import commands, tasks
 import random
 import asyncio
@@ -637,7 +636,7 @@ LISTA_PALAVRAS_RAPIDAS = [
 "EPICO","LENDARIO","MISTICO","ARCANO","RITUAL","TOTEM"
 ]
 
-LISTA_EMOJIS_RAPIDOS = ["🐸","🐲","🐢","Rex","🐍","🦎","🍀","🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐵","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🐊","🐅","🐆","🦓","🦍","🐘","🦛","🦏","🦒","🦘","🐎","🐖","🐏","🐑","🐐","🦌","🐕","🐩","🐈","🐓","🦃","🦚","🦜","🦢","🕊","🐇","🦝"]
+LISTA_EMOJIS_RAPIDOS = ["🐸","🐲","🐢","Rex","🐍","🦎","🍀","🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐵","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🐊","🐅","🐆","🦓","🦍","🐘","🦛","🦏","🦒","🦘","🐎","🐖","RAM","🐑","🐐","🦌","🐕","🐩","🐈","🐓","TURKEY","🦚","🦜","🦢","🕊","🐇","🦝"]
 
 PALAVRAS_PROIBIDAS = ["porra", "caralho", "merda", "bosta", "puta", "puto", "vadia", "desgraça", "idiota", "burro", "imbecil", "otário", "retardado", "lixo", "nojento", "arrombado", "viado", "bicha", "piranha", "vai se fuder", "vai se foder", "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"]
 
