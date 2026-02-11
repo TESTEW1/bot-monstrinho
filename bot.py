@@ -17,7 +17,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================= CONFIG =================
-
+#oi
 TOKEN = os.getenv("TOKEN")
 DONO_ID = 769951556388257812
 
