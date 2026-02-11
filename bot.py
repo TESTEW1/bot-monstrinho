@@ -166,7 +166,7 @@ LISTA_PERGUNTAS = [
 ("Quem é o super-herói adolescente da Marvel?", "homem aranha"),
 ("Qual o nome do rato cozinheiro?", "remy"),
 ("Quem é o vilão do Thor?", "loki"),
-("Qual o nome do super-herói com asas?", "falcao"),
+("Qual o nome do super-herói com acrobatas?", "falcao"),
 ("Quem é o herói com armadura dourada?", "homem de ferro"),
 ("Qual o nome do cachorro de Scooby-Doo?", "scooby"),
 ("Quem é o herói mais forte da Marvel?", "hulk"),
@@ -773,7 +773,7 @@ async def bauadm(ctx):
         pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 1000
         embed = discord.Embed(
             title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolher você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
             color=0xFFD700
         )
         embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
@@ -836,6 +836,7 @@ async def on_message(message):
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply("🥺 Errou a palavra! O Monstrinho ficou triste e você perdeu **50 coins**! 🐲💔")
+                    await atualizar_ranking(message.guild) # Atualiza no erro
                     return
 
             elif tipo == "caixa":
@@ -867,6 +868,7 @@ async def on_message(message):
                                     await message.reply("❌ Você não tem coins suficientes para doar! O Monstrinho ficou confuso. 🐲")
                             except asyncio.TimeoutError:
                                 await message.reply("⏰ Tempo de doação acabou!")
+                        await atualizar_ranking(message.guild) # Atualiza após escolha da caixa
                     except asyncio.TimeoutError:
                         await message.reply("⏰ Você demorou demais e a caixa se fechou! 🐲")
 
@@ -876,8 +878,8 @@ async def on_message(message):
                 elif resultado_caixa == "perder":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
                     await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **100 coins**! 🐲💔")
+                    await atualizar_ranking(message.guild) # Atualiza na perda
                 
-                await atualizar_ranking(message.guild)
                 if not ganhou: return
 
             elif tipo == "numero":
@@ -885,35 +887,39 @@ async def on_message(message):
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -50 coins! 💚")
+                    await atualizar_ranking(message.guild) # Atualiza no erro
 
             elif tipo == "ppt":
                 bot_choice = random.choice(["pedra", "papel", "tesoura"])
                 if msg_content == bot_choice:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
                     await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -50 coins... 🥺")
+                    await atualizar_ranking(message.guild) # Atualiza no empate
                 elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
                     ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
                     await message.reply(f"😜 Eu venci com **{bot_choice}**! -100 coins... 🐲💔")
+                    await atualizar_ranking(message.guild) # Atualiza na derrota
 
             elif tipo == "cara_coroa":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 300
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 150
                     await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -150 coins! 🥺💔")
+                    await atualizar_ranking(message.guild) # Atualiza no erro
 
             elif tipo == "dado":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 70
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 20
                     await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -20 coins! 🥺")
+                    await atualizar_ranking(message.guild) # Atualiza no erro
 
             elif tipo == "roleta":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
                 opcoes_roleta = ["1000", "100", "200", "perder", "jogo", "roubar"]
-                # Ajustado para 1% de chance de ganhar 1000 coins (0.01)
                 pesos = [0.01, 0.39, 0.20, 0.15, 0.10, 0.15]
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
                 if resultado == "1000":
@@ -930,6 +936,7 @@ async def on_message(message):
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
                 elif resultado == "roubar":
                     await message.reply("🥷 Mencione alguém para roubar 300 coins! (30s)")
+                    # Lógica de roubo omitida para brevidade, mas deve atualizar se implementada
                 await atualizar_ranking(message.guild); return
 
             elif msg_content == jogo_em_andamento["resposta"]:
@@ -942,7 +949,7 @@ async def on_message(message):
                 embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Monstrinho-Coins**! 🐲💚", color=0x00FF7F)
                 embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
                 await message.reply(embed=embed_acerto)
-                await atualizar_ranking(message.guild)
+                await atualizar_ranking(message.guild) # Atualiza na vitória
             return
 
     # --- PALAVRAS PROIBIDAS ---
