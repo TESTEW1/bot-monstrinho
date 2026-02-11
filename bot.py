@@ -51,6 +51,7 @@ GIF_ROLETA_GIRANDO = "https://i.pinimg.com/originals/30/16/25/30162543258ca8058f
 GIF_DERROTA = "https://i.pinimg.com/originals/ca/c9/81/cac9814161057dbc9bb2ae0ba0dbdfc0.gif"
 GIF_CAIXA_MISTERIOSA = "https://i.pinimg.com/originals/c8/54/2e/c8542e778641a29792671e6261541b63.gif"
 GIF_EMBARALHADO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
+GIF_SILENCIOSO = "https://media.tenor.com/On79Z_Gv08AAAAAd/shhh-quiet.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -83,7 +84,8 @@ jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu":
 
 # Lógica Evento Silencioso
 contador_mensagens_silencioso = 0
-meta_mensagens_silencioso = random.randint(1, 20)
+meta_mensagens_silencioso = 0
+evento_silencioso_ativo = False
 
 # Listas de Jogos
 LISTA_PERGUNTAS = [
@@ -181,7 +183,7 @@ LISTA_PERGUNTAS = [
 ("Qual o nome do bruxo das trevas?", "voldemort"),
 ("Quem é o herói com traje vermelho da DC?", "flash"),
 ("Qual o nome do cavalo do Woody?", "bala no alvo"),
-("Quem é o super-herói que vira formiga?", "homem formiga"),
+("Quem é o super-herói que vira formiga?", "homem ant-man"),
 ("Qual o nome do vilão verde do Homem-Aranha?", "duende verde"),
 ("Quem é o herói das garras?", "wolverine"),
 ("Qual o nome do pokémon de fogo inicial?", "charmander"),
@@ -292,7 +294,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     if not canal_geral: return
 
     # Sorteio do tipo de jogo ou uso do tipo escolhido
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso"])
     jogo_em_andamento["tipo"] = tipo_evento
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -365,6 +367,19 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         embed.title = "8️⃣ Caixa Misteriosa"
         embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 100\n• Prêmio Raro (300 coins)\n• Perder 100 coins"
         embed.set_image(url=GIF_CAIXA_MISTERIOSA)
+
+    elif tipo_evento == "silencioso":
+        global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
+        contador_mensagens_silencioso = 0
+        meta_mensagens_silencioso = random.randint(1, 20)
+        evento_silencioso_ativo = True
+        jogo_em_andamento["venceu"] = False # Controlado pela on_message
+        
+        embed.title = "🤫 EVENTO SILENCIOSO ATIVADO!"
+        embed.description = "O Monstrinho escolheu um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 400 Coins\n📝 **Dica:** O número está entre 1 e 20!"
+        embed.set_image(url=GIF_SILENCIOSO)
+        await canal_geral.send(embed=embed)
+        return # Sai da função pois a on_message cuida do resto
 
     embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
     await canal_geral.send(embed=embed)
@@ -547,7 +562,7 @@ class ReivindicarAnjoView(discord.ui.View):
 
     @discord.ui.button(label="🤝 Assumir Chamado", style=discord.ButtonStyle.success, custom_id="reivindicar_anjo")
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
+        cargo_anjo = discord.utils.get(interaction.user.guild.roles, name=CARGO_ANJO)
         eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
         
         if cargo_anjo not in interaction.user.roles and not eh_staff:
@@ -577,7 +592,7 @@ class ReivindicarCupidoView(discord.ui.View):
 
     @discord.ui.button(label="🏹 Assumir Ticket", style=discord.ButtonStyle.danger, custom_id="reivindicar_cupido")
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cargo_cupido = discord.utils.get(interaction.guild.roles, name=CARGO_CUPIDOS)
+        cargo_cupido = discord.utils.get(interaction.user.guild.roles, name=CARGO_CUPIDOS)
         eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
         
         if cargo_cupido not in interaction.user.roles and not eh_staff:
@@ -847,6 +862,11 @@ async def roleta(ctx):
     await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
     await disparar_roleta(ctx.guild)
 
+@bot.command()
+async def silencioso(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "silencioso")
+
 # ============== COMANDOS ADMINISTRATIVOS =================
 
 @bot.command()
@@ -919,24 +939,24 @@ async def on_message(message):
     if message.author.bot: return
 
     # --- LÓGICA EVENTO SILENCIOSO ---
-    global contador_mensagens_silencioso, meta_mensagens_silencioso
-    if message.channel.name == CANAL_GERAL:
+    global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
+    if evento_silencioso_ativo and message.channel.name == CANAL_GERAL:
         contador_mensagens_silencioso += 1
         if contador_mensagens_silencioso >= meta_mensagens_silencioso:
             user_id = message.author.id
             pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 400
             
             embed_silencioso = discord.Embed(
-                title="🐲 EVENTO SILENCIOSO! 🐲",
-                description=f"Surpresa! {message.author.mention}, você foi o sortudo da vez e enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **400 Monstrinho-Coins**! 💎✨",
+                title="🐲 SORTE NO SILÊNCIO! 🐲",
+                description=f"Surpresa! {message.author.mention}, você enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **400 Monstrinho-Coins**! 💎✨",
                 color=0xFFD700
             )
             embed_silencioso.set_thumbnail(url=AVATAR_MONSTRINHO)
             await message.channel.send(embed=embed_silencioso)
             
             # Reset do evento
-            contador_mensagens_silencioso = 0
-            meta_mensagens_silencioso = random.randint(1, 20)
+            evento_silencioso_ativo = False
+            jogo_em_andamento["venceu"] = True
             await atualizar_ranking(message.guild)
 
     # --- LÓGICA DO JOGUINHO ---
