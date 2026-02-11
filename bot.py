@@ -32,7 +32,7 @@ CANAL_CHAT_ANJO = "🪽・chat-anjo"
 CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
 CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "ranking-monstrinho"
-CANAL_LOJA_INFO = "💾・info-monstrinho"
+CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
 
 # GIFs e Imagens
@@ -858,23 +858,38 @@ async def resetar_ranking(ctx):
 async def bauadm(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode abrir o Baú do ADM! 🐲💎")
+    
     await ctx.send("💰 **BAÚ DO ADM!** 💰\n\nMeu papai, para quem você quer abrir o baú? Mencione (@) a pessoa sortuda agora! 🐲✨")
-    def check(m):
+    
+    def check_user(m):
         return m.author == ctx.author and m.channel == ctx.channel and len(m.mentions) > 0
+    
     try:
-        msg = await bot.wait_for("message", check=check, timeout=30)
-        alvo = msg.mentions[0]
-        pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 1000
+        msg_user = await bot.wait_for("message", check=check_user, timeout=30)
+        alvo = msg_user.mentions[0]
+        
+        await ctx.send(f"💎 Entendido! E quantos **Monstrinho-Coins** você quer dar para o(a) {alvo.mention}? 🐲💰")
+        
+        def check_quant(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
+        
+        msg_quant = await bot.wait_for("message", check=check_quant, timeout=30)
+        quantidade = int(msg_quant.content)
+        
+        pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + quantidade
+        
         embed = discord.Embed(
             title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **1000 Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
             color=0xFFD700
         )
         embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
+        
         await ctx.send(embed=embed)
         await atualizar_ranking(ctx.guild)
+        
     except asyncio.TimeoutError:
-        await ctx.send("⏰ O tempo acabou e ninguém foi escolhido para o baú! 🐲")
+        await ctx.send("⏰ O tempo acabou e o baú se fechou! 🐲")
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
