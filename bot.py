@@ -275,7 +275,7 @@ async def disparar_roleta(guild):
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
     embed.title = "🎡 EVENTO: ROLETA DA SORTE COLETIVA!"
-    embed.description = "A roleta está girando para TODOS! ✨🐲\n\nQuem escrever **ROLETA** vai girar uma vez e ganhar seu prêmio individual!\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 50 ou 100 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
+    embed.description = "A roleta está girando para TODOS! ✨🐲\n\nQuem escrever **ROLETA** vai girar uma vez e ganhar seu prêmio individual!\n\n🎁 **Prêmios possíveis:**\n• 500 Coins (Raro!)\n• 50 ou 100 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance Aumentada!)"
     embed.set_image(url=GIF_ROLETA_GIRANDO)
     embed.set_footer(text="A roleta ficará aberta por 5 minutos! Digite ROLETA para participar!")
     
@@ -372,7 +372,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["venceu"] = False # Controlado pela on_message
         
         embed.title = "🤫 EVENTO SILENCIOSO ATIVADO!"
-        embed.description = "O Monstrinho escolheu um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 400 Coins\n📝 **Dica:** O número está entre 1 e 20!"
+        embed.description = "O Monstrinho escolher um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 400 Coins\n📝 **Dica:** O número está entre 1 e 20!"
         embed.set_image(url=GIF_SILENCIOSO)
         await canal_geral.send(embed=embed)
         return # Sai da função pois a on_message cuida do resto
@@ -1081,13 +1081,13 @@ async def on_message(message):
 
             elif tipo == "roleta":
                 # Na roleta, não paramos o jogo global, apenas processamos o giro do usuário
-                opcoes_roleta = ["1000", "50", "100", "perder", "jogo", "dobrar"]
-                pesos = [0.01, 0.40, 0.25, 0.15, 0.185, 0.005] 
+                opcoes_roleta = ["500", "50", "100", "perder", "jogo", "dobrar"]
+                pesos = [0.01, 0.25, 0.25, 0.15, 0.14, 0.20] 
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
                 
-                if resultado == "1000":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 1000
-                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **1000 Coins**! 🐲✨", color=0x00FFFF))
+                if resultado == "500":
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 500
+                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **500 Coins**! 🐲✨", color=0x00FFFF))
                 elif resultado in ["50", "100"]:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + int(resultado)
                     await message.reply(f"🎉 {message.author.mention} ganhou **{resultado} Coins**! 🐲💚")
