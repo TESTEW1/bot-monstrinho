@@ -275,7 +275,7 @@ async def disparar_roleta(guild):
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
     embed.title = "🎡 EVENTO: ROLETA DA SORTE!"
-    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 100 ou 200 Coins\n• Outro Jogo Aleatório\n• Perder 200 Coins\n• ROUBAR 300 Coins de alguém!"
+    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 100 ou 200 Coins\n• Outro Jogo Aleatório\n• Perder 200 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
     embed.set_image(url=GIF_ROLETA_GIRANDO)
     embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
     
@@ -395,9 +395,9 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
 
 # ============== LOOP DO JOGO =================
 
-@tasks.loop(hours=3)
+@tasks.loop(minutes=30)
 async def loop_jogo_monstrinho():
-    espera_extra = random.randint(0, 7200)
+    espera_extra = random.randint(0, 300) # Pequeno atraso aleatório para não ser fixo no segundo
     await asyncio.sleep(espera_extra)
     
     for guild in bot.guilds:
@@ -1081,9 +1081,10 @@ async def on_message(message):
             elif tipo == "roleta":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
-                opcoes_roleta = ["1000", "100", "200", "perder", "jogo", "roubar"]
-                pesos = [0.01, 0.39, 0.20, 0.15, 0.10, 0.15]
+                opcoes_roleta = ["1000", "100", "200", "perder", "jogo", "dobrar"]
+                pesos = [0.01, 0.40, 0.25, 0.15, 0.185, 0.005] # Dobrar tem 0.5%
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
+                
                 if resultado == "1000":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 1000
                     await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description="Ganhou **1000 Coins**! 🐲✨", color=0x00FFFF))
@@ -1096,6 +1097,30 @@ async def on_message(message):
                 elif resultado == "jogo":
                     await message.reply("🎡 Outro jogo vindo aí! 🐲🔥")
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
+                elif resultado == "dobrar":
+                    premio_atual = 100
+                    continuar = True
+                    while continuar:
+                        await message.reply(f"🔥 **LOUCURA!** Você caiu na chance de **DOBRAR!**\nVocê tem **{premio_atual}** coins agora. Quer arriscar dobrar para **{premio_atual * 2}**?\nDigite **SIM** para arriscar ou **NAO** para parar!")
+                        def check_dobro(m): return m.author == message.author and m.content.lower() in ["sim", "nao"]
+                        try:
+                            msg_resp = await bot.wait_for("message", check=check_dobro, timeout=20)
+                            if msg_resp.content.lower() == "sim":
+                                if random.random() < 0.5: # 50% de chance de sucesso no double or nothing interno
+                                    premio_atual *= 2
+                                    await message.reply(f"✅ **CONSEGUIU!** Agora você tem **{premio_atual}** coins!")
+                                else:
+                                    await message.reply(f"💥 **PERDEU TUDO!** O Monstrinho engoliu suas moedas! 🐲💔")
+                                    premio_atual = 0
+                                    continuar = False
+                            else:
+                                await message.reply(f"💰 Sábia escolha! Você garantiu **{premio_atual}** coins! 🐲💚")
+                                continuar = False
+                        except asyncio.TimeoutError:
+                            await message.reply(f"⏰ Tempo acabou! Você parou com **{premio_atual}** coins.")
+                            continuar = False
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_atual
+                
                 await atualizar_ranking(message.guild); return
 
             elif msg_content == jogo_em_andamento["resposta"]:
