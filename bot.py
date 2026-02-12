@@ -34,6 +34,8 @@ CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
 CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
+CANAL_ATENCAO_STAFF = "⚠️・atenção" # Canal de monitoramento silencioso
+
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
 GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
@@ -73,6 +75,67 @@ CARGOS_IMUNES_NOMES = [
     "Admin. 🦇",
     "Moderador. 🦇"
 ]
+
+# ================= MONITORAMENTO BEM-ESTAR =================
+
+contador_atencao = {}
+
+GATILHOS_AJUDA = [
+    "triste", "tristeza", "sozinho", "sozinha", "solidão", "vazio", "vazia", "cansado", "cansada", "desanimado", "desanimada", 
+    "derrotado", "derrotada", "inútil", "inutil", "fracasso", "deprimido", "deprimida", "depressivo", "depressiva", "sem esperança", 
+    "sem sentido", "acabado", "acabada", "destruído", "destruida", "quebrado", "quebrada", "perdido", "perdida", "infeliz", 
+    "angustiado", "angustiada", "abatido", "abatida", "desolado", "desolada", "miserável", "miseravel", "patético", "patetico", 
+    "horrível", "horrivel", "péssimo", "pessimo", "terrível", "terrivel", "podre", "ruim", "horrendo", "horrenda", "fracassado", 
+    "fracassada", "ninguém liga", "ninguém se importa", "não sirvo pra nada", "não presto", "não valho nada", "sou inútil", 
+    "sou um lixo", "sou um fracasso", "me odeio", "odeio minha vida", "odeio tudo", "ninguém gosta de mim", "ninguém me ama", 
+    "sou um peso", "sou um problema", "só atrapalho", "sou descartável", "queria sumir", "queria desaparecer", "queria não existir", 
+    "queria dormir e não acordar", "não faço falta", "ninguém sentiria minha falta", "minha vida é inútil", "minha vida não presta", 
+    "minha vida não tem sentido", "vida sem sentido", "tudo dá errado", "nada presta", "nada importa", "nada vale a pena", 
+    "não vale a pena viver", "não vale a pena", "cansei de tudo", "cansado de tudo", "cansada de tudo", "não aguento", 
+    "não aguento mais", "não suporto mais", "não tenho forças", "sem forças", "sem energia", "esgotado", "esgotada", "exausto", 
+    "exausta", "desespero", "desesperado", "desesperada", "agonia", "dor", "sofrimento", "sofrer", "sofrendo", "angústia", 
+    "angustia", "tormento", "inferno", "colapso", "quero morrer", "queria morrer", "vou morrer", "vou me matar", "vou me suicidar", 
+    "me matar", "me suicidar", "suicídio", "suicidio", "suicidar", "acabar com tudo", "acabar com a minha vida", "sumir pra sempre", 
+    "desaparecer pra sempre", "não quero viver", "não quero mais viver", "prefiro morrer", "queria estar morto", "queria estar morta", 
+    "melhor morto", "melhor morta", "adeus para sempre", "adeus mundo", "última mensagem", "último adeus", "fim de tudo", 
+    "fim da minha vida", "vou partir", "vou embora pra sempre", "não volto mais", "ninguém vai sentir falta", "ninguém se importaria", 
+    "ninguém notaria", "não faço diferença", "não tenho valor", "sou insignificante", "sou ninguém", "sou nada", "não sou nada", 
+    "sou um erro", "sou um problema", "tudo é culpa minha", "a culpa é minha", "estraguei tudo", "não tem solução", "não tem saída", 
+    "sem saída", "sem futuro", "sem motivo pra viver", "perdi tudo", "perdi a vontade", "perdi a esperança", "desistir", "desisto", 
+    "vou desistir", "desistindo", "sem vontade de viver", "vontade de morrer", "querendo morrer"
+]
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Lógica do mecanismo de ajuda (Canal ⚠️・atenção)
+    msg_lower = message.content.lower()
+    if any(palavra in msg_lower for palavra in GATILHOS_AJUDA):
+        canal_atencao = discord.utils.get(message.guild.channels, name=CANAL_ATENCAO_STAFF)
+        
+        if canal_atencao:
+            user_id = message.author.id
+            contador_atencao[user_id] = contador_atencao.get(user_id, 0) + 1
+            contagem = contador_atencao[user_id]
+            
+            ficha = (
+                f"**Nome:** {message.author.name}\n"
+                f"**Canal:** {message.channel.mention}\n"
+                f"**Mensagem:** {message.content}\n"
+                f"**Contador:** {contagem}/3"
+            )
+            
+            if contagem >= 3:
+                await canal_atencao.send(f"🚨 **SITUAÇÃO CRÍTICA** - @Equipe Staff. :bat:\n{ficha}")
+            else:
+                await canal_atencao.send(f"⚠️ **Novo Registro:**\n{ficha}")
+
+    # Processa os demais comandos do bot
+    await bot.process_commands(message)
+
+# ================= FIM DA PRIMEIRA PARTE =================
 # ============== DADOS =================
 
 tickets = {}
