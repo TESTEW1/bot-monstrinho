@@ -52,6 +52,8 @@ GIF_DERROTA = "https://i.pinimg.com/originals/ca/c9/81/cac9814161057dbc9bb2ae0ba
 GIF_CAIXA_MISTERIOSA = "https://i.pinimg.com/originals/c8/54/2e/c8542e778641a29792671e6261541b63.gif"
 GIF_EMBARALHADO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 GIF_SILENCIOSO = "https://media.tenor.com/On79Z_Gv08AAAAAd/shhh-quiet.gif"
+GIF_BAU_PERDIDO = "https://i.pinimg.com/originals/e1/9b/6c/e19b6c086780963331a90623a6774900.gif"
+GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4YnlvaGJsZDIxb2prZnJnOHB4cmlzaGRzZzNlbCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/shkh5vfrJ56BAoeWqt/200w.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -213,7 +215,7 @@ LISTA_EMOJIS_RAPIDOS = [
 "🐸","🐲","🐢","REX","🐍","🦎","🍀",
 "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷",
 "🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅",
-"🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
+"🦉","BAT","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
 "🪲","🪳","🕷","🕸","涼","🐢","🐍","🦎","REX","🦕",
 "🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","鯊",
 "🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦒",
@@ -292,7 +294,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     if not canal_geral: return
 
     # Sorteio do tipo de jogo ou uso do tipo escolhido
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido"])
     jogo_em_andamento["tipo"] = tipo_evento
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -350,7 +352,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
 
     elif tipo_evento == "embaralhada":
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
-        jogo_em_andamento["resposta"] = palavra.lower()
+        jogo_em_andamento["resposta"] = word.lower()
         lista_letras = list(palavra)
         random.shuffle(lista_letras)
         palavra_shuffled = "".join(lista_letras)
@@ -363,6 +365,12 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         embed.title = "8️⃣ Caixa Misteriosa"
         embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 50\n• Prêmio Raro (300 coins)\n• Perder 50 coins"
         embed.set_image(url=GIF_CAIXA_MISTERIOSA)
+
+    elif tipo_evento == "bauperdido":
+        jogo_em_andamento["resposta"] = "abrir"
+        embed.title = "🏴‍☠️ EVENTO: O BAÚ PERDIDO!"
+        embed.description = "Um baú antigo apareceu no chat! Quem será o primeiro a abrir? 🐲✨\n\nDigite **ABRIR** para tentar a sorte!\n\n💰 **Prêmio:** 200 Coins\n💀 **Cuidado:** Pode ser um Mímico e você perder 100 coins!"
+        embed.set_image(url=GIF_BAU_PERDIDO)
 
     elif tipo_evento == "silencioso":
         global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
@@ -860,6 +868,11 @@ async def caixa(ctx):
     await disparar_pergunta(ctx.guild, "caixa")
 
 @bot.command()
+async def bauperdido(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "bauperdido")
+
+@bot.command()
 async def roleta(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
@@ -987,13 +1000,28 @@ async def on_message(message):
             "pergunta": lambda m: True, "palavra": lambda m: True, "emoji": lambda m: True,
             "roleta": lambda m: m == "roleta",
             "embaralhada": lambda m: True,
-            "caixa": lambda m: m in ["1", "2", "3"]
+            "caixa": lambda m: m in ["1", "2", "3"],
+            "bauperdido": lambda m: m == "abrir"
         }
 
         if filtros.get(tipo, lambda m: False)(msg_content):
             jogo_em_andamento["participantes_tentaram"].append(user_id)
 
-            if tipo == "embaralhada":
+            if tipo == "bauperdido":
+                jogo_em_andamento["venceu"] = True
+                jogo_em_andamento["resposta"] = None
+                sorte = random.random()
+                if sorte < 0.5: # 50% de chance para cada
+                    ganhou, premio = True, 200
+                else:
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                    embed_mimico = discord.Embed(title="💀 O MÍMICO TE PEGOU!", description=f"{message.author.mention}, o baú era um monstro! Você perdeu **100 Coins**! 🐲💔", color=0xFF0000)
+                    embed_mimico.set_image(url=GIF_MIMICO)
+                    await message.reply(embed=embed_mimico)
+                    await atualizar_ranking(message.guild)
+                    return
+
+            elif tipo == "embaralhada":
                 if msg_content == jogo_em_andamento["resposta"]:
                     ganhou, premio = True, 100
                 else:
