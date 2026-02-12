@@ -75,7 +75,83 @@ CARGOS_IMUNES_NOMES = [
     "Moderador. 🦇"
 ]
 
+# --- CONFIGURAÇÕES INICIAIS ---
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Dicionário global para contar os alertas de cada pessoa (em memória)
+contador_atencao = {}
+
+# --- LISTA DE PALAVRAS PARA MONITORAMENTO ---
+PALAVRAS_ALERTA = [
+    "triste", "tristeza", "sozinho", "sozinha", "solidão", "vazio", "vazia", "cansado", "cansada", 
+    "desanimado", "desanimada", "derrotado", "derrotada", "inútil", "inutil", "fracasso", "deprimido", 
+    "deprimida", "depressivo", "depressiva", "sem esperança", "sem sentido", "acabado", "acabada", 
+    "destruído", "destruida", "quebrado", "quebrada", "perdido", "perdida", "infeliz", "angustiado", 
+    "angustiada", "abatido", "abatida", "desolado", "desolada", "miserável", "miseravel", "patético", 
+    "patetico", "horrível", "horrivel", "péssimo", "pessimo", "terrível", "terrivel", "podre", "ruim", 
+    "horrendo", "horrenda", "fracassado", "fracassada", "ninguém liga", "ninguém se importa", 
+    "não sirvo pra nada", "não presto", "não valho nada", "sou inútil", "sou um lixo", "sou um fracasso", 
+    "me odeio", "odeio minha vida", "odeio tudo", "ninguém gosta de mim", "ninguém me ama", "sou um peso", 
+    "sou um problema", "só atrapalho", "sou descartável", "queria sumir", "queria desaparecer", 
+    "queria não existir", "queria dormir e não acordar", "não faço falta", "ninguém sentiria minha falta", 
+    "minha vida é inútil", "minha vida não presta", "minha vida não tem sentido", "vida sem sentido", 
+    "tudo dá errado", "nada presta", "nada importa", "nada vale a pena", "não vale a pena viver", 
+    "não vale a pena", "cansei de tudo", "cansado de tudo", "cansada de tudo", "não aguento", 
+    "não aguento mais", "não suporto mais", "não tenho forças", "sem forças", "sem energia", 
+    "esgotado", "esgotada", "exausto", "exausta", "desespero", "desesperado", "desesperada", "agonia", 
+    "dor", "sofrimento", "sofrer", "sofrendo", "angústia", "angustia", "tormento", "inferno", "colapso", 
+    "quero morrer", "queria morrer", "vou morrer", "vou me matar", "vou me suicidar", "me matar", 
+    "me suicidar", "suicídio", "suicidio", "suicidar", "acabar com tudo", "acabar com a minha vida", 
+    "sumir pra sempre", "desaparecer pra sempre", "não quero viver", "não quero mais viver", 
+    "prefiro morrer", "queria estar morto", "queria estar morta", "melhor morto", "melhor morta", 
+    "adeus para sempre", "adeus mundo", "última mensagem", "último adeus", "fim de tudo", 
+    "fim da minha vida", "vou partir", "vou embora pra sempre", "não volto mais", 
+    "ninguém vai sentir falta", "ninguém se importaria", "ninguém notaria", "não faço diferença", 
+    "não tenho valor", "sou insignificante", "sou ninguém", "sou nada", "não sou nada", "sou um erro", 
+    "sou um problema", "tudo é culpa minha", "a culpa é minha", "estraguei tudo", "não tem solução", 
+    "não tem saída", "sem saída", "sem futuro", "sem motivo pra viver", "perdi tudo", "perdi a vontade", 
+    "perdi a esperança", "desistir", "desisto", "vou desistir", "desistindo", "sem vontade de viver", 
+    "vontade de morrer", "querendo morrer"
+]
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # MECANISMO DE MONITORAMENTO (:warning:・atenção)
+    conteudo = message.content.lower()
+    
+    # Verifica se alguma palavra da lista está na mensagem
+    if any(palavra in conteudo for palavra in PALAVRAS_ALERTA):
+        # Procura o canal pelo nome exato
+        canal_atencao = discord.utils.get(message.guild.channels, name="⚠️・atenção")
+        
+        if canal_atencao:
+            user_id = str(message.author.id)
+            # Aumenta o contador do usuário
+            contador_atencao[user_id] = contador_atencao.get(user_id, 0) + 1
+            contagem = contador_atencao[user_id]
+            
+            # Formata a pequena ficha para a Staff
+            ficha = (
+                f"📝 **FICHA DE MONITORAMENTO**\n"
+                f"👤 **Nome:** {message.author.name} ({message.author.mention})\n"
+                f"📍 **Canal onde disse:** {message.channel.mention}\n"
+                f"💬 **Mensagem copiada:** {message.content}\n"
+                f"🔢 **Contador de registros:** {contagem}/3\n"
+                f"------------------------------------"
+            )
+            
+            # Se o contador chegar a 3, marca a staff, se não, manda apenas a ficha
+            if contagem >= 3:
+                await canal_atencao.send(content=f"@Equipe Staff. :bat: **SITUAÇÃO CRÍTICA!**\n{ficha}")
+            else:
+                await canal_atencao.send(content=ficha)
+
+    # Processa os demais comandos do bot (suas outras 1100+ linhas)
+    await bot.process_commands(message)
 # ============== DADOS =================
 
 tickets = {}
