@@ -275,7 +275,7 @@ async def disparar_roleta(guild):
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
     embed.title = "🎡 EVENTO: ROLETA DA SORTE!"
-    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 100 ou 200 Coins\n• Outro Jogo Aleatório\n• Perder 200 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
+    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 50 ou 100 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
     embed.set_image(url=GIF_ROLETA_GIRANDO)
     embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
     
@@ -307,44 +307,44 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["pergunta"] = pergunta
         jogo_em_andamento["resposta"] = response_str.lower()
         embed.title = "🐲 HORA DO JOGUINHO DO MONSTRINHO! 🐲"
-        embed.description = f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar ganha **100 monstrinho-coins**! Boa sorte! 💚🐉"
+        embed.description = f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar ganha **50 monstrinho-coins**! Boa sorte! 💚🐉"
 
     elif tipo_evento == "numero":
         res = random.randint(1, 50)
         jogo_em_andamento["resposta"] = str(res)
         embed.title = "🎯 Evento: Adivinhe o número!"
-        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 500 coins | ❌ **Erro:** -50 coins"
+        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 500 coins | ❌ **Erro:** -25 coins"
         embed.set_image(url=GIF_ADIVINHE_NUMERO)
 
     elif tipo_evento == "ppt":
         jogo_em_andamento["resposta"] = "logic_ppt"
         embed.title = "✊ Evento: Pedra, Papel ou Tesoura!"
-        embed.description = "Digite: **pedra, papel ou tesoura**\n\nO primeiro que vencer o bot ganha!\n💰 **Prêmio:** 300 | ❌ **Perde:** 100 | 🤝 **Empate:** -50"
+        embed.description = "Digite: **pedra, papel ou tesoura**\n\nO primeiro que vencer o bot ganha!\n💰 **Prêmio:** 150 | ❌ **Perde:** 50 | 🤝 **Empate:** -25"
         embed.set_image(url=GIF_PPT)
 
     elif tipo_evento == "cara_coroa":
         jogo_em_andamento["resposta"] = random.choice(["cara", "coroa"])
         embed.title = "🪙 Evento: Cara ou Coroa!"
-        embed.description = "Digite **cara** ou **coroa**\n\nO primeiro que acertar vence!\n💰 **Prêmio:** 300 | ❌ **Perde:** 150"
+        embed.description = "Digite **cara** ou **coroa**\n\nO primeiro que acertar vence!\n💰 **Prêmio:** 150 | ❌ **Perde:** 75"
         embed.set_image(url=GIF_CARA_COROA)
 
     elif tipo_evento == "dado":
         jogo_em_andamento["resposta"] = str(random.randint(1, 6))
         embed.title = "🎲 Evento: Dado da sorte!"
-        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 70 | ❌ **Perde:** 20"
+        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 35 | ❌ **Perde:** 10"
         embed.set_image(url=GIF_DADO)
 
     elif tipo_evento == "palavra":
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
         jogo_em_andamento["resposta"] = palavra.lower()
         embed.title = "⚡ Evento rápido!"
-        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence! Ganha **100 coins**"
+        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence! Ganha **50 coins**"
 
     elif tipo_evento == "emoji":
         emoji = random.choice(LISTA_EMOJIS_RAPIDOS)
         jogo_em_andamento["resposta"] = emoji
         embed.title = "⚡ Evento de emoji!"
-        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **100 coins**"
+        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **50 coins**"
 
     elif tipo_evento == "roleta":
         jogo_em_andamento["resposta"] = "roleta"
@@ -359,13 +359,13 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         random.shuffle(lista_letras)
         palavra_shuffled = "".join(lista_letras)
         embed.title = "2️⃣ Palavra Embaralhada"
-        embed.description = f"🔤 **Desembaralhe a palavra:**\n> **{palavra_shuffled}**\n\n💰 **Prêmio:** 200 coins | ❌ **Erro:** -50"
+        embed.description = f"🔤 **Desembaralhe a palavra:**\n> **{palavra_shuffled}**\n\n💰 **Prêmio:** 100 coins | ❌ **Erro:** -25"
         embed.set_image(url=GIF_EMBARALHADO)
 
     elif tipo_evento == "caixa":
         jogo_em_andamento["resposta"] = "caixa"
         embed.title = "8️⃣ Caixa Misteriosa"
-        embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 100\n• Prêmio Raro (300 coins)\n• Perder 100 coins"
+        embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 50\n• Prêmio Raro (300 coins)\n• Perder 50 coins"
         embed.set_image(url=GIF_CAIXA_MISTERIOSA)
 
     elif tipo_evento == "silencioso":
@@ -994,10 +994,10 @@ async def on_message(message):
 
             if tipo == "embaralhada":
                 if msg_content == jogo_em_andamento["resposta"]:
-                    ganhou, premio = True, 200
+                    ganhou, premio = True, 100
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply("🥺 Errou a palavra! O Monstrinho ficou triste e você perdeu **50 coins**! 🐲💔")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
+                    await message.reply("🥺 Errou a palavra! O Monstrinho ficou triste e você perdeu **25 coins**! 🐲💔")
                     await atualizar_ranking(message.guild) 
                     return
 
@@ -1007,25 +1007,25 @@ async def on_message(message):
                 resultado_caixa = random.choice(["coins", "raro", "perder"])
                 
                 if resultado_caixa == "coins":
-                    await message.reply(f"🎁 {message.author.mention}, a caixa tem **moedas**!\nVocê quer ganhar **100 coins** ou prefere **doar 200 coins** de si mesmo para alguém? (Responda **GANHAR** ou **DOAR**)")
+                    await message.reply(f"🎁 {message.author.mention}, a caixa tem **moedas**!\nVocê quer ganhar **50 coins** ou prefere **doar 100 coins** de si mesmo para alguém? (Responda **GANHAR** ou **DOAR**)")
                     def check_caixa(m):
                         return m.author == message.author and m.content.lower() in ["ganhar", "doar"]
                     try:
                         resp = await bot.wait_for("message", check=check_caixa, timeout=30)
                         if resp.content.lower() == "ganhar":
-                            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 100
-                            await message.reply("🐲 Você escolheu ganhar! +100 Coins na conta! 💚")
+                            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 50
+                            await message.reply("🐲 Você escolheu ganhar! +50 Coins na conta! 💚")
                         else:
-                            await message.reply("😇 Que generoso! Mencione para quem você quer doar 200 coins agora!")
+                            await message.reply("😇 Que generoso! Mencione para quem você quer doar 100 coins agora!")
                             def check_doacao(m):
                                 return m.author == message.author and len(m.mentions) > 0
                             try:
                                 msg_alvo = await bot.wait_for("message", check=check_doacao, timeout=30)
                                 alvo = msg_alvo.mentions[0]
-                                if pontuacao_monstrinho.get(user_id, 0) >= 200:
-                                    pontuacao_monstrinho[user_id] -= 200
-                                    pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 200
-                                    await message.reply(f"💖 Você doou 200 coins para {alvo.mention}! O Monstrinho amou sua bondade! 🐲✨")
+                                if pontuacao_monstrinho.get(user_id, 0) >= 100:
+                                    pontuacao_monstrinho[user_id] -= 100
+                                    pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 100
+                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! O Monstrinho amou sua bondade! 🐲✨")
                                 else:
                                     await message.reply("❌ Você não tem coins suficientes para doar! O Monstrinho ficou confuso. 🐲")
                             except asyncio.TimeoutError:
@@ -1038,8 +1038,8 @@ async def on_message(message):
                     ganhou, premio = True, 300
                     
                 elif resultado_caixa == "perder":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **100 coins**! 🐲💔")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                    await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **50 coins**! 🐲💔")
                     await atualizar_ranking(message.guild) 
                 
                 if not ganhou: return
@@ -1047,53 +1047,53 @@ async def on_message(message):
             elif tipo == "numero":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 500
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -50 coins! 💚")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
+                    await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "ppt":
                 bot_choice = random.choice(["pedra", "papel", "tesoura"])
                 if msg_content == bot_choice:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -50 coins... 🥺")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
+                    await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -25 coins... 🥺")
                     await atualizar_ranking(message.guild)
                 elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
-                    ganhou, premio = True, 300
+                    ganhou, premio = True, 150
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    await message.reply(f"😜 Eu venci com **{bot_choice}**! -100 coins... 🐲💔")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                    await message.reply(f"😜 Eu venci com **{bot_choice}**! -50 coins... 🐲💔")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "cara_coroa":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 300
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 150
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 150
-                    await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -150 coins! 🥺💔")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 75
+                    await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -75 coins! 🥺💔")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "dado":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 70
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 35
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 20
-                    await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -20 coins! 🥺")
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 10
+                    await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -10 coins! 🥺")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "roleta":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
-                opcoes_roleta = ["1000", "100", "200", "perder", "jogo", "dobrar"]
+                opcoes_roleta = ["1000", "50", "100", "perder", "jogo", "dobrar"]
                 pesos = [0.01, 0.40, 0.25, 0.15, 0.185, 0.005] # Dobrar tem 0.5%
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
                 
                 if resultado == "1000":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 1000
                     await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description="Ganhou **1000 Coins**! 🐲✨", color=0x00FFFF))
-                elif resultado in ["100", "200"]:
+                elif resultado in ["50", "100"]:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + int(resultado)
                     await message.reply(f"🎉 Ganhou **{resultado} Coins**! 🐲💚")
                 elif resultado == "perder":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 200
-                    await message.reply(embed=discord.Embed(title="💀 AZAR", description="Perdeu **200 Coins**! 🐲💔", color=0xFF0000).set_image(url=GIF_DERROTA))
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                    await message.reply(embed=discord.Embed(title="💀 AZAR", description="Perdeu **100 Coins**! 🐲💔", color=0xFF0000).set_image(url=GIF_DERROTA))
                 elif resultado == "jogo":
                     await message.reply("🎡 Outro jogo vindo aí! 🐲🔥")
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
@@ -1124,7 +1124,7 @@ async def on_message(message):
                 await atualizar_ranking(message.guild); return
 
             elif msg_content == jogo_em_andamento["resposta"]:
-                ganhou, premio = True, 100
+                ganhou, premio = True, 50
 
             if ganhou:
                 jogo_em_andamento["venceu"] = True
