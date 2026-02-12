@@ -1017,7 +1017,7 @@ async def on_message(message):
 
 @bot.command()
 @commands.has_permissions(administrator=True)
-def setup_ticket(ctx):
+async def setup_ticket(ctx):
     embed = discord.Embed(
         title="🎟️ CENTRAL DE ATENDIMENTO - CSI 🎟️",
         description="Precisa de ajuda, fazer uma denúncia ou apenas um ombro amigo? Escolha a categoria abaixo para abrir um atendimento privado!\n\n🕒 **Horário de atendimento:** Aleatório (conforme disponibilidade da staff).\n⚠️ **Atenção:** Abuso do sistema de tickets gera advertência.",
