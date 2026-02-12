@@ -23,7 +23,7 @@ DONO_ID = 769951556388257812
 
 CANAL_GERAL = "💭・chat-geral"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌・palavras-apagadas-bot"
+CANAL_LOG = "❌-palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
@@ -551,7 +551,14 @@ class FecharTicketView(discord.ui.View):
 
     @discord.ui.button(label="🔒 Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="fechar_ticket")
     async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔒 Fechando em 5s...", ephemeral=True)
+        # Verifica se é canal de Anjo
+        if interaction.channel.name.startswith("👼┃anjos"):
+            cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
+            eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
+            if (cargo_anjo not in interaction.user.roles) and not eh_staff:
+                return await interaction.response.send_message("❌ Apenas os Anjos ou a Staff podem fechar este canal de acolhimento! 🪽", ephemeral=True)
+        
+        await interaction.response.send_message("🔒 Fechando este ticket em 5 segundinhos... tchau tchau! 🐲💚", ephemeral=True)
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
@@ -659,16 +666,17 @@ class TicketSelect(discord.ui.Select):
 
         if tipo == "anjos":
             embed_user = discord.Embed(
-                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui! 🪽💚",
+                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui para te dar todo o carinho do mundo! 🪽💚",
                 color=0xFFB6C1
             )
-            await canal.send(embed=user, view=FecharTicketView())
+            await canal.send(embed=embed_user, view=FecharTicketView())
+            
             canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
             if canal_anjo_logs:
                 cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
                 embed_anjo = discord.Embed(
-                    title="🪽 Novo Chamado Angelical!",
-                    description=f"O(A) pequeno(a) {user.mention} precisa de acolhimento!\n📍 **Canal:** {canal.mention}",
+                    title="🪽 Alerta de Proteção Angelical!",
+                    description=f"Um neném está precisando de acolhimento!\n👤 **Membro:** {user.mention}\n📍 **Ticket:** {canal.mention}\n\nAlgum anjinho pode assumir esse chamado? 💚",
                     color=0x87CEEB,
                     timestamp=datetime.now()
                 )
@@ -730,7 +738,7 @@ async def on_ready():
             await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
             embed_banner = discord.Embed(color=0x2b2d31)
             embed_banner.set_image(url=BANNER_TICKET)
-            await canal_tkt.send(embed=embed_banner)
+            await canal_tkt.send(embed=banner)
 
         # Inicializar Loja
         canal_loja = discord.utils.get(guild.text_channels, name=CANAL_LOJA_INFO)
