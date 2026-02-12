@@ -34,7 +34,7 @@ CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
 CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
-CANAL_ATENCAO = "⚠️・atenção" # Novo canal de monitoramento
+CANAL_ATENCAO = "⚠️・atenção" # NOVO CANAL ADICIONADO
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -84,7 +84,7 @@ avisos_usuarios = {}
 total_castigos_usuario = {} # Contador de castigos total
 pontuacao_monstrinho = {} # Guardar os pontos
 jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
-contador_ajuda_psicologica = {} # Novo contador para o sistema de atenção
+contador_atencao_psicologica = {} # NOVO CONTADOR PARA O SISTEMA DE ATENÇÃO
 
 # Lógica Evento Silencioso
 contador_mensagens_silencioso = 0
@@ -120,7 +120,7 @@ LISTA_PERGUNTAS = [
 ("Quem é o rei da selva?", "leao"),
 ("Qual o nome do filme dos dinossauros?", "jurassic park"),
 ("Quem é o herói de capa vermelha e azul?", "superman"),
-("Qual o nome da princesa de gelo?", "elsa"),
+("Qual o nome da princessa de gelo?", "elsa"),
 ("Quem vive com o Pateta?", "mickey"),
 ("Qual o nome do robô amarelo de Transformers?", "bumblebee"),
 ("Quem é o herói com garras de metal?", "wolverine"),
@@ -227,7 +227,6 @@ LISTA_EMOJIS_RAPIDOS = [
 "Squirrel","Hedgehog"
 ]
 
-
 # ============== PALAVRAS PROIBIDAS =================
 
 PALAVRAS_PROIBIDAS = [
@@ -238,40 +237,10 @@ PALAVRAS_PROIBIDAS = [
     "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
 ]
 
-# ============== PALAVRAS DE ATENÇÃO =================
+# ============== PALAVRAS DE ATENÇÃO (NOVO) =================
 
 PALAVRAS_ATENCAO = [
-    "triste", "tristeza", "sozinho", "sozinha", "solidão", "vazio", "vazia", "cansado", "cansada", 
-    "desanimado", "desanimada", "derrotado", "derrotada", "inútil", "inutil", "fracasso", 
-    "deprimido", "deprimida", "depressivo", "depressiva", "sem esperança", "sem sentido", 
-    "acabado", "acabada", "destruído", "destruida", "quebrado", "quebrada", "perdido", 
-    "perdida", "infeliz", "angustiado", "angustiada", "abatido", "abatida", "desolado", 
-    "desolada", "miserável", "miseravel", "patético", "patetico", "horrível", "horrivel", 
-    "péssimo", "pessimo", "terrível", "terrivel", "podre", "ruim", "horrendo", "horrenda", 
-    "fracassado", "fracassada", "ninguém liga", "ninguém se importa", "não sirvo pra nada", 
-    "não presto", "não valho nada", "sou inútil", "sou um lixo", "sou um fracasso", "me odeio", 
-    "odeio minha vida", "odeio tudo", "ninguém gosta de mim", "ninguém me ama", "sou um peso", 
-    "sou um problema", "só atrapalho", "sou descartável", "queria sumir", "queria desaparecer", 
-    "queria não existir", "queria dormir e não acordar", "não faço falta", "ninguém sentiria minha falta", 
-    "minha vida é inútil", "minha vida não presta", "minha vida não tem sentido", "vida sem sentido", 
-    "tudo dá errado", "nada presta", "nada importa", "nada vale a pena", "não vale a pena viver", 
-    "não vale a pena", "cansei de tudo", "cansado de tudo", "cansada de tudo", "não aguento", 
-    "não aguento mais", "não suporto mais", "não tenho forças", "sem forças", "sem energia", 
-    "esgotado", "esgotada", "exausto", "exausta", "desespero", "desesperado", "desesperada", 
-    "agonia", "dor", "sofrimento", "sofrer", "sofrendo", "angústia", "angustia", "tormento", 
-    "inferno", "colapso", "quero morrer", "queria morrer", "vou morrer", "vou me matar", 
-    "vou me suicidar", "me matar", "me suicidar", "suicídio", "suicidio", "suicidar", 
-    "acabar com tudo", "acabar com a minha vida", "sumir pra sempre", "desaparecer pra sempre", 
-    "não quero viver", "não quero mais viver", "prefiro morrer", "queria estar morto", 
-    "queria estar morta", "melhor morto", "melhor morta", "adeus para sempre", "adeus mundo", 
-    "última mensagem", "último adeus", "fim de tudo", "fim da minha vida", "vou partir", 
-    "vou embora pra sempre", "não volto mais", "ninguém vai sentir falta", "ninguém se importaria", 
-    "ninguém notaria", "não faço diferença", "não tenho valor", "sou insignificante", 
-    "sou ninguém", "sou nada", "não sou nada", "sou um erro", "sou um problema", 
-    "tudo é culpa minha", "a culpa é minha", "estraguei tudo", "não tem solução", 
-    "não tem saída", "sem saída", "sem futuro", "sem motivo pra viver", "perdi tudo", 
-    "perdi a vontade", "perdi a esperança", "desistir", "desisto", "vou desistir", 
-    "desistindo", "sem vontade de viver", "vontade de morrer", "querendo morrer"
+    "triste", "tristeza", "sozinho", "sozinha", "solidão", "vazio", "vazia", "cansado", "cansada", "desanimado", "desanimada", "derrotado", "derrotada", "inútil", "inutil", "fracasso", "deprimido", "deprimida", "depressivo", "depressiva", "sem esperança", "sem sentido", "acabado", "acabada", "destruído", "destruida", "quebrado", "quebrada", "perdido", "perdida", "infeliz", "angustiado", "angustiada", "abatido", "abatida", "desolado", "desolada", "miserável", "miseravel", "patético", "patetico", "horrível", "horrivel", "péssimo", "pessimo", "terrível", "terrivel", "podre", "ruim", "horrendo", "horrenda", "fracassado", "fracassada", "ninguém liga", "ninguém se importa", "não sirvo pra nada", "não presto", "não valho nada", "sou inútil", "sou um lixo", "sou um fracasso", "me odeio", "odeio minha vida", "odeio tudo", "ninguém gosta de mim", "ninguém me ama", "sou um peso", "sou um problema", "só atrapalho", "sou descartável", "queria sumir", "queria desaparecer", "queria não existir", "queria dormir e não acordar", "não faço falta", "ninguém sentiria minha falta", "minha vida é inútil", "minha vida não presta", "minha vida não tem sentido", "vida sem sentido", "tudo dá errado", "nada presta", "nada importa", "nada vale a pena", "não vale a pena viver", "não vale a pena", "cansei de tudo", "cansado de tudo", "cansada de tudo", "não aguento", "não aguento mais", "não suporto mais", "não tenho forças", "sem forças", "sem energia", "esgotado", "esgotada", "exausto", "exausta", "desespero", "desesperado", "desesperada", "agonia", "dor", "sofrimento", "sofrer", "sofrendo", "angústia", "angustia", "tormento", "inferno", "colapso", "quero morrer", "queria morrer", "vou morrer", "vou me matar", "vou me suicidar", "me matar", "me suicidar", "suicídio", "suicidio", "suicidar", "acabar com tudo", "acabar com a minha vida", "sumir pra sempre", "desaparecer pra sempre", "não quero viver", "não quero mais viver", "prefiro morrer", "queria estar morto", "queria estar morta", "melhor morto", "melhor morta", "adeus para sempre", "adeus mundo", "última mensagem", "último adeus", "fim de tudo", "fim da minha vida", "vou partir", "vou embora pra sempre", "não volto mais", "ninguém vai sentir falta", "ninguém se importaria", "ninguém notaria", "não faço diferença", "não tenho valor", "sou insignificante", "sou ninguém", "sou nada", "não sou nada", "sou um erro", "sou um problema", "tudo é culpa minha", "a culpa é minha", "estraguei tudo", "não tem solução", "não tem saída", "sem saída", "sem futuro", "sem motivo pra viver", "perdi tudo", "perdi a vontade", "perdi a esperança", "desistir", "desisto", "vou desistir", "desistindo", "sem vontade de viver", "vontade de morrer", "querendo morrer"
 ]
 
 # ============== FUNÇÕES AUXILIARES JOGO =================
@@ -376,13 +345,13 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
         jogo_em_andamento["resposta"] = palavra.lower()
         embed.title = "⚡ Evento rápido!"
-        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence!\nGanha **50 coins**"
+        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence! Ganha **50 coins**"
 
     elif tipo_evento == "emoji":
         emoji = random.choice(LISTA_EMOJIS_RAPIDOS)
         jogo_em_andamento["resposta"] = emoji
         embed.title = "⚡ Evento de emoji!"
-        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence!\nGanha **50 coins**"
+        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **50 coins**"
 
     elif tipo_evento == "roleta":
         await disparar_roleta(guild)
@@ -614,7 +583,7 @@ class ReivindicarAnjoView(discord.ui.View):
         eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
         if cargo_anjo not in interaction.user.roles and not eh_staff:
             return await interaction.response.send_message("❌ Apenas um Anjo ou Staff pode fazer isso! 🪽", ephemeral=True)
-        
+
         canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
         if not canal_ticket:
             return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
@@ -626,7 +595,7 @@ class ReivindicarAnjoView(discord.ui.View):
             color=0x00FF7F
         )
         await canal_ticket.send(embed=embed_no_ticket)
-        
+
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
         button.disabled = True
@@ -643,7 +612,7 @@ class ReivindicarCupidoView(discord.ui.View):
         eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
         if cargo_cupido not in interaction.user.roles and not eh_staff:
             return await interaction.response.send_message("❌ Apenas um Cupido ou Staff pode fazer isso! 🏹💘", ephemeral=True)
-        
+
         canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
         if not canal_ticket:
             return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
@@ -655,7 +624,7 @@ class ReivindicarCupidoView(discord.ui.View):
             color=0xFF1493
         )
         await canal_ticket.send(embed=embed_no_ticket)
-        
+
         button.label = f"Assumido por {interaction.user.display_name}"
         button.style = discord.ButtonStyle.secondary
         button.disabled = True
@@ -673,11 +642,9 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"),
         ]
         super().__init__(
-            placeholder="🎟️ Selecione o tipo de ticket...",
-            min_values=1,
-            max_values=1,
+            placeholder="🎟️ Selecione o tipo de ticket",
             options=options,
-            custom_id="ticket_select"
+            custom_id="ticket_select_menu"
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -685,73 +652,63 @@ class TicketSelect(discord.ui.Select):
         user = interaction.user
         tipo = self.values[0]
 
-        # Configurações por tipo
-        config = {
-            "suporte": {"nome": f"🛠┃suporte-{user.display_name}", "color": 0x3498DB},
-            "denuncia": {"nome": f"🚨┃denúncia-{user.display_name}", "color": 0xE74C3C},
-            "staff": {"nome": f"👮┃staff-{user.display_name}", "color": 0x2ECC71},
-            "namorados": {"nome": f"💘┃amor-{user.display_name}", "color": 0xFF69B4},
-            "catalogo": {"nome": f"📸┃catálogo-{user.display_name}", "color": 0x9B59B6},
-            "lider_torcida": {"nome": f"📣┃torcida-{user.display_name}", "color": 0xF1C40F},
-            "anjos": {"nome": f"👼┃anjos-{user.display_name}", "color": 0x00FF7F}
-        }
-
-        # Permissões Básicas
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
 
-        canal = await guild.create_text_channel(name=config[tipo]["nome"], overwrites=overwrites)
-        
-        embed = discord.Embed(
-            title=f"🎟️ Ticket Aberto: {tipo.title()}",
-            description=f"Olá {user.mention}, bem-vindo ao seu ticket!\n\nAguarde um momento que a nossa equipe logo virá te atender. 🐲💚",
-            color=config[tipo]["color"]
-        )
-        if tipo == "namorados": embed.set_image(url=GIF_NAMORADOS)
-        if tipo == "catalogo": embed.set_image(url=GIF_CATALOGO)
-        
-        await canal.send(embed=embed, view=FecharTicketView())
-        await interaction.response.send_message(f"✅ Ticket criado: {canal.mention}", ephemeral=True)
+        if tipo != "anjos" and tipo != "namorados":
+            cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
+            if cargo_mod:
+                overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
-        # Notificar Staff nos canais específicos
+        categoria = interaction.channel.category
+        pref = "👼┃" if tipo == "anjos" else "💘┃" if tipo == "namorados" else "🎟️┃"
+        canal = await guild.create_text_channel(
+            name=f"{pref}{tipo}-{user.name}".lower(),
+            category=categoria,
+            overwrites=overwrites
+        )
+
+        tickets[canal.id] = {"user": user.id, "tipo": tipo}
+
         if tipo == "anjos":
-            canal_anjo = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
-            if canal_anjo:
-                cargo_anjo = discord.utils.get(guild.roles, name=CARGO_ANJO)
-                mencao = cargo_anjo.mention if cargo_anjo else "@Anjos"
-                embed_notif = discord.Embed(
-                    title="👼 NOVO PEDIDO DE ANJO",
-                    description=f"O membro {user.mention} está precisando de um anjinho para conversar!\n\n📍 **Canal:** {canal.mention}",
-                    color=0x00FF7F
+            embed_user = discord.Embed(
+                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui para te dar todo o carinho do mundo! 🪽💚",
+                color=0xFFB6C1
+            )
+            await canal.send(embed=embed_user, view=FecharTicketView())
+            
+            canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
+            if canal_anjo_logs:
+                cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
+                embed_anjo = discord.Embed(
+                    title="🪽 Alerta de Proteção Angelical!",
+                    description=f"Um neném está precisando de acolhimento!\n👤 **Membro:** {user.mention}\n📍 **Ticket:** {canal.mention}\n\nAlgum anjinho pode assumir esse chamado? 💚",
+                    color=0x87CEEB,
+                    timestamp=datetime.now()
                 )
-                await canal_anjo.send(content=mencao, embed=embed_notif, view=ReivindicarAnjoView(canal.id))
+                await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
 
         elif tipo == "namorados":
-            canal_cupido = discord.utils.get(guild.text_channels, name=CANAL_CHAT_CUPIDOS)
-            if canal_cupido:
-                cargo_cupido = discord.utils.get(guild.roles, name=CARGO_CUPIDOS)
-                mencao = cargo_cupido.mention if cargo_cupido else "@Cupidos"
-                embed_notif = discord.Embed(
-                    title="💘 NOVO PEDIDO DE CUPIDO",
-                    description=f"O membro {user.mention} quer falar sobre o amor!\n\n📍 **Canal:** {canal.mention}",
-                    color=0xFF1493
+            embed_namo = discord.Embed(title="💘 EVENTO DOS NAMORADOS", description=f"Oii {user.mention}! Um Cupido foi chamado para te flechar! ✨🏹", color=0xFF69B4)
+            embed_namo.set_image(url=GIF_NAMORADOS)
+            await canal.send(embed=embed_namo, view=FecharTicketView())
+            
+            canal_cupido_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_CUPIDOS)
+            if canal_cupido_logs:
+                cargo_cupido_mencao = discord.utils.get(guild.roles, name=CARGO_CUPIDOS)
+                embed_cupido = discord.Embed(
+                    title="💘 Pedido de Cupido!",
+                    description=f"O amor está no ar! {user.mention} abriu um ticket.\n📍 **Ticket:** {canal.mention}",
+                    color=0xFF69B4,
+                    timestamp=datetime.now()
                 )
-                await canal_cupido.send(content=mencao, embed=embed_notif, view=ReivindicarCupidoView(canal.id))
+                await canal_cupido_logs.send(content=cargo_cupido_mencao.mention if cargo_cupido_mencao else None, embed=embed_cupido, view=ReivindicarCupidoView(canal.id))
         
         else:
-            canal_staff = discord.utils.get(guild.text_channels, name=CANAL_CHAT_STAFF_GERAL)
-            if canal_staff:
-                cargo_staff = discord.utils.get(guild.roles, name=CARGO_STAFF_EQUIPE)
-                mencao = cargo_staff.mention if cargo_staff else "@Staff"
-                embed_notif = discord.Embed(
-                    title="🎟️ NOVO TICKET GERAL",
-                    description=f"**Membro:** {user.mention}\n**Tipo:** {tipo.title()}\n📍 **Canal:** {canal.mention}",
-                    color=0xFFD700
-                )
-                await canal_staff.send(content=mencao, embed=embed_notif)
+            embed_ticket = discord.Embed(title="🎟️ Ticket de Atendimento", description=f"Oii {user.mention}! Você abriu um ticket do tipo: **{tipo.upper()}**.\n\nA staff já foi notificada e em breve virão te ajudar! 🐲💚", color=0x00FF7F)
+            await canal.send(embed=embed_ticket, view=FecharTicketView())
 
 class TicketView(discord.ui.View):
     def __init__(self):
@@ -828,34 +785,32 @@ async def on_member_join(member):
 async def on_message(message):
     if message.author.bot: return
 
-    # --- SISTEMA DE ATENÇÃO E MONITORAMENTO ---
-    texto_atencao = message.content.lower()
-    for palavra in PALAVRAS_ATENCAO:
-        if palavra in texto_atencao:
+    # --- MECANISMO DE ATENÇÃO (NOVO) ---
+    conteudo_low = message.content.lower()
+    for gatilho in PALAVRAS_ATENCAO:
+        if gatilho in conteudo_low:
             canal_atencao = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO)
             if canal_atencao:
                 user_id = message.author.id
-                contador_ajuda_psicologica[user_id] = contador_ajuda_psicologica.get(user_id, 0) + 1
-                qtd_avisos = contador_ajuda_psicologica[user_id]
-                
-                # Criar a ficha
-                embed_atenção = discord.Embed(
-                    title="⚠️ ALERTA DE BEM-ESTAR",
-                    color=0xFFFF00,
+                contador_atencao_psicologica[user_id] = contador_atencao_psicologica.get(user_id, 0) + 1
+                total_atual = contador_atencao_psicologica[user_id]
+
+                embed_atencao = discord.Embed(
+                    title="⚠️ Ficha de Monitoramento",
+                    description=f"**Membro:** {message.author.mention}\n**Canal:** {message.channel.mention}\n**Contador:** `{total_atual}/3`",
+                    color=0xFFD700,
                     timestamp=datetime.now()
                 )
-                embed_atenção.add_field(name="👤 Usuário", value=f"{message.author.mention} (`{message.author.id}`)", inline=True)
-                embed_atenção.add_field(name="📍 Canal", value=message.channel.mention, inline=True)
-                embed_atenção.add_field(name="🔢 Contador", value=f"**{qtd_avisos}/3**", inline=True)
-                embed_atenção.add_field(name="💬 Mensagem Coletada", value=f"```{message.content}```", inline=False)
+                embed_atencao.add_field(name="Mensagem Original:", value=f"\"{message.content}\"", inline=False)
                 
-                content_msg = ""
-                if qtd_avisos >= 3:
-                    content_msg = f"@Equipe Staff. :bat: - A situação está séria com este membro!"
-                    contador_ajuda_psicologica[user_id] = 0 # Reseta após marcar a staff
-                
-                await canal_atencao.send(content=content_msg, embed=embed_atenção)
-            break # Encontrou uma palavra, não precisa checar as outras na mesma mensagem
+                mencao_staff = ""
+                if total_atual >= 3:
+                    mencao_staff = "@Equipe Staff. :bat:"
+                    # Resetamos opcionalmente ou mantemos alto? Deixarei resetar após avisar a staff
+                    contador_atencao_psicologica[user_id] = 0 
+
+                await canal_atencao.send(content=mencao_staff, embed=embed_atencao)
+            break
 
     # --- LÓGICA DO EVENTO SILENCIOSO ---
     global contador_mensagens_silencioso, evento_silencioso_ativo
@@ -870,58 +825,49 @@ async def on_message(message):
 
     # --- LÓGICA DOS JOGOS ---
     if jogo_em_andamento["resposta"] and not jogo_em_andamento["venceu"]:
-        # Bloqueio de canal (só funciona no geral)
         if message.channel.name != CANAL_GERAL: return
-
         user_id = message.author.id
         msg_limpa = message.content.lower().strip()
 
-        # LOGICA DA ROLETA (MULTIPARTICIPANTE)
         if jogo_em_andamento["tipo"] == "roleta":
             if msg_limpa == "roleta":
-                if user_id in jogo_em_andamento["participantes_tentaram"]:
-                    return # Já girou nessa roleta
-                
+                if user_id in jogo_em_andamento["participantes_tentaram"]: return
                 jogo_em_andamento["participantes_tentaram"].append(user_id)
                 sorte = random.randint(1, 100)
                 resultado = ""
                 cor = 0x00FF7F
-
-                if sorte <= 5: # 5% Dobrar
+                if sorte <= 5: 
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) * 2
                     resultado = "🐲 MEEEEEU DEUS! VOCÊ DOBROU SEUS PONTOS! 🎡✨"
-                elif sorte <= 15: # 10% 500 coins
+                elif sorte <= 15:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 500
                     resultado = "💎 UAU! Ganhou 500 Monstrinho-Coins raros!"
-                elif sorte <= 40: # 25% 100 coins
+                elif sorte <= 40:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 100
                     resultado = "💰 Boa! Você ganhou 100 Coins."
-                elif sorte <= 70: # 30% Perder 100
+                elif sorte <= 70:
                     pontuacao_monstrinho[user_id] = max(0, pontuacao_monstrinho.get(user_id, 0) - 100)
                     resultado = "💀 Eita... a roleta não foi generosa. Você perdeu 100 coins."
                     cor = 0xFF0000
-                else: # 30% 50 coins
+                else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 50
                     resultado = "✅ Você ganhou 50 Coins."
-
                 await message.reply(embed=discord.Embed(description=f"{message.author.mention} girou a roleta...\n\n**{resultado}**", color=cor))
                 await atualizar_ranking(message.guild)
             return
 
-        # LOGICA DO BAÚ PERDIDO
         if jogo_em_andamento["tipo"] == "bauperdido":
             if msg_limpa == "abrir":
                 jogo_em_andamento["venceu"] = True
-                if random.randint(1, 100) <= 20: # 20% Mimico
+                if random.randint(1, 100) <= 20:
                     pontuacao_monstrinho[user_id] = max(0, pontuacao_monstrinho.get(user_id, 0) - 100)
-                    await message.reply(f"💀 **ERA UM MÍMICO!** O baú te mordeu e você perdeu 100 coins! 🐲💔", file=discord.File(fp=None, filename=GIF_MIMICO) if False else None)
+                    await message.reply(f"💀 **ERA UM MÍMICO!** O baú te mordeu e você perdeu 100 coins! 🐲💔")
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 200
                     await message.reply(f"💎 **TESOURO!** Você abriu o baú e encontrou **200 Coins**! 🐲✨")
                 await atualizar_ranking(message.guild)
             return
 
-        # LOGICA DA CAIXA MISTERIOSA
         if jogo_em_andamento["tipo"] == "caixa":
             if msg_limpa in ["1", "2", "3"]:
                 jogo_em_andamento["venceu"] = True
@@ -938,32 +884,22 @@ async def on_message(message):
                 await atualizar_ranking(message.guild)
             return
 
-        # LOGICA PPT
         if jogo_em_andamento["tipo"] == "ppt":
             if msg_limpa in ["pedra", "papel", "tesoura"]:
-                bot_escolha = random.choice(["pedra", "papel", "tesoura"])
-                vitoria = False
-                empate = False
-                if msg_limpa == bot_escolha: empate = True
-                elif (msg_limpa == "pedra" and bot_escolha == "tesoura") or \
-                     (msg_limpa == "papel" and bot_escolha == "pedra") or \
-                     (msg_limpa == "tesoura" and bot_escolha == "papel"):
-                    vitoria = True
-                
-                if empate:
+                bot_choice = random.choice(["pedra", "papel", "tesoura"])
+                if msg_limpa == bot_choice:
                     pontuacao_monstrinho[user_id] = max(0, pontuacao_monstrinho.get(user_id, 0) - 25)
-                    await message.reply(f"🤝 Empate! Eu também escolhi **{bot_escolha}**. Perdeu 25 coins pelo tempo perdido! 🐲")
-                elif vitoria:
+                    await message.reply(f"🤝 Empate! Ambos escolhemos **{bot_choice}**. -25 coins!")
+                elif (msg_limpa == "pedra" and bot_choice == "tesoura") or (msg_limpa == "papel" and bot_choice == "pedra") or (msg_limpa == "tesoura" and bot_choice == "papel"):
                     jogo_em_andamento["venceu"] = True
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 150
-                    await message.reply(f"🎉 **VOCÊ VENCEU!** Eu escolhi **{bot_escolha}**. Ganhou **150 Coins**! 🐲✨")
+                    await message.reply(f"🎉 **VENCEU!** Eu escolhi {bot_choice}. +150 Coins!")
                 else:
                     pontuacao_monstrinho[user_id] = max(0, pontuacao_monstrinho.get(user_id, 0) - 50)
-                    await message.reply(f"😜 **EU VENCI!** Escolhi **{bot_escolha}**. Você perdeu **50 Coins**! 🐲")
+                    await message.reply(f"😜 **PERDEU!** Eu escolhi {bot_choice}. -50 Coins!")
                 await atualizar_ranking(message.guild)
             return
 
-        # LOGICA GERAL (Acerto de Resposta Única)
         if msg_limpa == jogo_em_andamento["resposta"]:
             jogo_em_andamento["venceu"] = True
             premio = 50
@@ -971,32 +907,22 @@ async def on_message(message):
             elif jogo_em_andamento["tipo"] == "cara_coroa": premio = 150
             elif jogo_em_andamento["tipo"] == "dado": premio = 35
             elif jogo_em_andamento["tipo"] == "embaralhada": premio = 100
-
             pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio
-            
-            embed = discord.Embed(
-                title="🐲 TEMOS UM VENCEDOR! 🐲",
-                description=f"Parabéns {message.author.mention}!\n\nVocê acertou a resposta **{jogo_em_andamento['resposta'].upper()}** e ganhou **{premio} monstrinho-coins**! 💚🐉",
-                color=0x00FF7F
-            )
+            embed = discord.Embed(title="🐲 TEMOS UM VENCEDOR! 🐲", description=f"Parabéns {message.author.mention}!\nAcertou **{jogo_em_andamento['resposta'].upper()}** e ganhou **{premio} monstrinho-coins**! 💚🐉", color=0x00FF7F)
             embed.set_image(url=GIF_ACERTO_MONSTRINHO)
             await message.reply(embed=embed)
             await atualizar_ranking(message.guild)
             return
-
-        # LOGICA DE ERRO (Penalidade)
         else:
-            # Penalidade apenas para jogos específicos e se a resposta for um "chute" válido
             penalidade = 0
             if jogo_em_andamento["tipo"] == "numero" and msg_limpa.isdigit(): penalidade = 25
             elif jogo_em_andamento["tipo"] == "cara_coroa" and msg_limpa in ["cara", "coroa"]: penalidade = 75
             elif jogo_em_andamento["tipo"] == "dado" and msg_limpa.isdigit(): penalidade = 10
             elif jogo_em_andamento["tipo"] == "embaralhada": penalidade = 25
-
             if penalidade > 0:
                 pontuacao_monstrinho[user_id] = max(0, pontuacao_monstrinho.get(user_id, 0) - penalidade)
                 await message.add_reaction("❌")
-                await atualizar_ranking(message.guild) 
+                await atualizar_ranking(message.guild)
             return
 
     # --- PALAVRAS PROIBIDAS ---
@@ -1015,7 +941,7 @@ async def on_message(message):
                         avisos_usuarios[user_id] = 0
                         await message.author.timeout(timedelta(days=1))
                         canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
-                        if canal_adv: await canal_adv.send(embed=discord.Embed(title="🚨 CASTIGO", description=f"{message.author.mention} silenciado.", color=0xFF0000), view=LiberarCastigoView(user_id))
+                        if canal_adv: await canal_adv.send(embed=discord.Embed(title="🚨 CASTIGO", description=f"{message.author.mention} silenciado por 1 dia.", color=0xFF0000), view=LiberarCastigoView(user_id))
                     else:
                         await message.channel.send(f"⚠️ {message.author.mention}, cuidado com as palavras! ({qtd}/4)", delete_after=5)
                 except: pass
@@ -1023,4 +949,4 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-bot.run(TOKEN))
+bot.run(TOKEN)
