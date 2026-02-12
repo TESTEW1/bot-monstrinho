@@ -268,26 +268,24 @@ async def disparar_roleta(guild):
     if not canal_geral: return
 
     jogo_em_andamento["tipo"] = "roleta"
-    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["venceu"] = False # Na roleta, 'venceu' agora significa 'tempo acabou'
     jogo_em_andamento["participantes_tentaram"] = []
     jogo_em_andamento["resposta"] = "roleta"
 
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.title = "🎡 EVENTO: ROLETA DA SORTE!"
-    embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 50 ou 100 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
+    embed.title = "🎡 EVENTO: ROLETA DA SORTE COLETIVA!"
+    embed.description = "A roleta está girando para TODOS! ✨🐲\n\nQuem escrever **ROLETA** vai girar uma vez e ganhar seu prêmio individual!\n\n🎁 **Prêmios possíveis:**\n• 1000 Coins (Raro!)\n• 50 ou 100 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance 0.5%!)"
     embed.set_image(url=GIF_ROLETA_GIRANDO)
-    embed.set_footer(text="Você tem 5 minutos! Responda aqui no chat!")
+    embed.set_footer(text="A roleta ficará aberta por 5 minutos! Digite ROLETA para participar!")
     
     await canal_geral.send(embed=embed)
 
-    for _ in range(300):
-        if jogo_em_andamento["venceu"]: break
-        await asyncio.sleep(1)
+    await asyncio.sleep(300) # Mantém aberta por 5 minutos
     
-    if not jogo_em_andamento["venceu"]:
-        jogo_em_andamento["resposta"] = None
-        await canal_geral.send("🥺 A roleta parou de girar e ninguém tentou a sorte... O Monstrinho ficou triste! 🐲💔")
+    jogo_em_andamento["venceu"] = True
+    jogo_em_andamento["resposta"] = None
+    await canal_geral.send("🎡 A roleta parou de girar! O tempo acabou. 🐲🏁")
 
 async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
@@ -347,10 +345,8 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **50 coins**"
 
     elif tipo_evento == "roleta":
-        jogo_em_andamento["resposta"] = "roleta"
-        embed.title = "🎡 EVENTO: ROLETA DA SORTE!"
-        embed.description = "O primeiro que escrever **ROLETA** vai girar e ver o que o destino reserva! 🐲✨"
-        embed.set_image(url=GIF_ROLETA_GIRANDO)
+        await disparar_roleta(guild)
+        return
 
     elif tipo_evento == "embaralhada":
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
@@ -867,7 +863,7 @@ async def caixa(ctx):
 async def roleta(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
-    await ctx.send("🐲 Iniciando rodada de Roleta para você, papai!")
+    await ctx.send("🐲 Iniciando rodada de Roleta Coletiva para você, papai!")
     await disparar_roleta(ctx.guild)
 
 @bot.command()
@@ -975,8 +971,13 @@ async def on_message(message):
         ganhou = False
         premio = 0
 
-        if user_id in jogo_em_andamento["participantes_tentaram"] and tipo not in ["roleta", "caixa"]:
-            return
+        # Filtro de participação: na roleta, só uma vez por evento. Nos outros, só um vencedor total.
+        if user_id in jogo_em_andamento["participantes_tentaram"]:
+            if tipo == "roleta":
+                # Resposta silenciosa ou aviso rápido se já jogou na roleta
+                return 
+            elif tipo not in ["caixa"]:
+                return
 
         filtros = {
             "numero": lambda m: m.isdigit(),
@@ -1079,34 +1080,33 @@ async def on_message(message):
                     await atualizar_ranking(message.guild)
 
             elif tipo == "roleta":
-                jogo_em_andamento["venceu"] = True
-                jogo_em_andamento["resposta"] = None
+                # Na roleta, não paramos o jogo global, apenas processamos o giro do usuário
                 opcoes_roleta = ["1000", "50", "100", "perder", "jogo", "dobrar"]
-                pesos = [0.01, 0.40, 0.25, 0.15, 0.185, 0.005] # Dobrar tem 0.5%
+                pesos = [0.01, 0.40, 0.25, 0.15, 0.185, 0.005] 
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
                 
                 if resultado == "1000":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 1000
-                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description="Ganhou **1000 Coins**! 🐲✨", color=0x00FFFF))
+                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **1000 Coins**! 🐲✨", color=0x00FFFF))
                 elif resultado in ["50", "100"]:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + int(resultado)
-                    await message.reply(f"🎉 Ganhou **{resultado} Coins**! 🐲💚")
+                    await message.reply(f"🎉 {message.author.mention} ganhou **{resultado} Coins**! 🐲💚")
                 elif resultado == "perder":
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    await message.reply(embed=discord.Embed(title="💀 AZAR", description="Perdeu **100 Coins**! 🐲💔", color=0xFF0000).set_image(url=GIF_DERROTA))
+                    await message.reply(embed=discord.Embed(title="💀 AZAR", description=f"{message.author.mention} perdeu **100 Coins**! 🐲💔", color=0xFF0000).set_image(url=GIF_DERROTA))
                 elif resultado == "jogo":
-                    await message.reply("🎡 Outro jogo vindo aí! 🐲🔥")
+                    await message.reply(f"🎡 {message.author.mention}, você ativou um bônus! Outro jogo vindo aí para todos! 🐲🔥")
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
                 elif resultado == "dobrar":
                     premio_atual = 100
                     continuar = True
                     while continuar:
-                        await message.reply(f"🔥 **LOUCURA!** Você caiu na chance de **DOBRAR!**\nVocê tem **{premio_atual}** coins agora. Quer arriscar dobrar para **{premio_atual * 2}**?\nDigite **SIM** para arriscar ou **NAO** para parar!")
+                        await message.reply(f"🔥 **LOUCURA!** {message.author.mention} caiu na chance de **DOBRAR!**\nVocê tem **{premio_atual}** coins agora. Quer arriscar dobrar para **{premio_atual * 2}**?\nDigite **SIM** para arriscar ou **NAO** para parar!")
                         def check_dobro(m): return m.author == message.author and m.content.lower() in ["sim", "nao"]
                         try:
                             msg_resp = await bot.wait_for("message", check=check_dobro, timeout=20)
                             if msg_resp.content.lower() == "sim":
-                                if random.random() < 0.5: # 50% de chance de sucesso no double or nothing interno
+                                if random.random() < 0.5: 
                                     premio_atual *= 2
                                     await message.reply(f"✅ **CONSEGUIU!** Agora você tem **{premio_atual}** coins!")
                                 else:
