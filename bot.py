@@ -1074,7 +1074,7 @@ async def on_message(message):
                 if not ganhou: return
 
             elif tipo == "numero":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 500
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 1000
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
                     await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
@@ -1101,9 +1101,9 @@ async def on_message(message):
                     await atualizar_ranking(message.guild)
 
             elif tipo == "dado":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 35
+                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 75
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 10
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 40
                     await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -10 coins! 🥺")
                     await atualizar_ranking(message.guild)
 
