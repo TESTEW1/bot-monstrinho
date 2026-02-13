@@ -313,7 +313,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         res = random.randint(1, 50)
         jogo_em_andamento["resposta"] = str(res)
         embed.title = "🎯 Evento: Adivinhe o número!"
-        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 500 coins | ❌ **Erro:** -25 coins"
+        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 1000 coins | ❌ **Erro:** -25 coins"
         embed.set_image(url=GIF_ADIVINHE_NUMERO)
 
     elif tipo_evento == "ppt":
@@ -331,7 +331,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     elif tipo_evento == "dado":
         jogo_em_andamento["resposta"] = str(random.randint(1, 6))
         embed.title = "🎲 Evento: Dado da sorte!"
-        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 35 | ❌ **Perde:** 10"
+        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 75 | ❌ **Perde:** 40"
         embed.set_image(url=GIF_DADO)
 
     elif tipo_evento == "palavra":
