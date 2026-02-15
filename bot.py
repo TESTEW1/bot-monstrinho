@@ -34,7 +34,7 @@ CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
 CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
-CANAL_ATENCAO_BEM_ESTAR = "⚠️・atenção
+CANAL_ATENCAO_BEM_ESTAR = "⚠️・atenção"
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
