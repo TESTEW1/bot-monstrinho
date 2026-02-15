@@ -737,25 +737,24 @@ async def on_ready():
     bot.add_view(LojaView())
     @bot.event
 
-    # --- SISTEMA DE VIGILÂNCIA (FICHA DE ATENÇÃO) ---
+   # --- BLOCO DE VIGILÂNCIA (CSI) ---
     texto_v = message.content.lower()
     for termo in PALAVRAS_VIGILIA:
         if termo in texto_v:
             canal_alerta = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO_BEM_ESTAR)
             if canal_alerta:
                 embed_v = discord.Embed(
-                    title="⚠️ FICHA DE ATENÇÃO - MONITORAMENTO",
-                    description="O sistema detectou um usuário em possível momento de fragilidade.",
+                    title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
+                    description=f"O sistema detectou um possível momento difícil.",
                     color=0xFF4500,
                     timestamp=datetime.now()
                 )
-                embed_v.add_field(name="👤 Usuário:", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
-                embed_v.add_field(name="💬 Mensagem Enviada:", value=f"```{message.content}```", inline=False)
-                embed_v.add_field(name="📍 Canal:", value=message.channel.mention, inline=True)
+                embed_v.add_field(name="👤 Usuário:", value=f"{message.author.mention}", inline=False)
+                embed_v.add_field(name="💬 Mensagem:", value=f"```{message.content}```", inline=False)
                 embed_v.set_thumbnail(url=message.author.display_avatar.url)
-                embed_v.set_footer(text="CSI - Sistema de Vigilância")
                 await canal_alerta.send(embed=embed_v)
-            break
+            break 
+    # --- FIM DO BLOCO DE VIGILÂNCIA ---
     if not loop_jogo_monstrinho.is_running():
         loop_jogo_monstrinho.start()
 
