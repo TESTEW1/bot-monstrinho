@@ -738,7 +738,7 @@ async def on_ready():
     @bot.event
 
     # --- SISTEMA DE VIGILÂNCIA (FICHA DE ATENÇÃO) ---
-texto_v = message.content.lower()
+    texto_v = message.content.lower()
     for termo in PALAVRAS_VIGILIA:
         if termo in texto_v:
             canal_alerta = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO_BEM_ESTAR)
