@@ -727,17 +727,12 @@ class TicketView(discord.ui.View):
         self.add_item(TicketSelect())
 
 # ============== EVENTOS =================
-
 @bot.event
-async def on_ready():
-    print(f"🐲 Ligado como {bot.user}")
-    bot.add_view(TicketView())
-    bot.add_view(FecharTicketView())
-    bot.add_view(LiberarCastigoView(0))
-    bot.add_view(LojaView())
-    @bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
 
-   # --- BLOCO DE VIGILÂNCIA (CSI) ---
+    # --- INÍCIO DO BLOCO DE VIGILÂNCIA (CSI) ---
     texto_v = message.content.lower()
     for termo in PALAVRAS_VIGILIA:
         if termo in texto_v:
@@ -745,7 +740,7 @@ async def on_ready():
             if canal_alerta:
                 embed_v = discord.Embed(
                     title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
-                    description=f"O sistema detectou um possível momento difícil.",
+                    description="O sistema detectou um possível momento difícil.",
                     color=0xFF4500,
                     timestamp=datetime.now()
                 )
@@ -755,6 +750,16 @@ async def on_ready():
                 await canal_alerta.send(embed=embed_v)
             break 
     # --- FIM DO BLOCO DE VIGILÂNCIA ---
+
+    # Daqui para baixo, mantenha o SEU código original (Jogos, Palavras Proibidas, etc.)
+@bot.event
+async def on_ready():
+    print(f"🐲 Ligado como {bot.user}")
+    bot.add_view(TicketView())
+    bot.add_view(FecharTicketView())
+    bot.add_view(LiberarCastigoView(0))
+    bot.add_view(LojaView())
+    @bot.event
     if not loop_jogo_monstrinho.is_running():
         loop_jogo_monstrinho.start()
 
