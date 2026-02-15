@@ -760,8 +760,6 @@ async def on_ready():
     bot.add_view(LiberarCastigoView(0))
     bot.add_view(LojaView())
     @bot.event
-    if not loop_jogo_monstrinho.is_running():
-        loop_jogo_monstrinho.start()
 
     for guild in bot.guilds:
         # Inicializar Tickets
