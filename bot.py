@@ -34,6 +34,7 @@ CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
 CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
 CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
+CANAL_ATENCAO = "⚠️・atenção"
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
@@ -212,17 +213,17 @@ LISTA_PALAVRAS_RAPIDAS = [
 "EPICO","LENDARIO","MISTICO","ARCANO","RITUAL","TOTEM"
 ]
 LISTA_EMOJIS_RAPIDOS = [
-"🐸","🐲","🐢","REX","🐍","🦎","🍀",
+"🐸","🐲","🐢","🦖","🐍","🦎","🍀",
 "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷",
 "🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅",
-"🦉","BAT","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
-"🪲","🪳","🕷","🕸","涼","🐢","🐍","🦎","REX","🦕",
-"🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","鯊",
+"🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
+"🪲","🪳","🕷","🕸","🦂","🐢","🐍","🦎","🦖","🦕",
+"🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🦈",
 "🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦒",
 "🦘","🦬","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐",
 "🦌","🐕","🐩","🦮","🐕‍🦺","🐈","🐓","🦃","🦚","🦜",
-"Swan","Dove","Rabbit","Raccoon","Skunk","Badger","Beaver","Otter","Sloth","Mouse","Rat",
-"Squirrel","Hedgehog"
+"🦢","🕊","🐇","🦝","🦨","🦡","🦫","🦦","🦥","🐁","🐀",
+"🐿","🦔"
 ]
 
 
@@ -234,6 +235,22 @@ PALAVRAS_PROIBIDAS = [
     "arrombado", "viado", "bicha", "piranha", "vai se fuder", "vai se foder", 
     "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", 
     "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
+]
+
+# ============== PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) =================
+
+PALAVRAS_ALERTA = [
+    "suicidio", "suicídio", "me matar", "vou me matar", "quero morrer", "acabar com tudo",
+    "depressão", "depressao", "tristeza", "triste", "sozinho", "sozinha", "vazio", "vazia",
+    "não aguento", "nao aguento", "não aguento mais", "cansado de tudo", "cansada de tudo",
+    "sem sentido", "ninguém se importa", "ninguem se importa", "ninguém liga", 
+    "desistir", "desisti", "não vale a pena", "nao vale a pena", "melhor morrer",
+    "me cortar", "auto mutilação", "automutilação", "auto mutilacao", "automutilacao",
+    "nao quero mais viver", "não quero mais viver", "acabar com a vida", "tirar minha vida",
+    "sem esperança", "sem esperanca", "desesperado", "desesperada", "ansiedade",
+    "vontade de sumir", "quero sumir", "desaparecer", "sozinho no mundo", 
+    "sem forças", "sem forcas", "exausto", "exausta", "esgotado", "esgotada",
+    "angústia", "angustia", "pânico", "panico", "medo de tudo", "não consigo mais"
 ]
 
 # ============== FUNÇÕES AUXILIARES JOGO =================
@@ -264,6 +281,39 @@ async def atualizar_ranking(guild):
 
     await canal_rank.purge(limit=5)
     await canal_rank.send(embed=embed)
+
+async def verificar_palavras_alerta(message):
+    """Verifica se a mensagem contém palavras que indicam tristeza/depressão"""
+    if message.author.bot:
+        return
+    
+    # Não verifica no canal de desabafos pois já é esperado
+    if message.channel.name == CANAL_DESABAFOS:
+        return
+    
+    texto = message.content.lower()
+    
+    # Verifica se há alguma palavra de alerta na mensagem
+    for palavra in PALAVRAS_ALERTA:
+        if palavra in texto:
+            canal_atencao = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO)
+            if canal_atencao:
+                embed = discord.Embed(
+                    title="⚠️ ALERTA - Possível Situação Delicada",
+                    description=f"Uma mensagem com palavras de alerta foi detectada.",
+                    color=0xFF6B6B,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(name="👤 Usuário", value=f"{message.author.mention} ({message.author.name})", inline=False)
+                embed.add_field(name="📍 Canal", value=message.channel.mention, inline=True)
+                embed.add_field(name="🔗 Link da Mensagem", value=f"[Clique aqui]({message.jump_url})", inline=True)
+                embed.add_field(name="💬 Mensagem", value=f"```{message.content[:1000]}```", inline=False)
+                embed.add_field(name="🔑 Palavra-chave detectada", value=f"`{palavra}`", inline=False)
+                embed.set_thumbnail(url=message.author.display_avatar.url)
+                embed.set_footer(text="Sistema de Monitoramento de Bem-Estar 🐲", icon_url=AVATAR_MONSTRINHO)
+                
+                await canal_atencao.send(embed=embed)
+            break  # Para após encontrar a primeira palavra
 
 async def disparar_roleta(guild):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
@@ -356,13 +406,13 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         lista_letras = list(palavra)
         random.shuffle(lista_letras)
         palavra_shuffled = "".join(lista_letras)
-        embed.title = "2️⃣ Palavra Embaralhada"
+        embed.title = "🔤 Palavra Embaralhada"
         embed.description = f"🔤 **Desembaralhe a palavra:**\n> **{palavra_shuffled}**\n\n💰 **Prêmio:** 100 coins | ❌ **Erro:** -25"
         embed.set_image(url=GIF_EMBARALHADO)
 
     elif tipo_evento == "caixa":
         jogo_em_andamento["resposta"] = "caixa"
-        embed.title = "8️⃣ Caixa Misteriosa"
+        embed.title = "📦 Caixa Misteriosa"
         embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 50\n• Prêmio Raro (300 coins)\n• Perder 50 coins"
         embed.set_image(url=GIF_CAIXA_MISTERIOSA)
 
@@ -380,7 +430,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["venceu"] = False # Controlado pela on_message
         
         embed.title = "🤫 EVENTO SILENCIOSO ATIVADO!"
-        embed.description = "O Monstrinho escolher um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 400 Coins\n📝 **Dica:** O número está entre 1 e 20!"
+        embed.description = "O Monstrinho escolheu um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 400 Coins\n📝 **Dica:** O número está entre 1 e 20!"
         embed.set_image(url=GIF_SILENCIOSO)
         await canal_geral.send(embed=embed)
         return # Sai da função pois a on_message cuida do resto
@@ -921,7 +971,7 @@ async def bauadm(ctx):
         
         embed = discord.Embed(
             title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolher você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
             color=0xFFD700
         )
         embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
@@ -954,6 +1004,9 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
+
+    # --- VERIFICAÇÃO DE PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) ---
+    await verificar_palavras_alerta(message)
 
     # --- LÓGICA EVENTO SILENCIOSO ---
     global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
