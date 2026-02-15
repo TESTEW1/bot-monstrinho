@@ -738,18 +738,14 @@ async def on_ready():
     @bot.event
 
     # --- SISTEMA DE VIGILÂNCIA (FICHA DE ATENÇÃO) ---
-   @bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    texto_v = message.content.lower()
+texto_v = message.content.lower()
     for termo in PALAVRAS_VIGILIA:
         if termo in texto_v:
             canal_alerta = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO_BEM_ESTAR)
             if canal_alerta:
                 embed_v = discord.Embed(
-                    title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
-                    description=f"O sistema detectou um usuário possivelmente passando por um momento difícil.",
+                    title="⚠️ FICHA DE ATENÇÃO - MONITORAMENTO",
+                    description="O sistema detectou um usuário em possível momento de fragilidade.",
                     color=0xFF4500,
                     timestamp=datetime.now()
                 )
