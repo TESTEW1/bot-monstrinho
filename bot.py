@@ -738,6 +738,10 @@ async def on_ready():
     @bot.event
 
     # --- SISTEMA DE VIGILÂNCIA (FICHA DE ATENÇÃO) ---
+   @bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
     texto_v = message.content.lower()
     for termo in PALAVRAS_VIGILIA:
         if termo in texto_v:
@@ -745,14 +749,15 @@ async def on_ready():
             if canal_alerta:
                 embed_v = discord.Embed(
                     title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
-                    description=f"O sistema detectou um possível momento difícil.",
+                    description=f"O sistema detectou um usuário possivelmente passando por um momento difícil.",
                     color=0xFF4500,
                     timestamp=datetime.now()
                 )
                 embed_v.add_field(name="👤 Usuário:", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
-                embed_v.add_field(name="💬 Mensagem:", value=f"```{message.content}```", inline=False)
+                embed_v.add_field(name="💬 Mensagem Enviada:", value=f"```{message.content}```", inline=False)
                 embed_v.add_field(name="📍 Canal:", value=message.channel.mention, inline=True)
                 embed_v.set_thumbnail(url=message.author.display_avatar.url)
+                embed_v.set_footer(text="CSI - Sistema de Vigilância")
                 await canal_alerta.send(embed=embed_v)
             break
     if not loop_jogo_monstrinho.is_running():
