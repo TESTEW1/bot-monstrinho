@@ -36,6 +36,11 @@ CANAL_LOJA_INFO = "💾・loja-monstrinho"
 CANAL_DIRECAO = "👑・chat-direção"
 CANAL_ATENCAO_BEM_ESTAR = "⚠️・atenção"
 
+PALAVRAS_VIGILIA = [
+    "triste", "quero morrer", "me matar", "suicídio", "depressão", "deprimido", 
+    "desisto de tudo", "não aguento mais", "solidão", "vazio por dentro",
+    "vontade de sumir", "cortar", "automutilação", "sem esperança", "queria sumir"
+]
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
 GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
@@ -90,12 +95,6 @@ contador_mensagens_silencioso = 0
 meta_mensagens_silencioso = 0
 evento_silencioso_ativo = False
 
-PALAVRAS_VIGILIA = [
-    "quero morrer", "me matar", "suicídio", "triste", "depressão", "deprimido", 
-    "desisto de tudo", "não aguento mais", "solidão", "sozinho", "vazio por dentro",
-    "vontade de sumir", "cortar", "automutilação", "fim da linha", "sem esperança",
-    "odiando minha vida", "queria sumir", "queria dormir e não acordar"
-]
 # Listas de Jogos
 LISTA_PERGUNTAS = [
 ("Qual o nome do bruxo de Harry Potter?", "harry potter"),
@@ -736,7 +735,26 @@ async def on_ready():
     bot.add_view(FecharTicketView())
     bot.add_view(LiberarCastigoView(0))
     bot.add_view(LojaView())
-    
+    @bot.event
+
+    # --- SISTEMA DE VIGILÂNCIA (FICHA DE ATENÇÃO) ---
+    texto_v = message.content.lower()
+    for termo in PALAVRAS_VIGILIA:
+        if termo in texto_v:
+            canal_alerta = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO_BEM_ESTAR)
+            if canal_alerta:
+                embed_v = discord.Embed(
+                    title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
+                    description=f"O sistema detectou um possível momento difícil.",
+                    color=0xFF4500,
+                    timestamp=datetime.now()
+                )
+                embed_v.add_field(name="👤 Usuário:", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
+                embed_v.add_field(name="💬 Mensagem:", value=f"```{message.content}```", inline=False)
+                embed_v.add_field(name="📍 Canal:", value=message.channel.mention, inline=True)
+                embed_v.set_thumbnail(url=message.author.display_avatar.url)
+                await canal_alerta.send(embed=embed_v)
+            break
     if not loop_jogo_monstrinho.is_running():
         loop_jogo_monstrinho.start()
 
@@ -819,30 +837,7 @@ async def on_message_delete(message):
         embed.set_thumbnail(url=AVATAR_MONSTRINHO)
         embed.set_footer(text=f"Monstrinho Logs 🐲")
         await canal_log.send(embed=embed)
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
 
-    # === COLE ESTE BLOCO AQUI (INÍCIO DO MONITORAMENTO) ===
-    texto_v = message.content.lower()
-    for termo in PALAVRAS_VIGILIA:
-        if termo in texto_v:
-            canal_alerta = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO_BEM_ESTAR)
-            if canal_alerta:
-                embed = discord.Embed(
-                    title="⚠️ FICHA DE ATENÇÃO - BEM-ESTAR",
-                    description=f"O sistema detectou um possível pedido de ajuda.",
-                    color=0xFF4500,
-                    timestamp=datetime.now()
-                )
-                embed.add_field(name="👤 Usuário:", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
-                embed.add_field(name="💬 Mensagem:", value=f"```{message.content}```", inline=False)
-                embed.add_field(name="📍 Canal:", value=message.channel.mention, inline=True)
-                embed.set_thumbnail(url=message.author.display_avatar.url)
-                embed.set_footer(text="CSI - Monitoramento de Saúde Mental")
-                await canal_alerta.send(embed=embed)
-            break
 # ============== COMANDOS DE JOGOS INDIVIDUAIS =================
 
 @bot.command()
