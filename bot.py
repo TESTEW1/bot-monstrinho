@@ -55,6 +55,8 @@ GIF_EMBARALHADO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-seas
 GIF_SILENCIOSO = "https://media.tenor.com/On79Z_Gv08AAAAAd/shhh-quiet.gif"
 GIF_BAU_PERDIDO = "https://i.pinimg.com/originals/e1/9b/6c/e19b6c086780963331a90623a6774900.gif"
 GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4YnlvaGJsZDIxb2prZnJnOHB4cmlzaGRzZzNlbCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/shkh5vfrJ56BAoeWqt/200w.gif"
+GIF_MONSTRO = "https://i.pinimg.com/originals/22/ba/4d/22ba4d403b0c9c172526be971b0c0ab7.gif"
+GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -344,7 +346,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     if not canal_geral: return
 
     # Sorteio do tipo de jogo ou uso do tipo escolhido
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro"])
     jogo_em_andamento["tipo"] = tipo_evento
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -421,6 +423,12 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         embed.title = "🏴‍☠️ EVENTO: O BAÚ PERDIDO!"
         embed.description = "Um baú antigo apareceu no chat! Quem será o primeiro a abrir? 🐲✨\n\nDigite **ABRIR** para tentar a sorte!\n\n💰 **Prêmio:** 200 Coins\n💀 **Cuidado:** Pode ser um Mímico e você perder 100 coins!"
         embed.set_image(url=GIF_BAU_PERDIDO)
+
+    elif tipo_evento == "sobrevivamonstro":
+        jogo_em_andamento["resposta"] = "sobrevivamonstro"
+        embed.title = "👹 SOBREVIVA AO MONSTRO!"
+        embed.description = "Um monstro selvagem apareceu! Escolha sua ação digitando:\n\n🛡️ **ESCUDO** - 50% de chance de se defender (Ganha 100 coins)\n⚔️ **ESPADA** - 1% de chance de vencer (Ganha 500 coins!)\n🏃 **FUGIR** - Quase garantido, mas perde 50 coins\n\nO primeiro a escolher enfrenta o monstro!"
+        embed.set_image(url=GIF_MONSTRO)
 
     elif tipo_evento == "silencioso":
         global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
@@ -934,6 +942,11 @@ async def silencioso(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
     await disparar_pergunta(ctx.guild, "silencioso")
 
+@bot.command()
+async def sobrevivamonstro(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "sobrevivamonstro")
+
 # ============== COMANDOS ADMINISTRATIVOS =================
 
 @bot.command()
@@ -1054,13 +1067,73 @@ async def on_message(message):
             "roleta": lambda m: m == "roleta",
             "embaralhada": lambda m: True,
             "caixa": lambda m: m in ["1", "2", "3"],
-            "bauperdido": lambda m: m == "abrir"
+            "bauperdido": lambda m: m == "abrir",
+            "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"]
         }
 
         if filtros.get(tipo, lambda m: False)(msg_content):
             jogo_em_andamento["participantes_tentaram"].append(user_id)
 
-            if tipo == "bauperdido":
+            if tipo == "sobrevivamonstro":
+                jogo_em_andamento["venceu"] = True
+                jogo_em_andamento["resposta"] = None
+                
+                if msg_content == "escudo":
+                    # 50% de chance de sucesso
+                    if random.random() < 0.5:
+                        ganhou, premio = True, 100
+                        embed_resultado = discord.Embed(
+                            title="🛡️ DEFESA BEM SUCEDIDA!",
+                            description=f"{message.author.mention} conseguiu se proteger do monstro com o escudo! 🐲✨\n\nVocê ganhou **100 Coins**!",
+                            color=0x00FF7F
+                        )
+                        embed_resultado.set_image(url=GIF_VITORIA)
+                    else:
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                        embed_resultado = discord.Embed(
+                            title="💥 O ESCUDO QUEBROU!",
+                            description=f"{message.author.mention}, o monstro era muito forte! Seu escudo não resistiu... 🐲💔\n\nVocê perdeu **50 Coins**!",
+                            color=0xFF0000
+                        )
+                        embed_resultado.set_image(url=GIF_DERROTA)
+                        await message.reply(embed=embed_resultado)
+                        await atualizar_ranking(message.guild)
+                        return
+                
+                elif msg_content == "espada":
+                    # 1% de chance de sucesso
+                    if random.random() < 0.01:
+                        ganhou, premio = True, 500
+                        embed_resultado = discord.Embed(
+                            title="⚔️ GOLPE CRÍTICO ÉPICO!",
+                            description=f"{message.author.mention} DERROTOU O MONSTRO COM UM ÚNICO GOLPE! 🐲⚔️✨\n\nVocê é um VERDADEIRO HERÓI! Ganhou **500 Coins**!",
+                            color=0xFFD700
+                        )
+                        embed_resultado.set_image(url=GIF_VITORIA)
+                    else:
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        embed_resultado = discord.Embed(
+                            title="💀 VOCÊ FOI DERROTADO!",
+                            description=f"{message.author.mention} tentou atacar mas o monstro era muito forte! 🐲💔\n\nVocê perdeu **100 Coins**!",
+                            color=0xFF0000
+                        )
+                        embed_resultado.set_image(url=GIF_DERROTA)
+                        await message.reply(embed=embed_resultado)
+                        await atualizar_ranking(message.guild)
+                        return
+                
+                elif msg_content == "fugir":
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                    embed_resultado = discord.Embed(
+                        title="🏃 VOCÊ FUGIU!",
+                        description=f"{message.author.mention} preferiu a segurança e fugiu do monstro! 🐲💨\n\nVocê perdeu **50 Coins** mas está a salvo!",
+                        color=0xFFA500
+                    )
+                    await message.reply(embed=embed_resultado)
+                    await atualizar_ranking(message.guild)
+                    return
+
+            elif tipo == "bauperdido":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
                 sorte = random.random()
