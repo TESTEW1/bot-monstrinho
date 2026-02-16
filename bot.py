@@ -57,6 +57,7 @@ GIF_BAU_PERDIDO = "https://i.pinimg.com/originals/e1/9b/6c/e19b6c086780963331a90
 GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4YnlvaGJsZDIxb2prZnJnOHB4cmlzaGRzZzNlbCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/shkh5vfrJ56BAoeWqt/200w.gif"
 GIF_MONSTRO = "https://i.pinimg.com/originals/22/ba/4d/22ba4d403b0c9c172526be971b0c0ab7.gif"
 GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
+GIF_TAROT = "https://i.pinimg.com/originals/28/bc/9a/28bc9aad11a3d4251108c3a28fd980f3.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -91,6 +92,38 @@ jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu":
 contador_mensagens_silencioso = 0
 meta_mensagens_silencioso = 0
 evento_silencioso_ativo = False
+
+# ============== CARTAS DE TAROT =================
+
+CARTAS_TAROT = [
+    # 3 CARTAS SUPER SORTUDAS
+    {"nome": "✨ O Sol", "mensagem": "A luz do sol ilumina seu caminho! Fortuna máxima te aguarda! 🌟", "coins": 1000, "tipo": "super_sorte"},
+    {"nome": "🌟 A Estrela", "mensagem": "Os astros se alinham a seu favor! Grande riqueza te espera! ✨", "coins": 500, "tipo": "super_sorte"},
+    {"nome": "🎴 O Mago", "mensagem": "O poder da manifestação está com você! Seus desejos se materializam! 🪄", "coins": 300, "tipo": "super_sorte"},
+    
+    # CARTAS BOAS (7 cartas)
+    {"nome": "💫 A Roda da Fortuna", "mensagem": "A sorte gira a seu favor! Aproveite este momento! 🎡", "coins": 150, "tipo": "boa"},
+    {"nome": "❤️ Os Enamorados", "mensagem": "O amor e a harmonia trazem prosperidade! 💕", "coins": 120, "tipo": "boa"},
+    {"nome": "👑 O Imperador", "mensagem": "Poder e autoridade te recompensam! 👑", "coins": 100, "tipo": "boa"},
+    {"nome": "🌙 A Lua", "mensagem": "Os mistérios noturnos revelam tesouros ocultos! 🌙", "coins": 80, "tipo": "boa"},
+    {"nome": "🎭 O Louco", "mensagem": "A ousadia traz recompensas inesperadas! 🎪", "coins": 70, "tipo": "boa"},
+    {"nome": "⚖️ A Justiça", "mensagem": "O equilíbrio universal te favorece! ⚖️", "coins": 60, "tipo": "boa"},
+    {"nome": "🦁 A Força", "mensagem": "Sua coragem interior é recompensada! 💪", "coins": 50, "tipo": "boa"},
+    
+    # CARTAS NEUTRAS/ESPECIAIS (7 cartas)
+    {"nome": "🔮 O Eremita", "mensagem": "A solidão traz reflexão... Escolha: DOAR 100 coins para alguém ou PEGAR 200 para você?", "coins": 0, "tipo": "escolha_doar"},
+    {"nome": "🎲 A Roda do Destino", "mensagem": "O destino é incerto... Quer se ARRISCAR e puxar outra carta ou PARAR aqui?", "coins": 0, "tipo": "arriscar"},
+    {"nome": "⚡ O Julgamento", "mensagem": "Seus atos retornam a você... Prepare-se para o karma!", "coins": -30, "tipo": "ruim"},
+    {"nome": "🗡️ Cinco de Espadas", "mensagem": "A batalha teve um preço... Pequena perda!", "coins": -40, "tipo": "ruim"},
+    {"nome": "🌊 Três de Copas", "mensagem": "Celebração moderada! Pequeno ganho!", "coins": 35, "tipo": "boa"},
+    {"nome": "🏰 Quatro de Pentáculos", "mensagem": "Guarde seus recursos... Momento neutro.", "coins": 10, "tipo": "neutro"},
+    {"nome": "🕊️ Dois de Copas", "mensagem": "União e parceria trazem equilíbrio.", "coins": 25, "tipo": "boa"},
+    
+    # 3 CARTAS BEM RUINS
+    {"nome": "💀 A Morte", "mensagem": "O fim de um ciclo cobra seu preço... Grande perda te aguarda! 💀", "coins": -300, "tipo": "muito_ruim"},
+    {"nome": "🗼 A Torre", "mensagem": "Tudo desmorona ao seu redor! Destruição e caos! ⚡", "coins": -200, "tipo": "muito_ruim"},
+    {"nome": "😈 O Diabo", "mensagem": "As correntes da ganância te prendem! Você pagará caro! 🔗", "coins": -150, "tipo": "muito_ruim"},
+]
 
 # Listas de Jogos
 LISTA_PERGUNTAS = [
@@ -341,12 +374,38 @@ async def disparar_roleta(guild):
     jogo_em_andamento["resposta"] = None
     await canal_geral.send("🎡 A roleta parou de girar! O tempo acabou. 🐲🏁")
 
+async def disparar_tarot(guild):
+    canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+    if not canal_geral: return
+
+    jogo_em_andamento["tipo"] = "tarot"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = "tarot"
+
+    embed = discord.Embed(color=0x9B59B6)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = "🔮 TIRAGEM DO DESTINO - TAROT MÍSTICO 🔮"
+    embed.description = "As cartas ancestrais aguardam por você... O primeiro corajoso que digitar **TAROT** revelará seu destino! ✨\n\nO que as cartas reservam? Fortuna ou ruína? 🎴"
+    embed.set_image(url=GIF_TAROT)
+    embed.set_footer(text="Você tem 5 minutos para consultar o oráculo! 🐲")
+    
+    await canal_geral.send(embed=embed)
+
+    for _ in range(300):
+        if jogo_em_andamento["venceu"]: break
+        await asyncio.sleep(1)
+    
+    if not jogo_em_andamento["venceu"]:
+        jogo_em_andamento["resposta"] = None
+        await canal_geral.send("🔮 As cartas se fecharam... ninguém ousou consultá-las a tempo! 🐲💫")
+
 async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
     if not canal_geral: return
 
     # Sorteio do tipo de jogo ou uso do tipo escolhido
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro", "tarot"])
     jogo_em_andamento["tipo"] = tipo_evento
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -354,7 +413,11 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
 
-    if tipo_evento == "pergunta":
+    if tipo_evento == "tarot":
+        await disparar_tarot(guild)
+        return
+
+    elif tipo_evento == "pergunta":
         pergunta, response_str = random.choice(LISTA_PERGUNTAS)
         jogo_em_andamento["pergunta"] = pergunta
         jogo_em_andamento["resposta"] = response_str.lower()
@@ -947,6 +1010,11 @@ async def sobrevivamonstro(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
     await disparar_pergunta(ctx.guild, "sobrevivamonstro")
 
+@bot.command()
+async def tarot(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "tarot")
+
 # ============== COMANDOS ADMINISTRATIVOS =================
 
 @bot.command()
@@ -1052,8 +1120,8 @@ async def on_message(message):
 
         # Filtro de participação: na roleta, só uma vez por evento. Nos outros, só um vencedor total.
         if user_id in jogo_em_andamento["participantes_tentaram"]:
-            if tipo == "roleta":
-                # Resposta silenciosa ou aviso rápido se já jogou na roleta
+            if tipo == "roleta" or tipo == "tarot":
+                # Resposta silenciosa ou aviso rápido se já jogou
                 return 
             elif tipo not in ["caixa"]:
                 return
@@ -1068,13 +1136,129 @@ async def on_message(message):
             "embaralhada": lambda m: True,
             "caixa": lambda m: m in ["1", "2", "3"],
             "bauperdido": lambda m: m == "abrir",
-            "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"]
+            "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"],
+            "tarot": lambda m: m == "tarot"
         }
 
         if filtros.get(tipo, lambda m: False)(msg_content):
             jogo_em_andamento["participantes_tentaram"].append(user_id)
 
-            if tipo == "sobrevivamonstro":
+            if tipo == "tarot":
+                jogo_em_andamento["venceu"] = True
+                jogo_em_andamento["resposta"] = None
+                
+                # Puxar carta aleatória
+                carta = random.choice(CARTAS_TAROT)
+                
+                # Criar embed inicial
+                embed_carta = discord.Embed(
+                    title="🔮 SUA CARTA FOI REVELADA! 🔮",
+                    description=f"**{carta['nome']}**\n\n*{carta['mensagem']}*",
+                    color=0x9B59B6
+                )
+                embed_carta.set_thumbnail(url=AVATAR_MONSTRINHO)
+                
+                # Cartas especiais com escolhas
+                if carta["tipo"] == "escolha_doar":
+                    await message.reply(embed=embed_carta)
+                    await message.channel.send(f"{message.author.mention}, escolha: **DOAR** ou **PEGAR**?")
+                    
+                    def check_escolha(m):
+                        return m.author == message.author and m.content.lower() in ["doar", "pegar"]
+                    
+                    try:
+                        resposta = await bot.wait_for("message", check=check_escolha, timeout=30)
+                        if resposta.content.lower() == "doar":
+                            await message.channel.send(f"😇 Que alma generosa! Mencione quem receberá os 100 coins!")
+                            
+                            def check_mencao(m):
+                                return m.author == message.author and len(m.mentions) > 0
+                            
+                            try:
+                                msg_alvo = await bot.wait_for("message", check=check_mencao, timeout=30)
+                                alvo = msg_alvo.mentions[0]
+                                if pontuacao_monstrinho.get(user_id, 0) >= 100:
+                                    pontuacao_monstrinho[user_id] -= 100
+                                    pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 100
+                                    embed_final = discord.Embed(
+                                        title="💖 BONDADE RECOMPENSADA",
+                                        description=f"{message.author.mention} doou 100 coins para {alvo.mention}!\n\nAs cartas sorriem para o generoso! 🔮✨",
+                                        color=0x00FF7F
+                                    )
+                                    await message.channel.send(embed=embed_final)
+                                else:
+                                    await message.channel.send("❌ Você não tem coins suficientes para doar!")
+                            except asyncio.TimeoutError:
+                                await message.channel.send("⏰ Tempo esgotado!")
+                        else:
+                            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 200
+                            embed_final = discord.Embed(
+                                title="💰 GANÂNCIA PREMIADA",
+                                description=f"{message.author.mention} escolheu o caminho da ambição e ganhou **200 Coins**! 🔮",
+                                color=0xFFD700
+                            )
+                            embed_final.set_image(url=GIF_VITORIA)
+                            await message.channel.send(embed=embed_final)
+                        await atualizar_ranking(message.guild)
+                    except asyncio.TimeoutError:
+                        await message.channel.send("⏰ As cartas se fecharam pelo silêncio...")
+                    return
+                
+                elif carta["tipo"] == "arriscar":
+                    await message.reply(embed=embed_carta)
+                    await message.channel.send(f"{message.author.mention}, você quer **ARRISCAR** outra carta ou **PARAR** aqui?")
+                    
+                    def check_risco(m):
+                        return m.author == message.author and m.content.lower() in ["arriscar", "parar"]
+                    
+                    try:
+                        resposta = await bot.wait_for("message", check=check_risco, timeout=30)
+                        if resposta.content.lower() == "arriscar":
+                            # 70% chance de carta ruim, 30% de boa
+                            if random.random() < 0.7:
+                                perda = random.randint(100, 250)
+                                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - perda
+                                embed_risco = discord.Embed(
+                                    title="💀 A GANÂNCIA TEM SEU PREÇO!",
+                                    description=f"{message.author.mention}, as cartas se voltaram contra você!\n\nVocê perdeu **{perda} Coins**! 🔮💔",
+                                    color=0xFF0000
+                                )
+                                embed_risco.set_image(url=GIF_DERROTA)
+                            else:
+                                ganho = random.randint(200, 400)
+                                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + ganho
+                                embed_risco = discord.Embed(
+                                    title="✨ A CORAGEM FOI RECOMPENSADA!",
+                                    description=f"{message.author.mention}, os deuses da sorte te favorecem!\n\nVocê ganhou **{ganho} Coins**! 🔮✨",
+                                    color=0x00FF7F
+                                )
+                                embed_risco.set_image(url=GIF_VITORIA)
+                            await message.channel.send(embed=embed_risco)
+                        else:
+                            await message.channel.send(f"🛡️ {message.author.mention} escolheu a prudência! As cartas respeitam sua decisão.")
+                        await atualizar_ranking(message.guild)
+                    except asyncio.TimeoutError:
+                        await message.channel.send("⏰ As cartas se fecharam...")
+                    return
+                
+                # Cartas normais com coins
+                else:
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + carta["coins"]
+                    
+                    if carta["coins"] > 0:
+                        embed_carta.set_image(url=GIF_VITORIA)
+                        embed_carta.add_field(name="💰 Recompensa", value=f"+{carta['coins']} Coins", inline=False)
+                    elif carta["coins"] < 0:
+                        embed_carta.set_image(url=GIF_DERROTA)
+                        embed_carta.add_field(name="💀 Perda", value=f"{carta['coins']} Coins", inline=False)
+                    else:
+                        embed_carta.add_field(name="⚖️ Neutro", value="Nenhuma mudança nos coins", inline=False)
+                    
+                    await message.reply(embed=embed_carta)
+                    await atualizar_ranking(message.guild)
+                    return
+
+            elif tipo == "sobrevivamonstro":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
                 
