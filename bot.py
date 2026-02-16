@@ -285,7 +285,7 @@ PALAVRAS_ALERTA = [
     "sem esperança", "sem esperanca", "desesperado", "desesperada", "ansiedade",
     "vontade de sumir", "quero sumir", "desaparecer", "sozinho no mundo", 
     "sem forças", "sem forcas", "exausto", "exausta", "esgotado", "esgotada",
-    "angústia", "angustia", "pânico", "panico", "medo de tudo", "não consigo mais", "chorei demais", "me machucar", "Quero sair desse mundo", 
+    "angústia", "angustia", "pânico", "panico", "medo de tudo", "não consigo mais", "chorei demais", "me machucar", "Quero sair desse mundo", "me cortei", "eu me cortei", "cortei"
 ]
 
 # ============== FUNÇÕES AUXILIARES JOGO =================
