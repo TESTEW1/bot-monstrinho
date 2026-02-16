@@ -38,7 +38,6 @@ CANAL_ATENCAO = "⚠️・atenção"
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
-GIF_NAMORADOS = "https://i.pinimg.com/originals/f5/b8/44/f5b844675a7942e4180bb9960c3fe319.gif"
 GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
 AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png"
 GIF_ACERTO_MONSTRINHO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
@@ -58,6 +57,7 @@ GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4
 GIF_MONSTRO = "https://i.pinimg.com/originals/22/ba/4d/22ba4d403b0c9c172526be971b0c0ab7.gif"
 GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 GIF_TAROT = "https://i.pinimg.com/originals/28/bc/9a/28bc9aad11a3d4251108c3a28fd980f3.gif"
+GIF_DETETIVE = "https://i.pinimg.com/originals/d5/0c/7b/d50c7b0413ac64fd5653c6b97cef9a22.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -123,6 +123,131 @@ CARTAS_TAROT = [
     {"nome": "💀 A Morte", "mensagem": "O fim de um ciclo cobra seu preço... Grande perda te aguarda! 💀", "coins": -300, "tipo": "muito_ruim"},
     {"nome": "🗼 A Torre", "mensagem": "Tudo desmorona ao seu redor! Destruição e caos! ⚡", "coins": -200, "tipo": "muito_ruim"},
     {"nome": "😈 O Diabo", "mensagem": "As correntes da ganância te prendem! Você pagará caro! 🔗", "coins": -150, "tipo": "muito_ruim"},
+]
+
+# ============== CENÁRIOS DETETIVE =================
+
+CENARIOS_DETETIVE = [
+    {
+        "caso": "O Roubo da Biblioteca",
+        "personagens": ["Ana (bibliotecária)", "Bruno (estudante)", "Carlos (professor)"],
+        "situacao": "Um livro raro desapareceu da biblioteca. Ana estava organizando prateleiras, Bruno estudava na mesa 5, e Carlos deu aula até às 18h. O livro sumiu entre 17h e 19h. As câmeras mostram que apenas Bruno saiu com uma mochila pesada.",
+        "culpado": "bruno"
+    },
+    {
+        "caso": "O Mistério do Bolo",
+        "personagens": ["Marta (cozinheira)", "Pedro (garçom)", "Sofia (gerente)"],
+        "situacao": "Um bolo de aniversário foi sabotado com sal. Marta preparou o bolo às 14h e guardou na geladeira. Pedro serviu às 18h. Sofia estava no escritório o dia todo. Só Pedro teve acesso à geladeira após Marta sair.",
+        "culpado": "pedro"
+    },
+    {
+        "caso": "O Quadro Desaparecido",
+        "personagens": ["Lucas (segurança)", "Diana (curadora)", "Rafael (visitante)"],
+        "situacao": "Um quadro sumiu do museu. Lucas vigiava a entrada, Diana fazia inventário no subsolo, Rafael visitava a exposição. As câmeras mostram Rafael perto do quadro minutos antes do alarme.",
+        "culpado": "rafael"
+    },
+    {
+        "caso": "A Janela Quebrada",
+        "personagens": ["João (zelador)", "Carla (moradora)", "Miguel (entregador)"],
+        "situacao": "A janela do apto 304 foi quebrada. João limpava o corredor, Carla estava viajando, Miguel entregou um pacote no 304. Vizinhos ouviram barulho durante a entrega de Miguel.",
+        "culpado": "miguel"
+    },
+    {
+        "caso": "O Celular Roubado",
+        "personagens": ["Amanda (aluna)", "Ricardo (professor)", "Beatriz (faxineira)"],
+        "situacao": "Um celular sumiu da sala de aula. Amanda saiu mais cedo, Ricardo deu aula normalmente, Beatriz limpou após todos saírem. Amanda voltou 'procurando' seu estojo e foi vista perto da mesa da vítima.",
+        "culpado": "amanda"
+    },
+    {
+        "caso": "O Veneno no Café",
+        "personagens": ["Helena (secretária)", "Gustavo (estagiário)", "Patrícia (chefe)"],
+        "situacao": "O café de Patrícia foi envenenado (mas ela não bebeu). Helena preparou o café às 9h. Gustavo serviu às 10h. Patrícia estava em reunião. Gustavo foi visto adicionando 'algo' na xícara.",
+        "culpado": "gustavo"
+    },
+    {
+        "caso": "A Carteira Sumida",
+        "personagens": ["Felipe (taxista)", "Laura (passageira)", "Marcos (segurança)"],
+        "situacao": "A carteira de Laura sumiu após táxi. Felipe dirigiu, Laura era passageira, Marcos vigiava o ponto. Laura esqueceu a carteira no banco. Felipe achou e não devolveu.",
+        "culpado": "felipe"
+    },
+    {
+        "caso": "O Documento Falsificado",
+        "personagens": ["Renata (advogada)", "Thiago (cliente)", "Júlia (secretária)"],
+        "situacao": "Um documento foi falsificado. Renata redigiu o original, Thiago solicitou, Júlia digitou e imprimiu. Thiago foi visto trocando páginas antes da assinatura.",
+        "culpado": "thiago"
+    },
+    {
+        "caso": "O Incêndio no Depósito",
+        "personagens": ["Eduardo (gerente)", "Fernanda (estoquista)", "Roberto (ex-funcionário)"],
+        "situacao": "O depósito pegou fogo. Eduardo estava de férias, Fernanda trabalhou até 17h, Roberto foi demitido semana passada. Câmeras mostram Roberto entrando no depósito às 20h.",
+        "culpado": "roberto"
+    },
+    {
+        "caso": "A Prova Vazada",
+        "personagens": ["Professora Clara", "Aluno Daniel", "Monitor Vinícius"],
+        "situacao": "A prova vazou antes da aplicação. Clara criou a prova, Daniel é aluno da turma, Vinícius monitora a disciplina. Vinícius teve acesso ao computador de Clara e enviou a prova para Daniel.",
+        "culpado": "vinicius"
+    },
+    {
+        "caso": "O Carro Arranhado",
+        "personagens": ["Dono Sérgio", "Mecânico Luís", "Vizinho André"],
+        "situacao": "O carro de Sérgio foi arranhado no estacionamento. Sérgio estava trabalhando, Luís consertava outro carro, André discutiu com Sérgio ontem. André foi visto com uma chave perto do carro.",
+        "culpado": "andre"
+    },
+    {
+        "caso": "A Joia Falsa",
+        "personagens": ["Joalheiro Paulo", "Cliente Isabela", "Aprendiz Rodrigo"],
+        "situacao": "Uma joia foi trocada por falsa. Paulo avaliou a joia, Isabela é a dona, Rodrigo estava aprendendo. Rodrigo trocou a joia verdadeira por falsa durante a limpeza.",
+        "culpado": "rodrigo"
+    },
+    {
+        "caso": "O Email Falso",
+        "personagens": ["Gerente Camila", "TI Henrique", "Estagiária Letícia"],
+        "situacao": "Um email falso foi enviado em nome de Camila. Camila estava em reunião, Henrique gerencia emails, Letícia usa computador próximo. Letícia acessou o email de Camila que estava aberto.",
+        "culpado": "leticia"
+    },
+    {
+        "caso": "O Vazamento de Água",
+        "personagens": ["Encanador Fábio", "Proprietário Marcelo", "Inquilino Antônio"],
+        "situacao": "O apartamento foi inundado. Fábio consertou cano ontem, Marcelo é o dono, Antônio mora lá. Fábio não apertou conexão corretamente, causando vazamento.",
+        "culpado": "fabio"
+    },
+    {
+        "caso": "A Receita Roubada",
+        "personagens": ["Chef Marina", "Sous-chef Gabriel", "Crítico Raul"],
+        "situacao": "A receita secreta foi roubada. Marina criou receita, Gabriel é sous-chef, Raul visitou cozinha. Gabriel fotografou receita e vendeu para concorrente.",
+        "culpado": "gabriel"
+    },
+    {
+        "caso": "O Acidente Forjado",
+        "personagens": ["Motorista Alice", "Pedestre Bruno", "Testemunha Cláudia"],
+        "situacao": "Acidente de trânsito foi forjado. Alice dirigia, Bruno 'foi atropelado', Cláudia viu tudo. Bruno se jogou de propósito no carro devagar para processar Alice.",
+        "culpado": "bruno"
+    },
+    {
+        "caso": "O Vírus no Sistema",
+        "personagens": ["Analista Túlio", "Gerente Vanessa", "Hacker Externo Igor"],
+        "situacao": "Sistema foi infectado. Túlio gerencia segurança, Vanessa aprova acessos, Igor é hacker conhecido. Túlio baixou arquivo suspeito que infectou rede.",
+        "culpado": "tulio"
+    },
+    {
+        "caso": "A Fraude no Caixa",
+        "personagens": ["Caixa Simone", "Fiscal Leonardo", "Cliente Mário"],
+        "situacao": "Dinheiro sumiu do caixa. Simone opera caixa, Leonardo fiscaliza, Mário era cliente. Simone desviava dinheiro e culpava sistema.",
+        "culpado": "simone"
+    },
+    {
+        "caso": "O Atestado Falso",
+        "personagens": ["Médico Jorge", "Paciente Aline", "Recepcionista Bruna"],
+        "situacao": "Atestado falso foi emitido. Jorge atende pacientes, Aline pediu atestado, Bruna agenda consultas. Bruna falsificou assinatura de Jorge para vender atestado para Aline.",
+        "culpado": "bruna"
+    },
+    {
+        "caso": "O Sabotador da Festa",
+        "personagens": ["Organizadora Paula", "DJ Caio", "Ex-namorado Otávio"],
+        "situacao": "Festa foi sabotada (som cortado, luzes apagadas). Paula organizou, Caio tocava, Otávio não foi convidado. Otávio invadiu cabine técnica e sabotou equipamentos.",
+        "culpado": "otavio"
+    }
 ]
 
 # Listas de Jogos
@@ -422,12 +547,43 @@ async def disparar_sobrevivamonstro(guild):
     jogo_em_andamento["resposta"] = None
     await canal_geral.send("👹 Os monstros recuaram! A batalha acabou! 🐲🏁")
 
+async def disparar_detetive(guild):
+    canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+    if not canal_geral: return
+
+    # Escolher cenário aleatório
+    cenario = random.choice(CENARIOS_DETETIVE)
+    
+    jogo_em_andamento["tipo"] = "detetive"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = cenario["culpado"]
+    jogo_em_andamento["pergunta"] = cenario["caso"]
+
+    embed = discord.Embed(color=0x1E90FF)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = f"🕵️ CASO: {cenario['caso']}"
+    embed.description = f"**👥 Personagens:**\n{', '.join(cenario['personagens'])}\n\n**📋 O que aconteceu:**\n{cenario['situacao']}\n\n🔍 **Quem é o culpado?** Digite apenas o PRIMEIRO NOME!\n\n💰 **Acertar:** +200 Coins | ❌ **Errar:** -100 Coins"
+    embed.set_image(url=GIF_DETETIVE)
+    embed.set_footer(text="Você tem 5 minutos para resolver o mistério! 🐲")
+    
+    await canal_geral.send(embed=embed)
+
+    for _ in range(300): # 300 segundos = 5 min
+        if jogo_em_andamento["venceu"]: break
+        await asyncio.sleep(1)
+    
+    if not jogo_em_andamento["venceu"]:
+        jogo_em_andamento["pergunta"] = None
+        jogo_em_andamento["resposta"] = None
+        await canal_geral.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! 🐲💔")
+
 async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
     if not canal_geral: return
 
     # Sorteio do tipo de jogo ou uso do tipo escolhido
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro", "tarot"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro", "tarot", "detetive"])
     
     if tipo_evento == "tarot":
         await disparar_tarot(guild)
@@ -435,6 +591,10 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     
     if tipo_evento == "sobrevivamonstro":
         await disparar_sobrevivamonstro(guild)
+        return
+    
+    if tipo_evento == "detetive":
+        await disparar_detetive(guild)
         return
 
     jogo_em_andamento["tipo"] = tipo_evento
@@ -541,7 +701,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
 
 # ============== LOOP DO JOGO =================
 
-@tasks.loop(minutes=30)
+@tasks.loop(minutes=40)  # ALTERADO DE 30 PARA 40 MINUTOS
 async def loop_jogo_monstrinho():
     espera_extra = random.randint(0, 300) # Pequeno atraso aleatório para não ser fixo no segundo
     await asyncio.sleep(espera_extra)
@@ -738,43 +898,12 @@ class ReivindicarAnjoView(discord.ui.View):
         button.disabled = True
         await interaction.response.edit_message(view=self)
 
-class ReivindicarCupidoView(discord.ui.View):
-    def __init__(self, canal_ticket_id: int):
-        super().__init__(timeout=None)
-        self.canal_ticket_id = canal_ticket_id
-
-    @discord.ui.button(label="🏹 Assumir Ticket", style=discord.ButtonStyle.danger, custom_id="reivindicar_cupido")
-    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cargo_cupido = discord.utils.get(interaction.user.guild.roles, name=CARGO_CUPIDOS)
-        eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
-        
-        if cargo_cupido not in interaction.user.roles and not eh_staff:
-            return await interaction.response.send_message("❌ Apenas um Cupido ou Staff pode fazer isso! 🏹💘", ephemeral=True)
-
-        canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
-        if not canal_ticket:
-            return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
-
-        await canal_ticket.set_permissions(interaction.user, view_channel=True, send_messages=True)
-        
-        embed_no_ticket = discord.Embed(
-            description=f"🏹 **O Cupido {interaction.user.mention} preparou o arco e chegou para te ajudar com o amor!** 💘✨\n\nAguarde, o romance está no ar!",
-            color=0xFF1493
-        )
-        await canal_ticket.send(embed=embed_no_ticket)
-        
-        button.label = f"Assumido por {interaction.user.display_name}"
-        button.style = discord.ButtonStyle.secondary
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
 class TicketSelect(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="🛠️ Suporte", value="suporte"),
             discord.SelectOption(label="🚨 Denúncia", value="denuncia"),
             discord.SelectOption(label="👮 Falar com Staff", value="staff"),
-            discord.SelectOption(label="💘 Evento dos Namorados", value="namorados"),
             discord.SelectOption(label="📸 Evento Catálogo", value="catalogo"),
             discord.SelectOption(label="📣 Líder de Torcida", value="lider_torcida"),
             discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"), 
@@ -795,13 +924,13 @@ class TicketSelect(discord.ui.Select):
             user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
 
-        if tipo != "anjos" and tipo != "namorados":
+        if tipo != "anjos":
             cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
             if cargo_mod:
                 overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         categoria = interaction.channel.category
-        pref = "👼┃" if tipo == "anjos" else "💘┃" if tipo == "namorados" else "🎟️┃"
+        pref = "👼┃" if tipo == "anjos" else "🎟️┃"
         canal = await guild.create_text_channel(
             name=f"{pref}{tipo}-{user.name}".lower(),
             category=categoria,
@@ -827,22 +956,6 @@ class TicketSelect(discord.ui.Select):
                     timestamp=datetime.now()
                 )
                 await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
-
-        elif tipo == "namorados":
-            embed_namo = discord.Embed(title="💘 EVENTO DOS NAMORADOS", description=f"Oii {user.mention}! Um Cupido foi chamado para te flechar! ✨🏹", color=0xFF69B4)
-            embed_namo.set_image(url=GIF_NAMORADOS)
-            await canal.send(embed=embed_namo, view=FecharTicketView())
-            
-            canal_cupido_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_CUPIDOS)
-            if canal_cupido_logs:
-                cargo_cupido_mencao = discord.utils.get(guild.roles, name=CARGO_CUPIDOS)
-                embed_cupido = discord.Embed(
-                    title="🏹 Novo Ticket de Amor!",
-                    description=f"O(A) {user.mention} abriu um ticket dos namorados! Vá espalhar o amor! 💘\n📍 **Canal:** {canal.mention}",
-                    color=0xFF1493,
-                    timestamp=datetime.now()
-                )
-                await canal_cupido_logs.send(content=cargo_cupido_mencao.mention if cargo_cupido_mencao else None, embed=embed_cupido, view=ReivindicarCupidoView(canal.id))
             
         elif tipo == "catalogo":
             embed_cat = discord.Embed(title="📸 EVENTO CATÁLOGO", color=0x00FFFF)
@@ -1036,6 +1149,11 @@ async def tarot(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
     await disparar_pergunta(ctx.guild, "tarot")
 
+@bot.command()
+async def detetive(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    await disparar_pergunta(ctx.guild, "detetive")
+
 # ============== COMANDOS ADMINISTRATIVOS =================
 
 @bot.command()
@@ -1158,11 +1276,34 @@ async def on_message(message):
             "caixa": lambda m: m in ["1", "2", "3"],
             "bauperdido": lambda m: m == "abrir",
             "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"],
-            "tarot": lambda m: m == "tarot"
+            "tarot": lambda m: m == "tarot",
+            "detetive": lambda m: True
         }
 
         if filtros.get(tipo, lambda m: False)(msg_content):
             jogo_em_andamento["participantes_tentaram"].append(user_id)
+
+            if tipo == "detetive":
+                # Verifica se acertou o culpado
+                if msg_content == jogo_em_andamento["resposta"]:
+                    jogo_em_andamento["venceu"] = True
+                    jogo_em_andamento["resposta"] = None
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 200
+                    
+                    embed_vitoria = discord.Embed(
+                        title="🕵️ CASO RESOLVIDO! 🎉",
+                        description=f"Parabéns, detetive {message.author.mention}! 🔍✨\n\nVocê descobriu o culpado e ganhou **200 Monstrinho-Coins**! 🐲💚",
+                        color=0x00FF7F
+                    )
+                    embed_vitoria.set_image(url=GIF_VITORIA)
+                    await message.reply(embed=embed_vitoria)
+                    await atualizar_ranking(message.guild)
+                else:
+                    # Errou o culpado
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                    await message.reply("❌ Não foi esse! Você perdeu **100 Coins**! Continue investigando... 🔍💔")
+                    await atualizar_ranking(message.guild)
+                return
 
             if tipo == "tarot":
                 # Não encerra o jogo - permite múltiplos participantes
