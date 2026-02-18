@@ -85,8 +85,8 @@ CARGOS_IMUNES_NOMES = [
 
 tickets = {}
 avisos_usuarios = {} 
-total_castigos_usuario = {} # Contador de castigos total
-pontuacao_monstrinho = {} # Guardar os pontos
+total_castigos_usuario = {}
+pontuacao_monstrinho = {}
 jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
 
 # Lógica Evento Silencioso
@@ -416,48 +416,132 @@ PALAVRAS_ALERTA = [
 
 # ============== FUNÇÕES AUXILIARES =================
 
-# Mapa de nomes de jogo para exibição bonita no aviso do chat-geral
-NOMES_JOGOS = {
-    "pergunta": "🧠 Pergunta Relâmpago",
-    "numero": "🎯 Adivinhe o Número",
-    "ppt": "✊ Pedra, Papel ou Tesoura",
-    "cara_coroa": "🪙 Cara ou Coroa",
-    "dado": "🎲 Dado da Sorte",
-    "palavra": "⚡ Palavra Rápida",
-    "emoji": "⚡ Emoji Rápido",
-    "roleta": "🎡 Roleta da Sorte Coletiva",
-    "embaralhada": "🔤 Palavra Embaralhada",
-    "caixa": "📦 Caixa Misteriosa",
-    "bauperdido": "🏴‍☠️ Baú Perdido",
-    "silencioso": "🤫 Evento Silencioso",
-    "sobrevivamonstro": "👹 Sobreviva ao Monstro",
-    "tarot": "🔮 Tarot Místico",
-    "detetive": "🕵️ Detetive"
-}
-
-async def avisar_geral_jogo(guild, tipo_evento):
-    """Envia aviso fofinho no chat-geral avisando que o jogo começou no monstrinho-games"""
-    canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-    if not canal_geral:
+async def enviar_prologo_games(guild):
+    """Envia um prólogo fofinho no canal de games quando o bot liga, explicando como funcionam os jogos."""
+    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
+    if not canal_games:
         return
-    nome_jogo = NOMES_JOGOS.get(tipo_evento, "🎮 Joguinho do Monstrinho")
+
     embed = discord.Embed(
-        color=0xADFF2F,
+        title="🐲💚 OI OI OI! O MONSTRINHO ACORDOU! 💚🐲",
         description=(
-            f"Oiii gente! 🐲💚 O **{nome_jogo}** tá começando agora!\n\n"
-            f"Corre lá pro 🎲・monstrinho-games pra participar e ganhar coins! ✨🐉\n\n"
-            f"*Não perde, hein! O Monstrinho tá esperando por vocês!* 🥺💕"
-        )
+            "AAAAA gente, eu tô de volta e tô com saudaaaaade de vocês! 🥺✨\n\n"
+            "Deixa eu te contar como funcionam os meus joguinhos antes da gente começar a se divertir, tá bom? 🎮🐉"
+        ),
+        color=0xADFF2F
     )
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.set_footer(text="Vai lá antes que acabe! 🐲💚")
-    await canal_geral.send(embed=embed)
+    embed.set_image(url=GIF_ACERTO_MONSTRINHO)
+    await canal_games.send(embed=embed)
+
+    await asyncio.sleep(2)
+
+    embed2 = discord.Embed(
+        title="🎮 COMO FUNCIONAM OS JOGOS? 🎮",
+        color=0x00FF7F
+    )
+    embed2.add_field(
+        name="🧠 Pergunta Relâmpago",
+        value="O Monstrinho faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡",
+        inline=False
+    )
+    embed2.add_field(
+        name="🎯 Adivinhe o Número",
+        value="Penso em um número de **1 a 50** — acertar vale **700 coins**! Errar custa **25 coins**. Só uma tentativa por vez! 🎰",
+        inline=False
+    )
+    embed2.add_field(
+        name="✊ Pedra, Papel ou Tesoura",
+        value="Me desafie digitando **pedra**, **papel** ou **tesoura**! Ganhar vale **200 coins**, perder custa **50**, empate **-25**. 🤜",
+        inline=False
+    )
+    embed2.add_field(
+        name="🪙 Cara ou Coroa",
+        value="Digite **cara** ou **coroa** e torça! Acertar vale **200 coins**, errar custa **75**. 🍀",
+        inline=False
+    )
+    embed2.add_field(
+        name="🎲 Dado da Sorte",
+        value="Escolha um número de **1 a 6**. Acertar vale **60 coins**, errar custa apenas **10**! 🎲",
+        inline=False
+    )
+    embed2.add_field(
+        name="⚡ Palavra Rápida & Emoji Rápido",
+        value="O primeiro que digitar a **palavra** ou mandar o **emoji** certo ganha **80 coins**! Velocidade é tudo! 💨",
+        inline=False
+    )
+    embed2.set_thumbnail(url=AVATAR_MONSTRINHO)
+    await canal_games.send(embed=embed2)
+
+    await asyncio.sleep(2)
+
+    embed3 = discord.Embed(
+        title="🌟 JOGOS ESPECIAIS DO MONSTRINHO 🌟",
+        color=0x9B59B6
+    )
+    embed3.add_field(
+        name="🔤 Palavra Embaralhada",
+        value="Vou embaralhar as letras de uma palavra e você descobre qual é! Acertar vale **150 coins**, errar custa **25**. 🔡",
+        inline=False
+    )
+    embed3.add_field(
+        name="📦 Caixa Misteriosa",
+        value="Escolha **1, 2 ou 3** e abra a caixa! Pode ter coins, prêmio raro (**450 coins!**) ou uma armadilha... 😈",
+        inline=False
+    )
+    embed3.add_field(
+        name="🏴‍☠️ Baú Perdido",
+        value="Digite **ABRIR** para tentar a sorte! Pode ser um tesouro de **300 coins** ou um Mímico que te roba **100 coins**! 💀",
+        inline=False
+    )
+    embed3.add_field(
+        name="🤫 Evento Silencioso",
+        value="O Monstrinho escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🐲",
+        inline=False
+    )
+    embed3.add_field(
+        name="🎡 Roleta da Sorte Coletiva",
+        value="Digite **ROLETA** para girar! TODOS podem participar ao mesmo tempo! Prêmios de **80 a 700 coins** ou chance de **DOBRAR tudo**! 🎰",
+        inline=False
+    )
+    embed3.add_field(
+        name="👹 Sobreviva ao Monstro",
+        value="Enfrente o monstro com **ESCUDO** (50% de defesa, +150), **ESPADA** (1% épico, +700!) ou **FUGIR** (-50 coins mas seguro). TODOS jogam! ⚔️",
+        inline=False
+    )
+    embed3.add_field(
+        name="🔮 Tarot Místico",
+        value="Digite **TAROT** e puxe sua carta do destino! Pode ganhar até **1000 coins** ou perder muito... As cartas não mentem! 🎴",
+        inline=False
+    )
+    embed3.add_field(
+        name="🕵️ Detetive",
+        value="Leia o caso, descubra o culpado e escreva o **primeiro nome** do suspeito! Acertar vale **+300 coins**, errar custa **100**. 🔍",
+        inline=False
+    )
+    embed3.set_thumbnail(url=AVATAR_MONSTRINHO)
+    await canal_games.send(embed=embed3)
+
+    await asyncio.sleep(2)
+
+    embed4 = discord.Embed(
+        title="💰 SISTEMA DE COINS 💰",
+        description=(
+            "Os **Monstrinho-Coins** são a moeda do servidor! Você ganha participando dos jogos e pode usar na **loja** para resgatar prêmios incríveis! 🛍️🐲\n\n"
+            "🏆 Confira o ranking no canal de ranking e veja quem é o mais ricão do servidor!\n\n"
+            "**Os jogos aparecem automaticamente a cada ~40 minutos, tá?** Fica de olho aqui! 👀💚\n\n"
+            "*O Monstrinho ama cada um de vocês... agora bora jogar!* 🐲💚✨"
+        ),
+        color=0xFFD700
+    )
+    embed4.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed4.set_footer(text="Monstrinho-Games 🐲 | Boa sorte a todos! 💚")
+    await canal_games.send(embed=embed4)
 
 async def atualizar_ranking(guild):
     canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_MONSTRINHO)
     if not canal_rank: return
     
-    # Ordenar ranking
     rank_ordenado = sorted(pontuacao_monstrinho.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
@@ -485,13 +569,11 @@ async def verificar_palavras_alerta(message):
     if message.author.bot:
         return
     
-    # Não verifica no canal de desabafos pois já é esperado
     if message.channel.name == CANAL_DESABAFOS:
         return
     
     texto = message.content.lower()
     
-    # Verifica se há alguma palavra de alerta na mensagem
     for palavra in PALAVRAS_ALERTA:
         if palavra in texto:
             canal_atencao = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO)
@@ -511,13 +593,11 @@ async def verificar_palavras_alerta(message):
                 embed.set_footer(text="Sistema de Monitoramento de Bem-Estar 🐲", icon_url=AVATAR_MONSTRINHO)
                 
                 await canal_atencao.send(embed=embed)
-            break  # Para após encontrar a primeira palavra
+            break
 
 async def disparar_roleta(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
-
-    await avisar_geral_jogo(guild, "roleta")
 
     jogo_em_andamento["tipo"] = "roleta"
     jogo_em_andamento["venceu"] = False
@@ -533,7 +613,7 @@ async def disparar_roleta(guild):
     
     await canal_games.send(embed=embed)
 
-    await asyncio.sleep(300) # Mantém aberta por 5 minutos
+    await asyncio.sleep(300)
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
@@ -542,8 +622,6 @@ async def disparar_roleta(guild):
 async def disparar_tarot(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
-
-    await avisar_geral_jogo(guild, "tarot")
 
     jogo_em_andamento["tipo"] = "tarot"
     jogo_em_andamento["venceu"] = False
@@ -569,8 +647,6 @@ async def disparar_sobrevivamonstro(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
 
-    await avisar_geral_jogo(guild, "sobrevivamonstro")
-
     jogo_em_andamento["tipo"] = "sobrevivamonstro"
     jogo_em_andamento["venceu"] = False
     jogo_em_andamento["participantes_tentaram"] = []
@@ -595,9 +671,6 @@ async def disparar_detetive(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
 
-    await avisar_geral_jogo(guild, "detetive")
-
-    # Escolher cenário aleatório
     cenario = random.choice(CENARIOS_DETETIVE)
     
     jogo_em_andamento["tipo"] = "detetive"
@@ -615,7 +688,7 @@ async def disparar_detetive(guild):
     
     await canal_games.send(embed=embed)
 
-    for _ in range(300): # 300 segundos = 5 min
+    for _ in range(300):
         if jogo_em_andamento["venceu"]: break
         await asyncio.sleep(1)
     
@@ -628,7 +701,6 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
 
-    # Sorteio do tipo de jogo ou uso do tipo escolhido
     tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro", "tarot", "detetive"])
     
     if tipo_evento == "tarot":
@@ -725,20 +797,18 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         contador_mensagens_silencioso = 0
         meta_mensagens_silencioso = random.randint(1, 20)
         evento_silencioso_ativo = True
-        jogo_em_andamento["venceu"] = False # Controlado pela on_message
+        jogo_em_andamento["venceu"] = False
         
         embed.title = "🤫 EVENTO SILENCIOSO ATIVADO!"
         embed.description = "O Monstrinho escolheu um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 600 Coins\n📝 **Dica:** O número está entre 1 e 20!"
         embed.set_image(url=GIF_SILENCIOSO)
-        await avisar_geral_jogo(guild, "silencioso")
         await canal_games.send(embed=embed)
-        return # Sai da função pois a on_message cuida do resto
+        return
 
-    await avisar_geral_jogo(guild, tipo_evento)
     embed.set_footer(text="Você tem 5 minutos! Responda no monstrinho-games!")
     await canal_games.send(embed=embed)
 
-    for _ in range(300): # 300 segundos = 5 min
+    for _ in range(300):
         if jogo_em_andamento["venceu"]: break
         await asyncio.sleep(1)
     
@@ -793,7 +863,6 @@ class LojaSelect(discord.ui.Select):
             )
             return await interaction.response.send_message(embed=embed_erro, ephemeral=True)
 
-        # Processar Compra
         pontuacao_monstrinho[user_id] -= custo
         await atualizar_ranking(interaction.guild)
 
@@ -804,7 +873,6 @@ class LojaSelect(discord.ui.Select):
         )
         await interaction.response.send_message(embed=embed_sucesso, ephemeral=True)
 
-        # Notificar Direção
         canal_dir = discord.utils.get(interaction.guild.text_channels, name=CANAL_DIRECAO)
         if canal_dir:
             embed_staff = discord.Embed(
@@ -903,7 +971,6 @@ class FecharTicketView(discord.ui.View):
 
     @discord.ui.button(label="🔒 Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="fechar_ticket")
     async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Verifica se é canal de Anjo
         if interaction.channel.name.startswith("👼┃anjos"):
             cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
             eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
@@ -1035,6 +1102,9 @@ async def on_ready():
         loop_jogo_monstrinho.start()
 
     for guild in bot.guilds:
+        # Prólogo fofo no canal de games
+        await enviar_prologo_games(guild)
+
         # Inicializar Tickets
         canal_tkt = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
         if canal_tkt:
@@ -1289,7 +1359,6 @@ async def on_message(message):
             embed_silencioso.set_thumbnail(url=AVATAR_MONSTRINHO)
             await message.channel.send(embed=embed_silencioso)
             
-            # Reset do evento
             evento_silencioso_ativo = False
             jogo_em_andamento["venceu"] = True
             await atualizar_ranking(message.guild)
@@ -1302,7 +1371,6 @@ async def on_message(message):
         ganhou = False
         premio = 0
 
-        # Filtro de participação: jogos coletivos permitem múltiplos participantes
         if user_id in jogo_em_andamento["participantes_tentaram"]:
             if tipo in ["roleta", "tarot", "sobrevivamonstro"]:
                 return 
