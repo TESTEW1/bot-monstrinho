@@ -1435,8 +1435,11 @@ async def responder_com_ia(mensagem_usuario: str) -> str:
                     data = await resp.json()
                     return data["content"][0]["text"]
                 else:
-                    return "Aaaa deu um probleminha aqui neném... 🐲💦 Tenta de novo!"
-    except Exception:
+                    erro = await resp.text()
+                    print(f"[ERRO IA] Status {resp.status}: {erro}")
+                    return f"Aaaa deu um probleminha aqui neném... 🐲💦 Tenta de novo!"
+    except Exception as e:
+        print(f"[ERRO IA] Exceção: {e}")
         return "Opsie, travei por um segundo! 🐲💚 Me chama de novo!"
 
 @bot.event
