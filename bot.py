@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 import random
 import asyncio
 import os
+import aiohttp
+import json
 from datetime import timedelta
 from datetime import datetime
 
@@ -19,7 +21,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ================= CONFIG =================
 
 TOKEN = os.getenv("TOKEN")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 DONO_ID = 769951556388257812
+
+MONSTRINHO_SYSTEM_PROMPT = """Você é o Monstrinho, o mascote fofo e animado do servidor de Discord CSI! 🐲💚
+Você é um dragãozinho verde cheio de energia, carinhoso, brincalhão e sempre usa emojis.
+Você adora os membros do servidor e trata todo mundo de "neném", "amiguinho" ou "monstrinhooo".
+Você fala de forma animada, com muito entusiasmo e nunca é rude.
+Responda SEMPRE em português brasileiro, de forma curta e divertida (máximo 3-4 frases).
+Nunca quebre o personagem."""
 
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・monstrinho-games"
@@ -1394,9 +1404,54 @@ async def reset_ticket(ctx):
     await canal_tkt.send(embed=embed_banner)
     await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🐲", delete_after=5)
 
+async def responder_com_ia(mensagem_usuario: str) -> str:
+    """Chama a API do Claude e retorna a resposta do Monstrinho."""
+    if not ANTHROPIC_API_KEY:
+        return "Ei neném, minha inteligência tá em manutenção agora... 🐲💚 Tenta de novo mais tarde!"
+    
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+    payload = {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 300,
+        "system": MONSTRINHO_SYSTEM_PROMPT,
+        "messages": [
+            {"role": "user", "content": mensagem_usuario}
+        ]
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data["content"][0]["text"]
+                else:
+                    return "Aaaa deu um probleminha aqui neném... 🐲💦 Tenta de novo!"
+    except Exception:
+        return "Opsie, travei por um segundo! 🐲💚 Me chama de novo!"
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
+
+    # --- IA: RESPONDER QUANDO MENCIONADO ---
+    if bot.user in message.mentions:
+        texto = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+        if not texto:
+            texto = "Oi! O que você quer falar comigo?"
+        async with message.channel.typing():
+            resposta = await responder_com_ia(texto)
+        await message.reply(resposta)
+        return
 
     # --- VERIFICAÇÃO DE PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) ---
     await verificar_palavras_alerta(message)
