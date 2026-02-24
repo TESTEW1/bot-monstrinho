@@ -24,6 +24,8 @@ TOKEN = os.getenv("TOKEN")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 DONO_ID = 769951556388257812
 
+print(f"[DEBUG] ANTHROPIC_API_KEY carregada: {'SIM' if ANTHROPIC_API_KEY else 'NÃO - VAZIA!'}")
+
 MONSTRINHO_SYSTEM_PROMPT = """Você é o Monstrinho, o mascote fofo e animado do servidor de Discord CSI! 🐲💚
 Você é um dragãozinho verde cheio de energia, carinhoso, brincalhão e sempre usa emojis.
 Você adora os membros do servidor e trata todo mundo de "neném", "amiguinho" ou "monstrinhooo".
