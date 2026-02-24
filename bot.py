@@ -1029,7 +1029,7 @@ class TicketSelect(discord.ui.Select):
         super().__init__(
             placeholder="🎟️ Selecione o tipo de ticket",
             options=options,
-            custom_id="ticket_select_menu"
+            custom_id="ticket_select_menu_v2"
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -1373,6 +1373,26 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
         await ctx.send(embed=embed)
     except Exception as e:
         await ctx.send(f"❌ Ocorreu um erro ao tentar remover o castigo: {e}")
+
+@bot.command(name="resetticket")
+async def reset_ticket(ctx):
+    """Reseta o canal de tickets com o menu atualizado."""
+    eh_staff = ctx.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles)
+    if not eh_staff:
+        return await ctx.send("❌ Apenas a staff pode usar esse comando!", delete_after=5)
+    
+    canal_tkt = discord.utils.get(ctx.guild.text_channels, name=CANAL_TICKET)
+    if not canal_tkt:
+        return await ctx.send("❌ Canal de tickets não encontrado!")
+    
+    try: await canal_tkt.purge(limit=10)
+    except: pass
+    
+    await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
+    embed_banner = discord.Embed(color=0x2b2d31)
+    embed_banner.set_image(url=BANNER_TICKET)
+    await canal_tkt.send(embed=embed_banner)
+    await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🐲", delete_after=5)
 
 @bot.event
 async def on_message(message):
