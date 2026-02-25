@@ -25,7 +25,8 @@ CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・monstrinho-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
 CANAL_LOG = "❌-palavras-apagadas-bot"
-CANAL_TICKET = "🎟️・𝑻𝒊𝒄𝒌𝒆𝒕"
+CANAL_TICKET = "🎟️・ticket"
+CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
 CANAL_ADVERTENCIAS = "⚠️・advertências" 
 CANAL_DESABAFOS = "😮‍💨・desabafos"
@@ -1019,12 +1020,16 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(label="👮 Falar com Staff", value="staff"),
             discord.SelectOption(label="📸 Evento Catálogo", value="catalogo"),
             discord.SelectOption(label="📣 Líder de Torcida", value="lider_torcida"),
-            discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"), 
+            discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"),
+            discord.SelectOption(label="🔒 Acesso a Funções", value="acesso_funcoes"),
+            discord.SelectOption(label="🎤 Influencer", value="influencer"),
+            discord.SelectOption(label="🎬 Cineasta", value="cineasta"),
+            discord.SelectOption(label="🎵 Sync", value="sync"),
         ]
         super().__init__(
             placeholder="🎟️ Selecione o tipo de ticket",
             options=options,
-            custom_id="ticket_select_menu"
+            custom_id="ticket_select_menu_v2"
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -1078,6 +1083,39 @@ class TicketSelect(discord.ui.Select):
             
         elif tipo == "lider_torcida":
             await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🐲", view=FecharTicketView())
+
+        elif tipo == "acesso_funcoes":
+            embed_acesso = discord.Embed(
+                title="🔒 ACESSO A FUNÇÕES",
+                description=f"{user.mention}, qual função você está solicitando acesso? Explique para a staff! 💚🐲",
+                color=0xFFA500
+            )
+            await canal.send(embed=embed_acesso, view=FecharTicketView())
+
+        elif tipo == "influencer":
+            embed_influencer = discord.Embed(
+                title="🎤 INFLUENCER",
+                description=f"{user.mention}, nos conta sobre o seu perfil e por que você quer ser Influencer no servidor! 💚🐲",
+                color=0xFF69B4
+            )
+            await canal.send(embed=embed_influencer, view=FecharTicketView())
+
+        elif tipo == "cineasta":
+            embed_cineasta = discord.Embed(
+                title="🎬 CINEASTA",
+                description=f"{user.mention}, nos conta sobre o seu trabalho audiovisual e por que você quer ser Cineasta no servidor! 💚🐲",
+                color=0x8B0000
+            )
+            await canal.send(embed=embed_cineasta, view=FecharTicketView())
+
+        elif tipo == "sync":
+            embed_sync = discord.Embed(
+                title="🎵 SYNC",
+                description=f"{user.mention}, nos conta sobre a sua proposta de Sync e como você pode contribuir! 💚🐲",
+                color=0x9B59B6
+            )
+            await canal.send(embed=embed_sync, view=FecharTicketView())
+
         else:
             await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
 
@@ -1335,6 +1373,26 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
         await ctx.send(embed=embed)
     except Exception as e:
         await ctx.send(f"❌ Ocorreu um erro ao tentar remover o castigo: {e}")
+
+@bot.command(name="resetticket")
+async def reset_ticket(ctx):
+    """Reseta o canal de tickets com o menu atualizado."""
+    eh_staff = ctx.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles)
+    if not eh_staff:
+        return await ctx.send("❌ Apenas a staff pode usar esse comando!", delete_after=5)
+    
+    canal_tkt = discord.utils.get(ctx.guild.text_channels, name=CANAL_TICKET)
+    if not canal_tkt:
+        return await ctx.send("❌ Canal de tickets não encontrado!")
+    
+    try: await canal_tkt.purge(limit=10)
+    except: pass
+    
+    await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
+    embed_banner = discord.Embed(color=0x2b2d31)
+    embed_banner.set_image(url=BANNER_TICKET)
+    await canal_tkt.send(embed=embed_banner)
+    await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🐲", delete_after=5)
 
 @bot.event
 async def on_message(message):
