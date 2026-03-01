@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 import random
 import asyncio
 import os
+import re
 from datetime import timedelta
 from datetime import datetime
 
@@ -69,6 +70,10 @@ CARGO_RECRUTADOR = "Recrutador. 🦇"
 CARGO_ANJO = "Anjo. 🦇"
 CARGO_CUPIDOS = "Cupidos"
 CARGO_STAFF_EQUIPE = "Equipe Staff. 🦇"
+CARGO_ADV_1 = "Advertência 1/3"
+CARGO_ADV_2 = "Advertência 2/3"
+CARGO_ADV_3 = "Advertência 3/3"
+CARGOS_ADV_TODOS = ["Advertência 1/3", "Advertência 2/3", "Advertência 3/3"]
 
 CARGOS_IMUNES_NOMES = [
     "Admin", 
@@ -85,8 +90,8 @@ CARGOS_IMUNES_NOMES = [
 # ============== DADOS =================
 
 tickets = {}
-avisos_usuarios = {} 
-total_castigos_usuario = {}
+avisos_usuarios = {}       # user_id -> avisos atuais (0–3)
+total_ciclos_usuario = {}  # user_id -> quantos ciclos completos de punição já levou
 pontuacao_monstrinho = {}
 jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
 
@@ -390,14 +395,40 @@ LISTA_EMOJIS_RAPIDOS = [
 
 
 # ============== PALAVRAS PROIBIDAS =================
+# Lógica: palavras soltas só disparam com boundary (\b), frases disparam por substring.
+# Isso evita falsos positivos como "computar" → "puta", "burrice" → "burro", etc.
 
-PALAVRAS_PROIBIDAS = [
-    "porra", "caralho", "merda", "bosta", "puta", "puto", "vadia", "desgraça", 
-    "idiota", "burro", "imbecil", "otário", "retardado", "lixo", "nojento", 
-    "arrombado", "viado", "bicha", "piranha", "vai se fuder", "vai se foder", 
-    "vai tomar no cu", "tomar no cu", "filho da puta", "se mata", "se fode", 
-    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho"
+PALAVRAS_PROIBIDAS_EXATAS = [
+    # palavrões isolados (serão verificados com \b word boundary)
+    "porra", "caralho", "merda", "bosta", "viado", "bicha", "piranha",
+    "arrombado", "imbecil", "otário", "otario", "retardado", "nojento",
+    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho",
 ]
+
+FRASES_PROIBIDAS = [
+    # Frases completas — não há falso positivo, contexto já é claro
+    "vai se fuder", "vai se foder", "vai tomar no cu", "tomar no cu",
+    "filho da puta", "filha da puta", "se mata", "se fode", "vai tomar",
+    "sua puta", "sua vadia", "puta que pariu", "puta merda",
+    "vai a merda", "vai pra merda", "me fode", "me foder",
+    "idiota mesmo", "idiota do", "burro demais", "burra demais",
+    "que lixo você", "você é um lixo", "vc é um lixo",
+    "puto da vida", "puta que", "fdp mesmo", "vsf mesmo",
+]
+
+def contem_palavra_proibida(texto: str):
+    """Retorna a palavra/frase encontrada ou None. Usa boundary para palavras soltas."""
+    # 1. Checar frases proibidas (substring simples — já são contextuais)
+    for frase in FRASES_PROIBIDAS:
+        if frase in texto:
+            return frase
+    # 2. Checar palavras exatas com word boundary
+    for palavra in PALAVRAS_PROIBIDAS_EXATAS:
+        # \b não funciona bem com acentos, mas cobre a maioria dos casos
+        padrao = r'(?<![a-zA-ZÀ-ú])' + re.escape(palavra) + r'(?![a-zA-ZÀ-ú])'
+        if re.search(padrao, texto):
+            return palavra
+    return None
 
 # ============== PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) =================
 
@@ -414,6 +445,154 @@ PALAVRAS_ALERTA = [
     "sem forças", "sem forcas", "exausto", "exausta", "esgotado", "esgotada",
     "angústia", "angustia", "pânico", "panico", "medo de tudo", "não consigo mais", "chorei demais", "me machucar", "Quero sair desse mundo", "me cortei", "eu me cortei", "cortei"
 ]
+
+# ============== SISTEMA DE PUNIÇÕES PROGRESSIVAS =================
+
+# Tabela de castigos por ciclo de punição (quantas vezes já completou os 3 avisos)
+# Cada ciclo: [timeout_aviso1, timeout_aviso2, timeout_aviso3, timeout_banimento]
+TABELA_CASTIGOS = [
+    # ciclo 0 (primeira vez)
+    [timedelta(minutes=5),  timedelta(minutes=15), timedelta(minutes=30), timedelta(days=1)],
+    # ciclo 1 (reincidente)
+    [timedelta(minutes=10), timedelta(minutes=30), timedelta(hours=1),    timedelta(days=3)],
+    # ciclo 2
+    [timedelta(minutes=20), timedelta(hours=1),    timedelta(hours=2),    timedelta(days=7)],
+    # ciclo 3+
+    [timedelta(hours=1),    timedelta(hours=3),    timedelta(hours=6),    timedelta(days=28)],
+]
+
+MSGS_AVISOS = [
+    None,  # índice 0 não usado
+    "Vc falou algo ruim!! infelizmente tive que te dar um aviso. cuidado com o segundo!! 🥺🐲",
+    "Ai ai... **segundo aviso!!** Tá quase chegando no limite, toma muito cuidado com o terceiro, tá?? 😰🐲",
+    "**TERCEIRO AVISO!!** Você tá no limite mesmo... se repetir isso vai tomar um castigo! 😱🐲 Respira fundo e volta calmo(a)!",
+]
+
+def obter_ciclo(user_id: int) -> int:
+    """Retorna o índice do ciclo atual de punição (limitado ao último da tabela)."""
+    ciclos = total_ciclos_usuario.get(user_id, 0)
+    return min(ciclos, len(TABELA_CASTIGOS) - 1)
+
+def obter_duracao_aviso(user_id: int, aviso: int) -> timedelta:
+    ciclo = obter_ciclo(user_id)
+    return TABELA_CASTIGOS[ciclo][aviso - 1]  # aviso 1→índice 0
+
+def obter_duracao_banimento(user_id: int) -> timedelta:
+    ciclo = obter_ciclo(user_id)
+    return TABELA_CASTIGOS[ciclo][3]
+
+def formatar_duracao(td: timedelta) -> str:
+    total_segundos = int(td.total_seconds())
+    if total_segundos < 3600:
+        return f"{total_segundos // 60} minuto(s)"
+    elif total_segundos < 86400:
+        return f"{total_segundos // 3600} hora(s)"
+    else:
+        return f"{total_segundos // 86400} dia(s)"
+
+async def gerenciar_cargo_advertencia(membro: discord.Member, qtd_avisos: int):
+    """Remove todos os cargos de advertência e aplica o correto para o aviso atual."""
+    guild = membro.guild
+    # Remover todos os cargos de advertência existentes
+    for nome_cargo in CARGOS_ADV_TODOS:
+        cargo = discord.utils.get(guild.roles, name=nome_cargo)
+        if cargo and cargo in membro.roles:
+            try:
+                await membro.remove_roles(cargo, reason="Atualização de cargo de advertência")
+            except Exception:
+                pass
+    # Aplicar o cargo correto
+    mapa = {1: CARGO_ADV_1, 2: CARGO_ADV_2, 3: CARGO_ADV_3}
+    nome_novo = mapa.get(qtd_avisos)
+    if nome_novo:
+        cargo_novo = discord.utils.get(guild.roles, name=nome_novo)
+        if cargo_novo:
+            try:
+                await membro.add_roles(cargo_novo, reason=f"Advertência {qtd_avisos}/3 aplicada pelo bot")
+            except Exception:
+                pass
+
+async def remover_cargos_advertencia(membro: discord.Member):
+    """Remove todos os cargos de advertência do membro."""
+    guild = membro.guild
+    for nome_cargo in CARGOS_ADV_TODOS:
+        cargo = discord.utils.get(guild.roles, name=nome_cargo)
+        if cargo and cargo in membro.roles:
+            try:
+                await membro.remove_roles(cargo, reason="Avisos zerados pela staff")
+            except Exception:
+                pass
+
+async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int):
+    """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
+    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
+    if not canal_log:
+        return
+
+    autor = message.author
+    total_ciclos = total_ciclos_usuario.get(autor.id, 0)
+
+    # Barra de avisos (bolinhas coloridas)
+    avisos_emoji = ""
+    cores_bola = ["🔴", "🟠", "🔴"]
+    for i in range(1, 4):
+        if i <= qtd_avisos:
+            avisos_emoji += f"{cores_bola[i-1]} "
+        else:
+            avisos_emoji += "⚪ "
+
+    # Cor do embed sobe com a gravidade
+    cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
+    cor = cor_map.get(qtd_avisos, 0xFF0000)
+
+    embed = discord.Embed(
+        title="🗑️ MENSAGEM APAGADA PELO MONSTRINHO",
+        color=cor,
+        timestamp=datetime.now()
+    )
+    embed.set_author(
+        name=f"{autor.display_name}  •  @{autor.name}",
+        icon_url=autor.display_avatar.url
+    )
+    embed.set_thumbnail(url=autor.display_avatar.url)
+
+    # Linha separadora visual com dados principais
+    embed.add_field(name="👤 Membro",       value=autor.mention,            inline=True)
+    embed.add_field(name="🆔 ID",           value=f"`{autor.id}`",          inline=True)
+    embed.add_field(name="📍 Canal",        value=message.channel.mention,  inline=True)
+
+    # Conteúdo apagado
+    conteudo = message.content[:900] if message.content else "*(sem texto — possível mídia)*"
+    embed.add_field(
+        name="💬 Mensagem apagada",
+        value=f"```{conteudo}```",
+        inline=False
+    )
+    embed.add_field(
+        name="🔍 Gatilho detectado",
+        value=f"```{palavra_detectada}```",
+        inline=False
+    )
+
+    # Painel de status
+    embed.add_field(
+        name=f"⚠️ Avisos  ({qtd_avisos}/3)",
+        value=avisos_emoji.strip(),
+        inline=True
+    )
+    embed.add_field(
+        name="📋 Advertências totais",
+        value=f"**{total_ciclos}** vez(es) punido(a)",
+        inline=True
+    )
+
+    embed.set_footer(
+        text="🐲 Monstrinho Logs  •  Use os botões abaixo caso tenha sido engano",
+        icon_url=AVATAR_MONSTRINHO
+    )
+
+    view = DesfazerAvisoView(membro_id)
+    await canal_log.send(embed=embed, view=view)
 
 # ============== FUNÇÕES AUXILIARES =================
 
@@ -891,26 +1070,72 @@ class LojaView(discord.ui.View):
 
 # ============== VIEWS =================
 
-class LiberarCastigoView(discord.ui.View):
+# ============== VIEWS =================
+
+class DesfazerAvisoView(discord.ui.View):
     def __init__(self, membro_id: int):
         super().__init__(timeout=None)
         self.membro_id = membro_id
 
-    @discord.ui.button(label="🔓 Remover Castigo", style=discord.ButtonStyle.success, custom_id="remover_castigo")
-    async def remover(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="↩️ Desfazer Aviso", style=discord.ButtonStyle.success, custom_id="desfazer_aviso")
+    async def desfazer(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.moderate_members:
+            return await interaction.response.send_message("❌ Apenas a staff pode desfazer avisos!", ephemeral=True)
+        guild = interaction.guild
+        membro = guild.get_member(self.membro_id)
+        if not membro:
+            return await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
+
+        # Remove timeout se houver e zera os avisos
+        try:
+            await membro.timeout(None)
+        except Exception:
+            pass
+        avisos_usuarios[self.membro_id] = 0
+        total_ciclos_usuario[self.membro_id] = max(0, total_ciclos_usuario.get(self.membro_id, 0) - 1)
+        await remover_cargos_advertencia(membro)
+
+        button.label = f"✅ Desfeito por {interaction.user.display_name}"
+        button.style = discord.ButtonStyle.secondary
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+        if canal_geral:
+            await canal_geral.send(
+                f"✅ {membro.mention} a staff revisou e percebeu que foi sem querer! "
+                f"Seus avisos foram zerados. Fica tranquilo(a)! 🐲💚"
+            )
+
+    @discord.ui.button(label="🔓 Remover Castigo/Timeout", style=discord.ButtonStyle.primary, custom_id="remover_castigo_v2")
+    async def remover_castigo(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.moderate_members:
             return await interaction.response.send_message("❌ Apenas a staff pode remover castigos!", ephemeral=True)
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
-        if membro:
+        if not membro:
+            return await interaction.response.send_message("❌ Membro não encontrado.", ephemeral=True)
+
+        try:
             await membro.timeout(None)
-            avisos_usuarios[self.membro_id] = 0 
-            await interaction.response.send_message(f"✅ Castigo de {membro.mention} removido com sucesso!", ephemeral=True)
-            canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-            if canal_geral:
-                await canal_geral.send(f"⚠️ **{membro.mention} foi liberado pela staff, mas continue se comportando! 🐲💚**")
-        else:
-            await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
+        except Exception:
+            pass
+        await remover_cargos_advertencia(membro)
+
+        button.label = f"🔓 Liberado por {interaction.user.display_name}"
+        button.style = discord.ButtonStyle.secondary
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
+        if canal_geral:
+            await canal_geral.send(
+                f"⚠️ {membro.mention} foi liberado(a) pela staff. "
+                f"Mas continue se comportando! 🐲💚"
+            )
+
+# Manter alias para compatibilidade com on_ready
+LiberarCastigoView = DesfazerAvisoView
 
 class AprovarMembroView(discord.ui.View):
     def __init__(self, membro_id: int):
@@ -1133,7 +1358,7 @@ async def on_ready():
     print(f"🐲 Ligado como {bot.user}")
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
-    bot.add_view(LiberarCastigoView(0))
+    bot.add_view(DesfazerAvisoView(0))
     bot.add_view(LojaView())
     
     if not loop_jogo_monstrinho.is_running():
@@ -1197,29 +1422,10 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_message_delete(message):
-    if message.author.bot: return
-    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
-    if canal_log:
-        embed = discord.Embed(
-            title="📝 Mensagem Deletada", 
-            color=0xFF0000,
-            timestamp=datetime.now()
-        )
-        embed.set_author(name=f"Autor: {message.author.name}", icon_url=message.author.display_avatar.url)
-        embed.add_field(name="📍 Canal", value=message.channel.mention, inline=True)
-        embed.add_field(name="👤 ID do Autor", value=f"`{message.author.id}`", inline=True)
-        
-        conteudo = message.content or "Mensagem sem texto ou apenas mídia."
-        embed.add_field(name="💬 Conteúdo", value=f"```\n{conteudo}\n```", inline=False)
-        
-        if message.attachments:
-            anexo = message.attachments[0]
-            if any(anexo.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
-                embed.set_image(url=anexo.proxy_url)
-
-        embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-        embed.set_footer(text=f"Monstrinho Logs 🐲")
-        await canal_log.send(embed=embed)
+    # Mensagens apagadas pelo bot por palavras proibidas são logadas diretamente na função de moderação.
+    # Aqui só logamos deleções feitas manualmente por moderadores (não pelo bot).
+    if message.author.bot:
+        return
 
 # ============== COMANDOS DE JOGOS INDIVIDUAIS =================
 
@@ -1363,6 +1569,8 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
     try:
         await membro.timeout(None)
         avisos_usuarios[membro.id] = 0
+        total_ciclos_usuario[membro.id] = max(0, total_ciclos_usuario.get(membro.id, 0) - 1)
+        await remover_cargos_advertencia(membro)
         embed = discord.Embed(
             title="🔓 CASTIGO REMOVIDO MANUALMENTE",
             description=f"O membro {membro.mention} teve seus avisos resetados e o castigo removido por {ctx.author.mention}. 🐲💚",
@@ -1794,23 +2002,218 @@ async def on_message(message):
     texto = message.content.lower()
     eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
     if not eh_imune and message.channel.name != CANAL_DESABAFOS:
-        for palavra in PALAVRAS_PROIBIDAS:
-            if palavra in texto:
+        palavra_encontrada = contem_palavra_proibida(texto)
+        if palavra_encontrada:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+            user_id = message.author.id
+            membro = message.author
+            guild = message.guild
+
+            avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
+            qtd = avisos_usuarios[user_id]
+            total_adv = total_ciclos_usuario.get(user_id, 0)
+
+            canal_adv = discord.utils.get(guild.text_channels, name=CANAL_ADVERTENCIAS)
+            cargo_staff = discord.utils.get(guild.roles, name=CARGO_STAFF_EQUIPE)
+
+            # ── Ficha no canal de log (sempre) ──────────────────────────────
+            await enviar_log_palavras_apagadas(message, palavra_encontrada, qtd, user_id)
+
+            # ── CICLO COMPLETO → CASTIGO ─────────────────────────────────────
+            if qtd >= 4:
+                duracao_ban = obter_duracao_banimento(user_id)
+                duracao_str = formatar_duracao(duracao_ban)
+                total_ciclos_usuario[user_id] = total_adv + 1
+                avisos_usuarios[user_id] = 0
+                novo_total_adv = total_ciclos_usuario[user_id]
+
                 try:
-                    await message.delete()
-                    user_id = message.author.id
-                    avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
-                    qtd = avisos_usuarios[user_id]
-                    if qtd >= 4:
-                        total_castigos_usuario[user_id] = total_castigos_usuario.get(user_id, 0) + 1
-                        avisos_usuarios[user_id] = 0
-                        await message.author.timeout(timedelta(days=1))
-                        canal_adv = discord.utils.get(message.guild.text_channels, name=CANAL_ADVERTENCIAS)
-                        if canal_adv: await canal_adv.send(embed=discord.Embed(title="🚨 CASTIGO", description=f"{message.author.mention} silenciado.", color=0xFF0000), view=LiberarCastigoView(user_id))
-                    else:
-                        await message.channel.send(f"⚠️ {message.author.mention} aviso {qtd}/3!", delete_after=10)
-                    return
-                except: pass
+                    await membro.timeout(duracao_ban)
+                except Exception:
+                    pass
+
+                # Aplica o cargo de advertência correto baseado no total de castigos
+                mapa_cargos_adv = {1: CARGO_ADV_1, 2: CARGO_ADV_2, 3: CARGO_ADV_3}
+                nome_cargo_adv = mapa_cargos_adv.get(min(novo_total_adv, 3))
+                await remover_cargos_advertencia(membro)
+                if nome_cargo_adv:
+                    cargo_adv = discord.utils.get(guild.roles, name=nome_cargo_adv)
+                    if cargo_adv:
+                        try:
+                            await membro.add_roles(cargo_adv, reason=f"Castigo nº {novo_total_adv} aplicado pelo bot")
+                        except Exception:
+                            pass
+
+                # Embed da ficha de castigo no canal advertências
+                if canal_adv:
+                    embed_castigo = discord.Embed(
+                        title="🚨 CASTIGO APLICADO — CICLO COMPLETO",
+                        color=0xCC0000,
+                        timestamp=datetime.now()
+                    )
+                    embed_castigo.set_author(
+                        name=f"{membro.display_name}  •  @{membro.name}",
+                        icon_url=membro.display_avatar.url
+                    )
+                    embed_castigo.set_thumbnail(url=membro.display_avatar.url)
+
+                    embed_castigo.add_field(name="👤 Membro",              value=membro.mention,            inline=True)
+                    embed_castigo.add_field(name="🆔 ID",                  value=f"`{membro.id}`",          inline=True)
+                    embed_castigo.add_field(name="📍 Canal da infração",   value=message.channel.mention,   inline=True)
+                    embed_castigo.add_field(name="⏱️ Duração do castigo",  value=f"**{duracao_str}**",      inline=True)
+                    embed_castigo.add_field(name="📋 Advertências totais", value=f"**{novo_total_adv}x**",  inline=True)
+                    embed_castigo.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
+                    embed_castigo.add_field(
+                        name="ℹ️ Informação",
+                        value=(
+                            f"Este membro ignorou **3 avisos** e acumulou seu **{novo_total_adv}º** ciclo de punição.\n"
+                            f"O próximo ciclo terá castigos ainda mais severos."
+                        ),
+                        inline=False
+                    )
+                    embed_castigo.set_footer(
+                        text="🐲 Monstrinho Moderação  •  Use os botões para gerenciar",
+                        icon_url=AVATAR_MONSTRINHO
+                    )
+
+                    mencao_staff = cargo_staff.mention if cargo_staff else ""
+                    await canal_adv.send(
+                        content=mencao_staff if mencao_staff else None,
+                        embed=embed_castigo,
+                        view=DesfazerAvisoView(user_id)
+                    )
+
+                # Mensagem no canal da infração
+                embed_ban_canal = discord.Embed(
+                    title="😢 Você ignorou todos os meus avisos...",
+                    description=(
+                        f"{membro.mention} terei que te castigar por **{duracao_str}**... "
+                        f"Espero que você reflita e volte com mais calma! 🐲💔\n\n"
+                        f"*Se foi um engano, chame a staff — ela pode te liberar!*"
+                    ),
+                    color=0xFF0000,
+                    timestamp=datetime.now()
+                )
+                embed_ban_canal.set_thumbnail(url=membro.display_avatar.url)
+                embed_ban_canal.set_footer(text="🐲 Monstrinho Moderação", icon_url=AVATAR_MONSTRINHO)
+                await message.channel.send(embed=embed_ban_canal, delete_after=20)
+
+            # ── AVISOS 1 / 2 / 3 ─────────────────────────────────────────────
+            else:
+                duracao_aviso = obter_duracao_aviso(user_id, qtd)
+                duracao_str = formatar_duracao(duracao_aviso)
+
+                try:
+                    await membro.timeout(duracao_aviso)
+                except Exception:
+                    pass
+
+                msg_aviso = MSGS_AVISOS[qtd]
+
+                # ── Embed no canal da infração ────────────────────────────────
+                cores_aviso = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF4400}
+                embed_aviso = discord.Embed(
+                    title=f"⚠️ Aviso {qtd}/3",
+                    description=f"{membro.mention} {msg_aviso}",
+                    color=cores_aviso.get(qtd, 0xFFAA00),
+                    timestamp=datetime.now()
+                )
+                embed_aviso.add_field(
+                    name="⏱️ Silêncio temporário",
+                    value=f"Você ficará calado(a) por **{duracao_str}**.",
+                    inline=False
+                )
+                embed_aviso.set_thumbnail(url=membro.display_avatar.url)
+                embed_aviso.set_footer(text="🐲 Monstrinho Moderação", icon_url=AVATAR_MONSTRINHO)
+                await message.channel.send(embed=embed_aviso, delete_after=15)
+
+                # ── Aviso 2 → ficha no canal advertências + ping staff ─────────
+                if qtd == 2 and canal_adv:
+                    mencao_staff = cargo_staff.mention if cargo_staff else ""
+                    embed_adv2 = discord.Embed(
+                        title="⚠️ ATENÇÃO — Segundo Aviso Aplicado",
+                        description=(
+                            f"O membro {membro.mention} acaba de receber seu **2º aviso**.\n"
+                            f"Pedimos que a staff fique de olho nessa situação."
+                        ),
+                        color=0xFF8800,
+                        timestamp=datetime.now()
+                    )
+                    embed_adv2.set_author(
+                        name=f"{membro.display_name}  •  @{membro.name}",
+                        icon_url=membro.display_avatar.url
+                    )
+                    embed_adv2.set_thumbnail(url=membro.display_avatar.url)
+                    embed_adv2.add_field(name="👤 Membro",              value=membro.mention,             inline=True)
+                    embed_adv2.add_field(name="🆔 ID",                  value=f"`{membro.id}`",           inline=True)
+                    embed_adv2.add_field(name="📍 Canal",               value=message.channel.mention,    inline=True)
+                    embed_adv2.add_field(name="⚠️ Situação",           value="**2/3 avisos** — está próximo do castigo.",  inline=True)
+                    embed_adv2.add_field(name="📋 Advertências totais", value=f"**{total_adv}x** histórico", inline=True)
+                    embed_adv2.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
+                    embed_adv2.add_field(
+                        name="📌 Observação",
+                        value=(
+                            "Se este membro infringir as regras mais **uma vez**, receberá um castigo automático.\n"
+                            "A staff pode intervir manualmente se necessário."
+                        ),
+                        inline=False
+                    )
+                    embed_adv2.set_footer(
+                        text="🐲 Monstrinho Moderação  •  Notificação automática",
+                        icon_url=AVATAR_MONSTRINHO
+                    )
+                    await canal_adv.send(
+                        content=f"{mencao_staff} — Notificação de 2º aviso:" if mencao_staff else None,
+                        embed=embed_adv2
+                    )
+
+                # ── Aviso 3 → ficha no canal advertências + ping staff (SÉRIO) ──
+                elif qtd == 3 and canal_adv:
+                    mencao_staff = cargo_staff.mention if cargo_staff else ""
+                    embed_adv3 = discord.Embed(
+                        title="🚨 ALERTA MÁXIMO — Terceiro Aviso Aplicado",
+                        description=(
+                            f"⛔ {membro.mention} está no **último aviso antes do castigo**.\n\n"
+                            f"Qualquer nova infração resultará em **silenciamento imediato** por **{formatar_duracao(obter_duracao_banimento(user_id))}**.\n"
+                            f"Solicitamos atenção imediata da equipe."
+                        ),
+                        color=0xFF0000,
+                        timestamp=datetime.now()
+                    )
+                    embed_adv3.set_author(
+                        name=f"{membro.display_name}  •  @{membro.name}",
+                        icon_url=membro.display_avatar.url
+                    )
+                    embed_adv3.set_thumbnail(url=membro.display_avatar.url)
+                    embed_adv3.add_field(name="👤 Membro",              value=membro.mention,             inline=True)
+                    embed_adv3.add_field(name="🆔 ID",                  value=f"`{membro.id}`",           inline=True)
+                    embed_adv3.add_field(name="📍 Canal",               value=message.channel.mention,    inline=True)
+                    embed_adv3.add_field(name="🔴 Situação",            value="**3/3 avisos — LIMITE ATINGIDO**", inline=True)
+                    embed_adv3.add_field(name="📋 Advertências totais", value=f"**{total_adv}x** histórico", inline=True)
+                    embed_adv3.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
+                    embed_adv3.add_field(
+                        name="⛔ Situação Crítica",
+                        value=(
+                            "Este membro atingiu o **limite máximo de avisos**.\n"
+                            "O próximo erro acionará o castigo automático sem possibilidade de aviso adicional.\n"
+                            "**Recomendamos intervenção da staff imediatamente.**"
+                        ),
+                        inline=False
+                    )
+                    embed_adv3.set_footer(
+                        text="🐲 Monstrinho Moderação  •  Ação imediata recomendada",
+                        icon_url=AVATAR_MONSTRINHO
+                    )
+                    await canal_adv.send(
+                        content=f"🚨 {mencao_staff} — **ATENÇÃO: terceiro aviso detectado!**" if mencao_staff else None,
+                        embed=embed_adv3
+                    )
+
+            return
 
     await bot.process_commands(message)
 
