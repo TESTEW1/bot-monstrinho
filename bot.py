@@ -1442,7 +1442,7 @@ async def on_member_remove(member):
 async def on_member_update(before, after):
     cargo_aniver = discord.utils.get(after.guild.roles, name="🎂 Aniversariante")
     if cargo_aniver and cargo_aniver not in before.roles and cargo_aniver in after.roles:
-        canal_geral = discord.utils.get(after.guild.text_channels, name=CANAL_GERAL)
+        canal_geral = discord.utils.get(after.guild.text_channels, name="🎉・aniversariante")
         if not canal_geral:
             return
         msgs_aniversario = [
