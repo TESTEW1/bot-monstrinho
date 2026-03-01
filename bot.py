@@ -60,6 +60,7 @@ GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4
 GIF_MONSTRO = "https://i.pinimg.com/originals/22/ba/4d/22ba4d403b0c9c172526be971b0c0ab7.gif"
 GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 GIF_TAROT = "https://i.pinimg.com/originals/28/bc/9a/28bc9aad11a3d4251108c3a28fd980f3.gif"
+GIF_ANIVERSARIO = "https://usagif.com/wp-content/uploads/2021/4fh5wi/flzanversariopt-7.gif"
 GIF_DETETIVE = "https://i.pinimg.com/originals/d5/0c/7b/d50c7b0413ac64fd5653c6b97cef9a22.gif"
 
 # Cargos
@@ -1436,6 +1437,42 @@ async def on_member_remove(member):
         )
         await member.send(mensagem_despedida)
     except: pass
+
+@bot.event
+async def on_member_update(before, after):
+    cargo_aniver = discord.utils.get(after.guild.roles, name="🎂 Aniversariante")
+    if cargo_aniver and cargo_aniver not in before.roles and cargo_aniver in after.roles:
+        canal_geral = discord.utils.get(after.guild.text_channels, name=CANAL_GERAL)
+        if not canal_geral:
+            return
+        msgs_aniversario = [
+            (
+                f"✨🎂 ESPERA, ESPERA, ESPERA!! 🎂✨\n\n"
+                f"Hoje é o dia mais especial do ano pra {after.mention}!! 🥳💚\n\n"
+                f"O Monstrinho colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🐲🎉\n"
+                f"Que esse dia seja tão lindo quanto você, cheio de amor, risada e tudo de bom que você merece!\n\n"
+                f"**Feliz Aniversário, neném!! 🎂💚✨**"
+            ),
+            (
+                f"🎉💚 TUM TUM TUM… adivinha quem faz aniversário HOJE?! 💚🎉\n\n"
+                f"{after.mention}, o Monstrinho não ia deixar esse dia passar em branco não!! 🥺🐲\n\n"
+                f"Vim aqui do fundo do coração te desejar um dia incrível, repleto de alegria, de pessoas que você ama e de muito, muito carinho!\n"
+                f"Você merece tudo de melhor que esse mundo tem a oferecer! 🌟\n\n"
+                f"**Parabéns pra você!! 🎂💚🎊**"
+            ),
+            (
+                f"🐲💕 OI OI OI!! O Monstrinho ficou sabendo de um segredinho… 👀🎂\n\n"
+                f"Hoje é o aniversário da nossa querida {after.mention}!! 🥳✨\n\n"
+                f"Que a vida te presenteie com dias leves, sorrisos verdadeiros e muita coisa boa chegando por aí!\n"
+                f"Aqui na nossa família a gente torce muito por você, saiba disso! 💚🫶\n\n"
+                f"**Feliz Aniversário!! Seja muito feliz sempre!! 🎉🎂💚**"
+            ),
+        ]
+        import random as _random
+        mensagem = _random.choice(msgs_aniversario)
+        embed_aniver = discord.Embed(description=mensagem, color=0x00FF7F)
+        embed_aniver.set_image(url=GIF_ANIVERSARIO)
+        await canal_geral.send(embed=embed_aniver)
 
 @bot.event
 async def on_message_delete(message):
