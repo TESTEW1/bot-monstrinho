@@ -1168,7 +1168,18 @@ class AprovarMembroView(discord.ui.View):
         if cargo_anjo: mencoes.append(cargo_anjo.mention)
         if cargo_recrutador: mencoes.append(cargo_recrutador.mention)
         if canal_geral:
-            await canal_geral.send(f"AAAA 😭🐲💚 {membro.mention} foi LIBERADO!\n{' '.join(mencoes)} venham dar boas-vindas pro neném do monstrinhooo 🐲💚✨")
+            msg_boas_vindas = (
+                f"✨💚 tum tum tum… o Monstrinho apareceu! 💚✨\n\n"
+                f"Atençãooo!! Temos alguém novo chegando no nosso cantinho 👀✨\n\n"
+                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 O Monstrinho já abriu espaço, ajeitou tudo por aqui e tá prontinho pra te acompanhar nessa nova fase.\n\n"
+                f"🦇 {' 🦇 '.join(mencoes)}\n\n"
+                f"Venham dar aquele abraço de boas-vindas que só a gente sabe dar 💚\n"
+                f"Aqui você não entrou só em um servidor… Entrou em um lar.\n\n"
+                f"O Monstrinho foi criado pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
+                f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n"
+                f"Com carinho, Monstrinho. 💚"
+            )
+            await canal_geral.send(msg_boas_vindas)
         await interaction.followup.send("✅ Liberado com sucesso!", ephemeral=True)
 
     @discord.ui.button(label="⏳ Aguardar", style=discord.ButtonStyle.secondary, custom_id="aguardar_membro")
