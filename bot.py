@@ -25,7 +25,7 @@ DONO_ID = 769951556388257812
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・monstrinho-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌-palavras-apagadas-bot"
+CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・ticket"
 CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
@@ -2048,8 +2048,8 @@ async def on_message(message):
                         except Exception:
                             pass
 
-                # Embed da ficha de castigo no canal advertências
-                if canal_adv:
+                # Embed da ficha de castigo no canal advertências — apenas a partir do 2º castigo
+                if canal_adv and novo_total_adv >= 2:
                     embed_castigo = discord.Embed(
                         title="🚨 CASTIGO APLICADO — CICLO COMPLETO",
                         color=0xCC0000,
@@ -2087,20 +2087,11 @@ async def on_message(message):
                         view=DesfazerAvisoView(user_id)
                     )
 
-                # Mensagem no canal da infração
-                embed_ban_canal = discord.Embed(
-                    title="😢 Você ignorou todos os meus avisos...",
-                    description=(
-                        f"{membro.mention} terei que te castigar por **{duracao_str}**... "
-                        f"Espero que você reflita e volte com mais calma! 🐲💔\n\n"
-                        f"*Se foi um engano, chame a staff — ela pode te liberar!*"
-                    ),
-                    color=0xFF0000,
-                    timestamp=datetime.now()
+                # Mensagem simples no canal da infração
+                await message.channel.send(
+                    f"😢 {membro.mention} você ignorou todos os meus avisos... terei que te castigar por **{duracao_str}**. "
+                    f"Espero que você reflita e volte com mais calma! 🐲💔\n*Se foi um engano, chame a staff!*"
                 )
-                embed_ban_canal.set_thumbnail(url=membro.display_avatar.url)
-                embed_ban_canal.set_footer(text="🐲 Monstrinho Moderação", icon_url=AVATAR_MONSTRINHO)
-                await message.channel.send(embed=embed_ban_canal, delete_after=20)
 
             # ── AVISOS 1 / 2 / 3 ─────────────────────────────────────────────
             else:
@@ -2114,104 +2105,8 @@ async def on_message(message):
 
                 msg_aviso = MSGS_AVISOS[qtd]
 
-                # ── Embed no canal da infração ────────────────────────────────
-                cores_aviso = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF4400}
-                embed_aviso = discord.Embed(
-                    title=f"⚠️ Aviso {qtd}/3",
-                    description=f"{membro.mention} {msg_aviso}",
-                    color=cores_aviso.get(qtd, 0xFFAA00),
-                    timestamp=datetime.now()
-                )
-                embed_aviso.add_field(
-                    name="⏱️ Silêncio temporário",
-                    value=f"Você ficará calado(a) por **{duracao_str}**.",
-                    inline=False
-                )
-                embed_aviso.set_thumbnail(url=membro.display_avatar.url)
-                embed_aviso.set_footer(text="🐲 Monstrinho Moderação", icon_url=AVATAR_MONSTRINHO)
-                await message.channel.send(embed=embed_aviso, delete_after=15)
-
-                # ── Aviso 2 → ficha no canal advertências + ping staff ─────────
-                if qtd == 2 and canal_adv:
-                    mencao_staff = cargo_staff.mention if cargo_staff else ""
-                    embed_adv2 = discord.Embed(
-                        title="⚠️ ATENÇÃO — Segundo Aviso Aplicado",
-                        description=(
-                            f"O membro {membro.mention} acaba de receber seu **2º aviso**.\n"
-                            f"Pedimos que a staff fique de olho nessa situação."
-                        ),
-                        color=0xFF8800,
-                        timestamp=datetime.now()
-                    )
-                    embed_adv2.set_author(
-                        name=f"{membro.display_name}  •  @{membro.name}",
-                        icon_url=membro.display_avatar.url
-                    )
-                    embed_adv2.set_thumbnail(url=membro.display_avatar.url)
-                    embed_adv2.add_field(name="👤 Membro",              value=membro.mention,             inline=True)
-                    embed_adv2.add_field(name="🆔 ID",                  value=f"`{membro.id}`",           inline=True)
-                    embed_adv2.add_field(name="📍 Canal",               value=message.channel.mention,    inline=True)
-                    embed_adv2.add_field(name="⚠️ Situação",           value="**2/3 avisos** — está próximo do castigo.",  inline=True)
-                    embed_adv2.add_field(name="📋 Advertências totais", value=f"**{total_adv}x** histórico", inline=True)
-                    embed_adv2.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
-                    embed_adv2.add_field(
-                        name="📌 Observação",
-                        value=(
-                            "Se este membro infringir as regras mais **uma vez**, receberá um castigo automático.\n"
-                            "A staff pode intervir manualmente se necessário."
-                        ),
-                        inline=False
-                    )
-                    embed_adv2.set_footer(
-                        text="🐲 Monstrinho Moderação  •  Notificação automática",
-                        icon_url=AVATAR_MONSTRINHO
-                    )
-                    await canal_adv.send(
-                        content=f"{mencao_staff} — Notificação de 2º aviso:" if mencao_staff else None,
-                        embed=embed_adv2
-                    )
-
-                # ── Aviso 3 → ficha no canal advertências + ping staff (SÉRIO) ──
-                elif qtd == 3 and canal_adv:
-                    mencao_staff = cargo_staff.mention if cargo_staff else ""
-                    embed_adv3 = discord.Embed(
-                        title="🚨 ALERTA MÁXIMO — Terceiro Aviso Aplicado",
-                        description=(
-                            f"⛔ {membro.mention} está no **último aviso antes do castigo**.\n\n"
-                            f"Qualquer nova infração resultará em **silenciamento imediato** por **{formatar_duracao(obter_duracao_banimento(user_id))}**.\n"
-                            f"Solicitamos atenção imediata da equipe."
-                        ),
-                        color=0xFF0000,
-                        timestamp=datetime.now()
-                    )
-                    embed_adv3.set_author(
-                        name=f"{membro.display_name}  •  @{membro.name}",
-                        icon_url=membro.display_avatar.url
-                    )
-                    embed_adv3.set_thumbnail(url=membro.display_avatar.url)
-                    embed_adv3.add_field(name="👤 Membro",              value=membro.mention,             inline=True)
-                    embed_adv3.add_field(name="🆔 ID",                  value=f"`{membro.id}`",           inline=True)
-                    embed_adv3.add_field(name="📍 Canal",               value=message.channel.mention,    inline=True)
-                    embed_adv3.add_field(name="🔴 Situação",            value="**3/3 avisos — LIMITE ATINGIDO**", inline=True)
-                    embed_adv3.add_field(name="📋 Advertências totais", value=f"**{total_adv}x** histórico", inline=True)
-                    embed_adv3.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
-                    embed_adv3.add_field(
-                        name="⛔ Situação Crítica",
-                        value=(
-                            "Este membro atingiu o **limite máximo de avisos**.\n"
-                            "O próximo erro acionará o castigo automático sem possibilidade de aviso adicional.\n"
-                            "**Recomendamos intervenção da staff imediatamente.**"
-                        ),
-                        inline=False
-                    )
-                    embed_adv3.set_footer(
-                        text="🐲 Monstrinho Moderação  •  Ação imediata recomendada",
-                        icon_url=AVATAR_MONSTRINHO
-                    )
-                    await canal_adv.send(
-                        content=f"🚨 {mencao_staff} — **ATENÇÃO: terceiro aviso detectado!**" if mencao_staff else None,
-                        embed=embed_adv3
-                    )
+                # ── Mensagem fofa no canal da infração (fica permanente) ──────
+                await message.channel.send(f"{membro.mention} {msg_aviso}")
 
             return
 
