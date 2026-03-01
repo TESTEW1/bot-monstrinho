@@ -1168,6 +1168,10 @@ class AprovarMembroView(discord.ui.View):
         if cargo_anjo: mencoes.append(cargo_anjo.mention)
         if cargo_recrutador: mencoes.append(cargo_recrutador.mention)
         if canal_geral:
+            canal_rpg = discord.utils.get(guild.text_channels, name="🌎・mundo-csi")
+            canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
+            rpg_mention = canal_rpg.mention if canal_rpg else "#🌎・mundo-csi"
+            games_mention = canal_games.mention if canal_games else "#🎲・monstrinho-games"
             msg_boas_vindas = (
                 f"✨💚 tum tum tum… o Monstrinho apareceu! 💚✨\n\n"
                 f"Atençãooo!! Temos alguém novo chegando no nosso cantinho 👀✨\n\n"
@@ -1176,7 +1180,9 @@ class AprovarMembroView(discord.ui.View):
                 f"Venham dar aquele abraço de boas-vindas que só a gente sabe dar 💚\n"
                 f"Aqui você não entrou só em um servidor… Entrou em um lar.\n\n"
                 f"O Monstrinho foi criado pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
-                f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n"
+                f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n\n"
+                f"🌎 Curte RPG? Dá uma espiadinha no {rpg_mention} e entra na aventura!\n"
+                f"🎲 Gosta de joguinhos? Te espero no {games_mention} pra gente se divertir!\n\n"
                 f"Com carinho, Monstrinho. 💚"
             )
             await canal_geral.send(msg_boas_vindas)
