@@ -6,6 +6,7 @@ import os
 import re
 from datetime import timedelta
 from datetime import datetime
+from collections import defaultdict, deque
 
 # ================= INTENTS =================
 # ============== BOT SETUP =================
@@ -16,6 +17,593 @@ intents.members = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║          MONSTRINHO SECURITY SYSTEM — GOD MODE v2.0             ║
+# ║      Sistema completo de segurança integrado ao bot             ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚙️  CONFIGURAÇÕES DE SEGURANÇA
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOG_CHANNEL_NAME = "🗒️・monitoramento"   # Canal exclusivo de logs de segurança
+
+COMMAND_SPAM_LIMIT    = 3       # Máximo de comandos por janela
+COMMAND_SPAM_WINDOW   = 5       # Janela em segundos
+COMMAND_COOLDOWN_TIME = 30      # Cooldown após spam de comandos
+
+RAID_JOIN_LIMIT       = 8       # Entradas para acionar alerta
+RAID_JOIN_WINDOW      = 5       # Janela em segundos
+LOCKDOWN_THRESHOLD    = 12      # Entradas para lockdown total
+
+MSG_SPAM_LIMIT        = 7       # Mensagens por janela
+MSG_SPAM_WINDOW       = 5       # Janela em segundos
+MSG_REPEAT_LIMIT      = 4       # Msgs idênticas seguidas
+EMOJI_SPAM_LIMIT      = 20      # Emojis numa mensagem
+MENTION_SPAM_LIMIT    = 5       # Menções numa mensagem
+
+ADMIN_ACTION_LIMIT    = 5       # Ações admin por janela
+ADMIN_ACTION_WINDOW   = 10      # Janela em segundos
+
+RISK_SPAM_MSG         = 2
+RISK_SPAM_CMD         = 3
+RISK_RAID             = 5
+RISK_LINK             = 4
+RISK_NEW_ACCOUNT      = 2
+RISK_NO_AVATAR        = 1
+RISK_SUSPICIOUS_THRESHOLD = 12  # Pontuação para marcar SUSPEITO
+
+ACCOUNT_MIN_AGE_DAYS  = 7       # Dias mínimos de conta
+
+MALICIOUS_PATTERNS = [
+    r"discord\.gift", r"discordnitro\.", r"free.*nitro",
+    r"steamcommunity.*\.ru", r"bit\.ly", r"tinyurl\.com",
+    r"grabify\.link", r"iplogger\.", r"discord-app\.com",
+    r"dicsord\.", r"dlscord\.",
+]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📦  BANCO DE DADOS INTERNO DE SEGURANÇA
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class SecurityDatabase:
+    """Banco de dados em memória para inteligência de segurança."""
+    def __init__(self):
+        self.risk_scores:   dict[int, int]  = {}
+        self.flagged_users: dict[int, dict] = {}
+        self.alert_history: list[dict]      = []
+        self.total_alerts  = 0
+        self.spam_events   = 0
+        self.raid_events   = 0
+        self.link_events   = 0
+        self.admin_events  = 0
+        self.lockdown_active  = False
+        self.emergency_mode   = False
+        self.security_level   = "NORMAL"
+
+    def add_risk(self, user_id: int, points: int, reason: str):
+        self.risk_scores[user_id] = self.risk_scores.get(user_id, 0) + points
+        if self.risk_scores[user_id] >= RISK_SUSPICIOUS_THRESHOLD:
+            self.flagged_users[user_id] = {
+                "reason": reason,
+                "time":   datetime.utcnow(),
+                "score":  self.risk_scores[user_id]
+            }
+
+    def get_risk(self, uid: int) -> int:
+        return self.risk_scores.get(uid, 0)
+
+    def is_flagged(self, uid: int) -> bool:
+        return uid in self.flagged_users
+
+    def log_alert(self, alert_type: str, details: str):
+        self.total_alerts += 1
+        self.alert_history.append({"type": alert_type, "details": details, "time": datetime.utcnow()})
+        if len(self.alert_history) > 500:
+            self.alert_history.pop(0)
+
+    def reset(self):
+        self.risk_scores.clear(); self.flagged_users.clear(); self.alert_history.clear()
+        self.total_alerts = self.spam_events = self.raid_events = self.link_events = self.admin_events = 0
+        self.lockdown_active = self.emergency_mode = False
+        self.security_level  = "NORMAL"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🛡️  COG — MONSTRINHO SECURITY SYSTEM
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
+    """MONSTRINHO SECURITY SYSTEM — GOD MODE v2.0."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.db  = SecurityDatabase()
+        self._cmd_timestamps:   defaultdict[int, deque] = defaultdict(deque)
+        self._msg_timestamps:   defaultdict[int, deque] = defaultdict(deque)
+        self._join_timestamps:  defaultdict[int, deque] = defaultdict(deque)
+        self._admin_timestamps: defaultdict[int, deque] = defaultdict(deque)
+        self._last_msg:   dict[int, list[str]]       = {}
+        self._cmd_cooldowns: dict[int, datetime]     = {}
+        self.cleanup_task.start()
+
+    def cog_unload(self):
+        self.cleanup_task.cancel()
+
+    # ── Utilitários ──────────────────────────────
+
+    async def get_log_channel(self, guild: discord.Guild):
+        return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+
+    def _now(self) -> float:
+        return datetime.utcnow().timestamp()
+
+    def _prune(self, dq: deque, window: float):
+        cutoff = self._now() - window
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+
+    def _level_color(self) -> int:
+        return {"NORMAL": 0x00ff99, "ALERTA": 0xffaa00, "LOCKDOWN": 0xff4400, "EMERGÊNCIA": 0xff0000}.get(self.db.security_level, 0x00ff99)
+
+    async def send_alert(self, guild, threat_type, user, details, color=0xff4444, critical=False):
+        """Envia embed de alerta para o canal de monitoramento."""
+        ch = await self.get_log_channel(guild)
+        if not ch:
+            return
+        now = datetime.utcnow()
+        self.db.log_alert(threat_type, details)
+        embed = discord.Embed(title=f"{'🔴' if critical else '🚨'} MONSTRINHO SECURITY ALERT", color=color, timestamp=now)
+        embed.add_field(name="⚠️ Tipo de Ameaça", value=f"`{threat_type}`",                           inline=False)
+        embed.add_field(name="👤 Usuário",          value=str(user) if user else "Desconhecido",        inline=True)
+        embed.add_field(name="🆔 ID",               value=str(user.id) if user else "—",                inline=True)
+        embed.add_field(name="🏠 Servidor",         value=guild.name,                                    inline=True)
+        embed.add_field(name="📋 Detalhes",         value=details,                                       inline=False)
+        embed.add_field(name="⏰ Horário (UTC)",    value=now.strftime("%d/%m/%Y às %H:%M:%S"),          inline=False)
+        if user and hasattr(user, "display_avatar"):
+            embed.set_thumbnail(url=user.display_avatar.url)
+        risk    = self.db.get_risk(user.id) if user else 0
+        flagged = "⛔ SIM" if (user and self.db.is_flagged(user.id)) else "✅ Não"
+        embed.set_footer(text=f"MONSTRINHO SECURITY • Risco: {risk}pts | Suspeito: {flagged}",
+                         icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
+        await ch.send(embed=embed)
+
+    # ── 🟢 BOOT — Ficha de inicialização ─────────
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Envia a ficha profissional de inicialização no canal de monitoramento."""
+        await asyncio.sleep(3)
+        for guild in self.bot.guilds:
+            ch = await self.get_log_channel(guild)
+            if not ch:
+                continue
+            now = datetime.utcnow()
+
+            # Embed Principal de Boot
+            boot = discord.Embed(
+                description=(
+                    "```\n"
+                    "╔══════════════════════════════════════╗\n"
+                    "║   MONSTRINHO SECURITY SYSTEM         ║\n"
+                    "║         — GOD MODE —                 ║\n"
+                    "║       ⚡  v2.0  ONLINE  ⚡           ║\n"
+                    "╚══════════════════════════════════════╝\n"
+                    "```"
+                ),
+                color=0x00ff99, timestamp=now
+            )
+            boot.set_author(name="MONSTRINHO SECURITY • Sistema Iniciado",
+                            icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
+            boot.add_field(name="🛡️ Módulos Ativos (14/14)", inline=False, value=(
+                "✅ Anti-Spam de Comandos\n✅ Detector de Raid\n✅ Auto Lockdown\n"
+                "✅ Anti-Spam de Mensagens\n✅ Monitor de Ações Admin\n✅ Detector de Bot Suspeito\n"
+                "✅ Detector de Links Maliciosos\n✅ Pontuação de Risco\n✅ Detecção de Script\n"
+                "✅ Anti-Raid Extremo / Emergência\n✅ Contas Suspeitas\n✅ Inteligência (DB)\n"
+                "✅ Monitor de Erros\n✅ Comandos Administrativos"
+            ))
+            boot.add_field(name="⚙️ Configuração Atual", inline=False, value=(
+                f"📡 Log: `#{LOG_CHANNEL_NAME}`\n"
+                f"🚫 Spam CMD: `{COMMAND_SPAM_LIMIT} cmds/{COMMAND_SPAM_WINDOW}s`\n"
+                f"🚪 Raid: `{RAID_JOIN_LIMIT} entradas/{RAID_JOIN_WINDOW}s`\n"
+                f"💬 Spam MSG: `{MSG_SPAM_LIMIT} msgs/{MSG_SPAM_WINDOW}s`\n"
+                f"⚠️ Risco Suspeito: `≥{RISK_SUSPICIOUS_THRESHOLD} pts`"
+            ))
+            boot.add_field(name="🟢 Status do Sistema", inline=False, value=(
+                f"**Nível:** `NORMAL` | **Servidor:** `{guild.name}`\n"
+                f"**Membros:** `{guild.member_count}` | **Iniciado:** `{now.strftime('%d/%m/%Y %H:%M UTC')}`"
+            ))
+            boot.set_footer(text="MONSTRINHO SECURITY SYSTEM • Todos os sistemas operacionais.",
+                            icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
+            await ch.send(embed=boot)
+
+            # Embed de Comandos
+            cmds = discord.Embed(title="📋 Comandos — MONSTRINHO SECURITY", color=0x5865F2, timestamp=now)
+            cmds.add_field(name="🔍 Status & Info", inline=False, value=(
+                "`!security status` — Painel completo\n"
+                "`!segurança status` — Alias PT\n"
+                "`!security riskscore @user` — Risco do usuário\n"
+                "`!security flagged` — Usuários suspeitos"
+            ))
+            cmds.add_field(name="🔧 Administração", inline=False, value=(
+                "`!security reset` — Limpar alertas\n"
+                "`!security lockdown on/off` — Lockdown manual\n"
+                "`!security emergency on/off` — Modo emergência\n"
+                "`!security unflag @user` — Remover flag\n"
+                "`!security alerts` — Últimos 10 alertas\n"
+                "`!security stats` — Estatísticas gerais"
+            ))
+            cmds.add_field(name="⚠️ Permissão", value="Todos os comandos exigem **Administrador**.", inline=False)
+            cmds.set_footer(text="MONSTRINHO SECURITY SYSTEM • GOD MODE v2.0")
+            await ch.send(embed=cmds)
+
+    # ── 1️⃣ Anti-Spam de Comandos ─────────────────
+
+    @commands.Cog.listener()
+    async def on_command(self, ctx: commands.Context):
+        if ctx.author.bot:
+            return
+        uid = ctx.author.id
+        if uid in self._cmd_cooldowns:
+            release = self._cmd_cooldowns[uid]
+            if datetime.utcnow() < release:
+                remaining = (release - datetime.utcnow()).seconds
+                try: await ctx.message.delete()
+                except: pass
+                await ctx.send(f"⛔ {ctx.author.mention} cooldown de segurança. Aguarde `{remaining}s`.", delete_after=5)
+                return
+        dq = self._cmd_timestamps[uid]
+        dq.append(self._now())
+        self._prune(dq, COMMAND_SPAM_WINDOW)
+        if len(dq) > COMMAND_SPAM_LIMIT:
+            self.db.add_risk(uid, RISK_SPAM_CMD, "Spam de comandos")
+            self.db.spam_events += 1
+            self._cmd_cooldowns[uid] = datetime.utcnow() + timedelta(seconds=COMMAND_COOLDOWN_TIME)
+            dq.clear()
+            await self.send_alert(ctx.guild, "SPAM DE COMANDOS / SCRIPT", ctx.author,
+                f"**{ctx.author}** executou `{COMMAND_SPAM_LIMIT}+` cmds em `{COMMAND_SPAM_WINDOW}s`.\n"
+                f"Cooldown: `{COMMAND_COOLDOWN_TIME}s` | Risco: `{self.db.get_risk(uid)} pts`",
+                color=0xff8800)
+
+    # ── 2️⃣+3️⃣+🔟 Raid / Lockdown / Emergência ──
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        guild = member.guild
+        gid   = guild.id
+        dq    = self._join_timestamps[gid]
+        dq.append(self._now())
+        self._prune(dq, RAID_JOIN_WINDOW)
+        count = len(dq)
+
+        if count >= LOCKDOWN_THRESHOLD and not self.db.emergency_mode:
+            self.db.emergency_mode = self.db.lockdown_active = True
+            self.db.security_level = "EMERGÊNCIA"
+            self.db.raid_events += 1
+            await self.send_alert(guild, "🔴 RAID SEVERO — MODO EMERGÊNCIA ATIVADO", None,
+                f"**{count}** membros em `{RAID_JOIN_WINDOW}s`.\n⛔ Emergência ativada. Use `!security emergency off` para desativar.",
+                color=0xff0000, critical=True)
+            await self._apply_lockdown(guild, True)
+        elif count >= RAID_JOIN_LIMIT and not self.db.lockdown_active:
+            self.db.security_level = "ALERTA"
+            self.db.raid_events += 1
+            await self.send_alert(guild, "POSSÍVEL RAID DETECTADO", None,
+                f"**{count}** membros nos últimos `{RAID_JOIN_WINDOW}s`.\n⚠️ Modo Alerta ativado.",
+                color=0xff8800, critical=True)
+
+        await self._check_suspicious_account(member)
+        if member.bot:
+            await self._check_suspicious_bot(member)
+
+    async def _apply_lockdown(self, guild: discord.Guild, activate: bool):
+        everyone = guild.default_role
+        for ch in guild.text_channels:
+            try:
+                ow = ch.overwrites_for(everyone)
+                ow.send_messages = False if activate else None
+                await ch.set_permissions(everyone, overwrite=ow)
+            except: pass
+
+    # ── 4️⃣ Spam de Chat ──────────────────────────
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Detecta spam, repetição, emojis, menções e links. NÃO processa comandos (o bot principal faz isso)."""
+        if message.author.bot or not message.guild:
+            return
+        uid     = message.author.id
+        content = message.content
+
+        # Flood de mensagens
+        dq = self._msg_timestamps[uid]
+        dq.append(self._now())
+        self._prune(dq, MSG_SPAM_WINDOW)
+        if len(dq) > MSG_SPAM_LIMIT:
+            self.db.add_risk(uid, RISK_SPAM_MSG, "Flood de mensagens")
+            self.db.spam_events += 1
+            dq.clear()
+            try: await message.delete()
+            except: pass
+            await self.send_alert(message.guild, "FLOOD DE MENSAGENS", message.author,
+                f"Mais de `{MSG_SPAM_LIMIT}` msgs em `{MSG_SPAM_WINDOW}s`.\nCanal: {message.channel.mention}", color=0xff6600)
+            return
+
+        # Mensagens repetidas
+        hist = self._last_msg.setdefault(uid, [])
+        hist.append(content)
+        if len(hist) > MSG_REPEAT_LIMIT: hist.pop(0)
+        if len(hist) == MSG_REPEAT_LIMIT and len(set(hist)) == 1:
+            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam repetido")
+            self.db.spam_events += 1
+            hist.clear()
+            try: await message.delete()
+            except: pass
+            await self.send_alert(message.guild, "MENSAGENS REPETIDAS (SPAM)", message.author,
+                f"Mesma msg `{MSG_REPEAT_LIMIT}x`.\nConteúdo: `{content[:100]}`\nCanal: {message.channel.mention}", color=0xff6600)
+            return
+
+        # Spam de emojis
+        ec = len(re.findall(r"<a?:\w+:\d+>|[\U0001F300-\U0001FAFF]", content))
+        if ec >= EMOJI_SPAM_LIMIT:
+            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de emojis")
+            try: await message.delete()
+            except: pass
+            await self.send_alert(message.guild, "SPAM DE EMOJIS", message.author,
+                f"**{ec}** emojis numa mensagem.\nCanal: {message.channel.mention}", color=0xffaa00)
+            return
+
+        # Spam de menções
+        mc = len(message.mentions) + len(message.role_mentions)
+        if mc >= MENTION_SPAM_LIMIT:
+            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de menções")
+            try: await message.delete()
+            except: pass
+            await self.send_alert(message.guild, "SPAM DE MENÇÕES", message.author,
+                f"**{mc}** menções numa mensagem.\nCanal: {message.channel.mention}", color=0xff8800)
+            return
+
+        # Links maliciosos
+        if re.search(r"https?://", content, re.IGNORECASE):
+            await self._check_malicious_link(message)
+
+    # ── 5️⃣ Ações Administrativas ────────────────
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, ch):
+        await self._admin_action(ch.guild, "CANAL CRIADO", f"Canal `{ch.name}` criado.")
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, ch):
+        await self._admin_action(ch.guild, "CANAL DELETADO", f"Canal `{ch.name}` deletado.")
+    @commands.Cog.listener()
+    async def on_guild_role_create(self, role):
+        await self._admin_action(role.guild, "CARGO CRIADO", f"Cargo `{role.name}` criado.")
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role):
+        await self._admin_action(role.guild, "CARGO DELETADO", f"Cargo `{role.name}` deletado.")
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild, user):
+        await self._admin_action(guild, "BANIMENTO", f"Usuário `{user}` banido.")
+
+    async def _admin_action(self, guild, action_type, details):
+        gid = guild.id
+        dq  = self._admin_timestamps[gid]
+        dq.append(self._now())
+        self._prune(dq, ADMIN_ACTION_WINDOW)
+        self.db.admin_events += 1
+        if len(dq) >= ADMIN_ACTION_LIMIT:
+            dq.clear()
+            await self.send_alert(guild, f"AVALANCHE ADMIN — {action_type}", None,
+                f"`{ADMIN_ACTION_LIMIT}+` ações em `{ADMIN_ACTION_WINDOW}s`.\nÚltima: {details}\n⚠️ Possível ataque.",
+                color=0xff4400, critical=True)
+        else:
+            ch = await self.get_log_channel(guild)
+            if ch:
+                embed = discord.Embed(title="🔧 Ação Administrativa", description=details, color=0x5865F2, timestamp=datetime.utcnow())
+                embed.set_footer(text=f"MONSTRINHO SECURITY • Ações na janela: {len(dq)}/{ADMIN_ACTION_LIMIT}")
+                await ch.send(embed=embed)
+
+    # ── 6️⃣ Bot Suspeito ──────────────────────────
+
+    async def _check_suspicious_bot(self, member: discord.Member):
+        guild = member.guild
+        adder = None
+        try:
+            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.bot_add):
+                if entry.target.id == member.id:
+                    adder = entry.user; break
+        except: pass
+        is_admin = adder.guild_permissions.administrator if adder else False
+        await self.send_alert(guild, "BOT ADICIONADO AO SERVIDOR", member,
+            f"**Bot:** `{member.name}` (ID: `{member.id}`)\n"
+            f"**Por:** {adder} (`{adder.id if adder else '?'}`)\n"
+            f"**Admin:** {'✅ Sim' if is_admin else '⛔ NÃO — SUSPEITO!'}",
+            color=0xff0000 if not is_admin else 0xffaa00, critical=not is_admin)
+
+    # ── 7️⃣ Links Maliciosos ──────────────────────
+
+    async def _check_malicious_link(self, message: discord.Message):
+        cl = message.content.lower()
+        for pattern in MALICIOUS_PATTERNS:
+            if re.search(pattern, cl, re.IGNORECASE):
+                self.db.add_risk(message.author.id, RISK_LINK, "Link malicioso")
+                self.db.link_events += 1
+                try: await message.delete()
+                except: pass
+                await self.send_alert(message.guild, "LINK MALICIOSO / PHISHING", message.author,
+                    f"Padrão: `{pattern}`\nCanal: {message.channel.mention}\nPrévia: `{message.content[:120]}`",
+                    color=0xff0000, critical=True)
+                return
+
+    # ── 11️⃣ Contas Suspeitas ─────────────────────
+
+    async def _check_suspicious_account(self, member: discord.Member):
+        uid      = member.id
+        age_days = (datetime.utcnow() - member.created_at.replace(tzinfo=None)).days
+        flags    = []
+        if age_days < ACCOUNT_MIN_AGE_DAYS:
+            self.db.add_risk(uid, RISK_NEW_ACCOUNT, "Conta recente")
+            flags.append(f"🆕 Conta criada há `{age_days}` dia(s)")
+        if member.display_avatar.url == member.default_avatar.url:
+            self.db.add_risk(uid, RISK_NO_AVATAR, "Sem avatar")
+            flags.append("🖼️ Sem avatar personalizado")
+        if re.match(r"^[a-z]+\d{4,}$", member.name.lower()):
+            self.db.add_risk(uid, 2, "Nome padrão bot")
+            flags.append(f"🤖 Nome suspeito: `{member.name}`")
+        if flags:
+            await self.send_alert(member.guild, "CONTA SUSPEITA ENTROU NO SERVIDOR", member,
+                "Fatores de risco:\n" + "\n".join(flags) + f"\n\n**Risco total:** `{self.db.get_risk(uid)} pts`",
+                color=0xffaa00)
+
+    # ── 13️⃣ Erros do Bot ─────────────────────────
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error: Exception):
+        if isinstance(error, commands.CommandNotFound): return
+        if isinstance(error, commands.MissingPermissions):
+            await self.send_alert(ctx.guild, "USO SEM PERMISSÃO", ctx.author,
+                f"Tentou usar `{ctx.command}` sem permissão.\nCanal: {ctx.channel.mention}", color=0xffaa00)
+        else:
+            ch = await self.get_log_channel(ctx.guild)
+            if ch:
+                embed = discord.Embed(title="⚠️ Erro no Bot",
+                    description=f"```{type(error).__name__}: {str(error)[:300]}```",
+                    color=0xff6600, timestamp=datetime.utcnow())
+                embed.add_field(name="Comando", value=f"`{ctx.command}`", inline=True)
+                embed.add_field(name="Usuário",  value=str(ctx.author),   inline=True)
+                embed.set_footer(text="MONSTRINHO SECURITY • Monitor de Erros")
+                await ch.send(embed=embed)
+
+    # ── 🧹 Limpeza periódica ──────────────────────
+
+    @tasks.loop(minutes=10)
+    async def cleanup_task(self):
+        for uid in list(self._cmd_timestamps.keys()): self._prune(self._cmd_timestamps[uid], COMMAND_SPAM_WINDOW)
+        for uid in list(self._msg_timestamps.keys()): self._prune(self._msg_timestamps[uid], MSG_SPAM_WINDOW)
+        for gid in list(self._join_timestamps.keys()): self._prune(self._join_timestamps[gid], RAID_JOIN_WINDOW * 10)
+        expired = [u for u, t in self._cmd_cooldowns.items() if datetime.utcnow() >= t]
+        for u in expired: del self._cmd_cooldowns[u]
+
+    @cleanup_task.before_loop
+    async def before_cleanup(self):
+        await self.bot.wait_until_ready()
+
+    # ── 14️⃣ Comandos Administrativos ─────────────
+
+    @commands.group(name="security", aliases=["segurança"], invoke_without_command=True)
+    @commands.has_permissions(administrator=True)
+    async def security_group(self, ctx):
+        await ctx.send("📋 Comandos: `status`, `reset`, `lockdown on/off`, `emergency on/off`, `alerts`, `stats`, `flagged`, `unflag @user`, `riskscore @user`.", delete_after=15)
+
+    @security_group.command(name="status")
+    @commands.has_permissions(administrator=True)
+    async def security_status(self, ctx):
+        db = self.db
+        le = {"NORMAL":"🟢","ALERTA":"🟡","LOCKDOWN":"🔴","EMERGÊNCIA":"🆘"}.get(db.security_level,"⚪")
+        embed = discord.Embed(title="🛡️ MONSTRINHO SECURITY — Status", color=self._level_color(), timestamp=datetime.utcnow())
+        embed.add_field(name="🔒 Sistema", inline=True, value=(
+            f"**Nível:** {le} `{db.security_level}`\n"
+            f"**Lockdown:** {'⛔ ATIVO' if db.lockdown_active else '✅ Off'}\n"
+            f"**Emergência:** {'🆘 ATIVA' if db.emergency_mode else '✅ Off'}"))
+        embed.add_field(name="📊 Eventos", inline=True, value=(
+            f"🚨 Alertas: `{db.total_alerts}`\n💬 Spam: `{db.spam_events}`\n"
+            f"🚪 Raid: `{db.raid_events}`\n🔗 Links: `{db.link_events}`\n🔧 Admin: `{db.admin_events}`"))
+        embed.add_field(name="👤 Monitorados", inline=False, value=(
+            f"⚠️ Com risco: `{len(db.risk_scores)}` | ⛔ Suspeitos: `{len(db.flagged_users)}` | 🕒 Cooldown: `{len(self._cmd_cooldowns)}`"))
+        embed.set_footer(text="MONSTRINHO SECURITY SYSTEM • GOD MODE v2.0")
+        await ctx.send(embed=embed)
+
+    @security_group.command(name="reset")
+    @commands.has_permissions(administrator=True)
+    async def security_reset(self, ctx):
+        self.db.reset(); self._cmd_timestamps.clear(); self._msg_timestamps.clear()
+        self._join_timestamps.clear(); self._admin_timestamps.clear()
+        self._cmd_cooldowns.clear(); self._last_msg.clear()
+        embed = discord.Embed(title="✅ Sistema Resetado", description="Alertas, cooldowns e pontuações limpos.", color=0x00ff99, timestamp=datetime.utcnow())
+        embed.set_footer(text=f"Resetado por {ctx.author}")
+        await ctx.send(embed=embed)
+        await self.send_alert(ctx.guild, "SISTEMA RESETADO", ctx.author, f"Reset manual por **{ctx.author}**.", color=0x5865F2)
+
+    @security_group.command(name="lockdown")
+    @commands.has_permissions(administrator=True)
+    async def security_lockdown(self, ctx, state: str = "on"):
+        activate = state.lower() in ("on", "ativar", "ligar")
+        self.db.lockdown_active = activate
+        self.db.security_level  = "LOCKDOWN" if activate else "NORMAL"
+        await self._apply_lockdown(ctx.guild, activate)
+        color = 0xff4400 if activate else 0x00ff99
+        await ctx.send(embed=discord.Embed(title=f"🔒 Lockdown {'⛔ ATIVADO' if activate else '✅ DESATIVADO'}",
+            description=f"Por {ctx.author.mention}.", color=color, timestamp=datetime.utcnow()))
+        await self.send_alert(ctx.guild, f"LOCKDOWN {'ATIVADO' if activate else 'DESATIVADO'} MANUALMENTE",
+            ctx.author, f"**{ctx.author}** {'ativou' if activate else 'desativou'} o lockdown.", color=color, critical=activate)
+
+    @security_group.command(name="emergency")
+    @commands.has_permissions(administrator=True)
+    async def security_emergency(self, ctx, state: str = "on"):
+        activate = state.lower() in ("on", "ativar", "ligar")
+        self.db.emergency_mode = self.db.lockdown_active = activate
+        self.db.security_level = "EMERGÊNCIA" if activate else "NORMAL"
+        if activate: await self._apply_lockdown(ctx.guild, True)
+        color = 0xff0000 if activate else 0x00ff99
+        await ctx.send(embed=discord.Embed(title=f"⚡ Emergência {'🆘 ATIVADA' if activate else '✅ DESATIVADA'}",
+            color=color, timestamp=datetime.utcnow()))
+
+    @security_group.command(name="alerts")
+    @commands.has_permissions(administrator=True)
+    async def security_alerts(self, ctx):
+        recent = self.db.alert_history[-10:]
+        if not recent: return await ctx.send("✅ Nenhum alerta registrado.", delete_after=10)
+        embed = discord.Embed(title="📋 Últimos 10 Alertas", color=0xff8800, timestamp=datetime.utcnow())
+        for i, a in enumerate(reversed(recent), 1):
+            t = a["time"].strftime("%d/%m %H:%M")
+            embed.add_field(name=f"#{i} [{t}] {a['type']}", value=a["details"][:100], inline=False)
+        embed.set_footer(text="MONSTRINHO SECURITY • Histórico")
+        await ctx.send(embed=embed)
+
+    @security_group.command(name="stats")
+    @commands.has_permissions(administrator=True)
+    async def security_stats(self, ctx):
+        db = self.db
+        embed = discord.Embed(title="📊 Estatísticas do Sistema", color=0x5865F2, timestamp=datetime.utcnow())
+        embed.add_field(name="Alertas",   value=f"`{db.total_alerts}`",       inline=True)
+        embed.add_field(name="Spam",      value=f"`{db.spam_events}`",        inline=True)
+        embed.add_field(name="Raid",      value=f"`{db.raid_events}`",        inline=True)
+        embed.add_field(name="Links",     value=f"`{db.link_events}`",        inline=True)
+        embed.add_field(name="Admin",     value=f"`{db.admin_events}`",       inline=True)
+        embed.add_field(name="Suspeitos", value=f"`{len(db.flagged_users)}`", inline=True)
+        await ctx.send(embed=embed)
+
+    @security_group.command(name="flagged")
+    @commands.has_permissions(administrator=True)
+    async def security_flagged(self, ctx):
+        if not self.db.flagged_users: return await ctx.send("✅ Nenhum suspeito.", delete_after=10)
+        embed = discord.Embed(title="⛔ Usuários Suspeitos", color=0xff4400, timestamp=datetime.utcnow())
+        for uid, info in list(self.db.flagged_users.items())[:15]:
+            embed.add_field(name=f"ID: {uid}",
+                value=f"Motivo: `{info['reason']}`\nScore: `{info['score']} pts`\nEm: `{info['time'].strftime('%d/%m %H:%M')}`", inline=True)
+        await ctx.send(embed=embed)
+
+    @security_group.command(name="unflag")
+    @commands.has_permissions(administrator=True)
+    async def security_unflag(self, ctx, member: discord.Member):
+        rf = self.db.flagged_users.pop(member.id, None)
+        rs = self.db.risk_scores.pop(member.id, None)
+        if rf or rs: await ctx.send(f"✅ Flag removido de **{member}**.", delete_after=10)
+        else: await ctx.send(f"ℹ️ **{member}** não estava marcado.", delete_after=10)
+
+    @security_group.command(name="riskscore")
+    @commands.has_permissions(administrator=True)
+    async def security_riskscore(self, ctx, member: discord.Member):
+        score = self.db.get_risk(member.id)
+        flag  = self.db.is_flagged(member.id)
+        color = 0x00ff99 if score < 5 else (0xffaa00 if score < RISK_SUSPICIOUS_THRESHOLD else 0xff0000)
+        embed = discord.Embed(title=f"🔎 Risco — {member.name}", color=color, timestamp=datetime.utcnow())
+        embed.add_field(name="Score",    value=f"`{score} pts`",                    inline=True)
+        embed.add_field(name="Limite",   value=f"`{RISK_SUSPICIOUS_THRESHOLD} pts`", inline=True)
+        embed.add_field(name="Suspeito", value="⛔ SIM" if flag else "✅ Não",       inline=True)
+        if flag:
+            embed.add_field(name="Motivo", value=f"`{self.db.flagged_users[member.id]['reason']}`", inline=False)
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=embed)
 
 # ================= CONFIG =================
 
@@ -2166,4 +2754,15 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-bot.run(TOKEN)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀  INICIALIZAÇÃO — Carrega o Security COG e sobe o bot
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import asyncio as _asyncio
+
+async def _main():
+    async with bot:
+        await bot.add_cog(MonstrinhoCog(bot))
+        await bot.start(TOKEN)
+
+_asyncio.run(_main())
