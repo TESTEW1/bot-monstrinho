@@ -305,16 +305,23 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             except: pass
 
     # ── 4️⃣ Spam de Chat ──────────────────────────
+    # Monitoramento restrito ao canal 💭・chat-geral.
+    # O bot APENAS relata no log — nunca deleta nem toma ação automática.
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """Detecta spam, repetição, emojis, menções e links. NÃO processa comandos (o bot principal faz isso)."""
+        """Monitora spam SOMENTE no chat-geral e apenas relata no canal de monitoramento."""
         if message.author.bot or not message.guild:
             return
+
+        # So analisa spam no chat-geral — qualquer outro canal e ignorado
+        if message.channel.name != CANAL_GERAL:
+            return
+
         uid     = message.author.id
         content = message.content
 
-        # Flood de mensagens
+        # Flood de mensagens — apenas relata, sem deletar
         dq = self._msg_timestamps[uid]
         dq.append(self._now())
         self._prune(dq, MSG_SPAM_WINDOW)
@@ -322,13 +329,15 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             self.db.add_risk(uid, RISK_SPAM_MSG, "Flood de mensagens")
             self.db.spam_events += 1
             dq.clear()
-            try: await message.delete()
-            except: pass
             await self.send_alert(message.guild, "FLOOD DE MENSAGENS", message.author,
-                f"Mais de `{MSG_SPAM_LIMIT}` msgs em `{MSG_SPAM_WINDOW}s`.\nCanal: {message.channel.mention}", color=0xff6600)
+                f"Mais de `{MSG_SPAM_LIMIT}` msgs em `{MSG_SPAM_WINDOW}s`.\n"
+                f"Canal: {message.channel.mention}\n"
+                f"Risco acumulado: `{self.db.get_risk(uid)} pts`\n"
+                f"Nenhuma acao automatica — cabe a staff agir.",
+                color=0xff6600)
             return
 
-        # Mensagens repetidas
+        # Mensagens repetidas — apenas relata, sem deletar
         hist = self._last_msg.setdefault(uid, [])
         hist.append(content)
         if len(hist) > MSG_REPEAT_LIMIT: hist.pop(0)
@@ -336,33 +345,37 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             self.db.add_risk(uid, RISK_SPAM_MSG, "Spam repetido")
             self.db.spam_events += 1
             hist.clear()
-            try: await message.delete()
-            except: pass
             await self.send_alert(message.guild, "MENSAGENS REPETIDAS (SPAM)", message.author,
-                f"Mesma msg `{MSG_REPEAT_LIMIT}x`.\nConteúdo: `{content[:100]}`\nCanal: {message.channel.mention}", color=0xff6600)
+                f"Mesma mensagem enviada `{MSG_REPEAT_LIMIT}x` seguidas.\n"
+                f"Conteudo: `{content[:100]}`\n"
+                f"Canal: {message.channel.mention}\n"
+                f"Nenhuma acao automatica — cabe a staff agir.",
+                color=0xff6600)
             return
 
-        # Spam de emojis
+        # Spam de emojis — apenas relata, sem deletar
         ec = len(re.findall(r"<a?:\w+:\d+>|[\U0001F300-\U0001FAFF]", content))
         if ec >= EMOJI_SPAM_LIMIT:
             self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de emojis")
-            try: await message.delete()
-            except: pass
             await self.send_alert(message.guild, "SPAM DE EMOJIS", message.author,
-                f"**{ec}** emojis numa mensagem.\nCanal: {message.channel.mention}", color=0xffaa00)
+                f"**{ec}** emojis em uma unica mensagem.\n"
+                f"Canal: {message.channel.mention}\n"
+                f"Nenhuma acao automatica — cabe a staff agir.",
+                color=0xffaa00)
             return
 
-        # Spam de menções
+        # Spam de mencoes — apenas relata, sem deletar
         mc = len(message.mentions) + len(message.role_mentions)
         if mc >= MENTION_SPAM_LIMIT:
-            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de menções")
-            try: await message.delete()
-            except: pass
-            await self.send_alert(message.guild, "SPAM DE MENÇÕES", message.author,
-                f"**{mc}** menções numa mensagem.\nCanal: {message.channel.mention}", color=0xff8800)
+            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de mencoes")
+            await self.send_alert(message.guild, "SPAM DE MENCOES", message.author,
+                f"**{mc}** mencoes em uma unica mensagem.\n"
+                f"Canal: {message.channel.mention}\n"
+                f"Nenhuma acao automatica — cabe a staff agir.",
+                color=0xff8800)
             return
 
-        # Links maliciosos
+        # Links maliciosos — apenas relata, sem deletar
         if re.search(r"https?://", content, re.IGNORECASE):
             await self._check_malicious_link(message)
 
@@ -427,10 +440,12 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             if re.search(pattern, cl, re.IGNORECASE):
                 self.db.add_risk(message.author.id, RISK_LINK, "Link malicioso")
                 self.db.link_events += 1
-                try: await message.delete()
-                except: pass
+                # Apenas relata — nao deleta a mensagem
                 await self.send_alert(message.guild, "LINK MALICIOSO / PHISHING", message.author,
-                    f"Padrão: `{pattern}`\nCanal: {message.channel.mention}\nPrévia: `{message.content[:120]}`",
+                    f"Padrao detectado: `{pattern}`\n"
+                    f"Canal: {message.channel.mention}\n"
+                    f"Previa: `{message.content[:120]}`\n"
+                    f"Nenhuma acao automatica — cabe a staff agir.",
                     color=0xff0000, critical=True)
                 return
 
