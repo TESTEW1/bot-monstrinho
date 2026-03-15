@@ -665,6 +665,10 @@ GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6t
 GIF_TAROT = "https://i.pinimg.com/originals/28/bc/9a/28bc9aad11a3d4251108c3a28fd980f3.gif"
 GIF_ANIVERSARIO = "https://usagif.com/wp-content/uploads/2021/4fh5wi/flzanversariopt-7.gif"
 GIF_DETETIVE = "https://i.pinimg.com/originals/d5/0c/7b/d50c7b0413ac64fd5653c6b97cef9a22.gif"
+# GIFs — Novos Jogos v2.0
+GIF_BLACKJACK = "https://media.tenor.com/7a2N_8jJXH0AAAAC/blackjack-casino.gif"
+GIF_MINAS = "https://media.tenor.com/kEBJSwLWvZoAAAAC/minesweeper.gif"
+GIF_DRAGAO = "https://media.tenor.com/OmLMoVFrGpQAAAAC/dragon-fire.gif"
 
 # Cargos
 CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
@@ -1226,12 +1230,12 @@ async def enviar_prologo_games(guild):
     )
     embed2.add_field(
         name="🧠 Pergunta Relâmpago",
-        value="O Monstrinho faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡",
+        value="O Monstrinho faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
         inline=False
     )
     embed2.add_field(
         name="🎯 Adivinhe o Número",
-        value="Penso em um número de **1 a 50** — acertar vale **700 coins**! Errar custa **25 coins**. Só uma tentativa por vez! 🎰",
+        value="Penso em um número de **1 a 50** — acertar vale **700 coins**! Errar custa **25 coins**. Dou dicas de **alto/baixo** a cada tentativa! 🎰",
         inline=False
     )
     embed2.add_field(
@@ -1241,12 +1245,12 @@ async def enviar_prologo_games(guild):
     )
     embed2.add_field(
         name="🪙 Cara ou Coroa",
-        value="Digite **cara** ou **coroa** e torça! Acertar vale **200 coins**, errar custa **75**. 🍀",
+        value="Digite **cara** ou **coroa** e torça! Acertar vale **200 coins**, errar custa **75**. 50/50 — pura sorte! 🍀",
         inline=False
     )
     embed2.add_field(
         name="🎲 Dado da Sorte",
-        value="Escolha um número de **1 a 6**. Acertar vale **60 coins**, errar custa apenas **10**! 🎲",
+        value="Escolha um número de **1 a 6**. Acertar vale **60 coins**, errar custa apenas **10**! Múltiplas tentativas permitidas! 🎲",
         inline=False
     )
     embed2.add_field(
@@ -1265,7 +1269,7 @@ async def enviar_prologo_games(guild):
     )
     embed3.add_field(
         name="🔤 Palavra Embaralhada",
-        value="Vou embaralhar as letras de uma palavra e você descobre qual é! Acertar vale **150 coins**, errar custa **25**. 🔡",
+        value="Vou embaralhar as letras de uma palavra e você descobre qual é! Acertar vale **150 coins**, errar custa **25**. 💡 *Dica: mostro quantas letras tem!* 🔡",
         inline=False
     )
     embed3.add_field(
@@ -1303,6 +1307,21 @@ async def enviar_prologo_games(guild):
         value="Leia o caso, descubra o culpado e escreva o **primeiro nome** do suspeito! Acertar vale **+300 coins**, errar custa **100**. 🔍",
         inline=False
     )
+    embed3.add_field(
+        name="🃏 Blackjack (NOVO!)",
+        value="Digite **BLACKJACK** para entrar na mesa! Peça **HIT** ou pare com **STAND**. Blackjack = **+350 coins!** Perder = **-100 coins**. ♠️",
+        inline=False
+    )
+    embed3.add_field(
+        name="💣 Campo Minado (NOVO!)",
+        value="Escolha uma casa de **1 a 9** num grid 3×3! 5 cofres (80-200 coins) e 4 minas escondidas (-100 coins). Confie no instinto! 💥",
+        inline=False
+    )
+    embed3.add_field(
+        name="🐉 Desafio do Dragão (NOVO!)",
+        value="Um dragão apareceu! Use **CHAMA** (35%/+350), **GELO** (50%/+200) ou **OURO** (75%/+80) — cada estratégia tem seu risco! 🔥",
+        inline=False
+    )
     embed3.set_thumbnail(url=AVATAR_MONSTRINHO)
     await canal_games.send(embed=embed3)
 
@@ -1321,6 +1340,68 @@ async def enviar_prologo_games(guild):
     embed4.set_thumbnail(url=AVATAR_MONSTRINHO)
     embed4.set_footer(text="Monstrinho-Games 🐲 | Boa sorte a todos! 💚")
     await canal_games.send(embed=embed4)
+
+    await asyncio.sleep(2)
+
+    embed5 = discord.Embed(
+        title="⚙️ COMANDOS DO PAPAI — FORÇAR JOGOS 🐲",
+        description=(
+            "Esses comandos são **exclusivos do dono** para forçar qualquer jogo na hora! 🔧\n\n"
+            "*(Os membros não precisam de comandos — é só responder quando o jogo aparecer!)*"
+        ),
+        color=0x2C3E50
+    )
+    embed5.add_field(
+        name="🎲 Jogos Clássicos",
+        value=(
+            "`!jogo` — Dispara um jogo **aleatório**\n"
+            "`!pergunta` — Pergunta relâmpago\n"
+            "`!numero` — Adivinhe o número (1-50)\n"
+            "`!ppt` — Pedra, papel ou tesoura\n"
+            "`!caracoroa` — Cara ou coroa\n"
+            "`!dado` — Dado da sorte (1-6)\n"
+            "`!palavra` — Digitação veloz\n"
+            "`!emoji` — Emoji rápido\n"
+            "`!embaralhada` — Palavra embaralhada"
+        ),
+        inline=True
+    )
+    embed5.add_field(
+        name="🌟 Jogos Especiais",
+        value=(
+            "`!caixa` — Caixa misteriosa\n"
+            "`!bauperdido` — Baú perdido\n"
+            "`!silencioso` — Evento silencioso\n"
+            "`!roleta` — Roleta coletiva\n"
+            "`!sobrevivamonstro` — Horda de monstros\n"
+            "`!tarot` — Tiragem de tarot\n"
+            "`!detetive` — Caso policial"
+        ),
+        inline=True
+    )
+    embed5.add_field(
+        name="✨ Jogos Novos (v2.0)",
+        value=(
+            "`!blackjack` — Mesa de blackjack 🃏\n"
+            "`!campominado` — Campo minado 💣\n"
+            "`!dragao` — Desafio do dragão 🐉"
+        ),
+        inline=False
+    )
+    embed5.add_field(
+        name="🔧 Outros Comandos Administrativos",
+        value=(
+            "`!resetar_ranking` — Zera todos os coins\n"
+            "`!bauadm` — Dar coins manualmente a alguém\n"
+            "`!removercastigo @user` — Remove castigo de membro\n"
+            "`!resetticket` — Recria o painel de tickets\n"
+            "`!linha_indireta` — Recria o embed da linha indireta"
+        ),
+        inline=False
+    )
+    embed5.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed5.set_footer(text="🐲 Monstrinho v2.0 — Apenas o dono vê isso aqui no games!")
+    await canal_games.send(embed=embed5)
 
 async def atualizar_ranking(guild):
     canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_MONSTRINHO)
@@ -1390,10 +1471,24 @@ async def disparar_roleta(guild):
 
     embed = discord.Embed(color=0xADFF2F)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.title = "🎡 EVENTO: ROLETA DA SORTE COLETIVA!"
-    embed.description = "A roleta está girando para TODOS! ✨🐲\n\nQuem escrever **ROLETA** vai girar uma vez e ganhar seu prêmio individual!\n\n🎁 **Prêmios possíveis:**\n• 700 Coins (Raro!)\n• 80 ou 150 Coins\n• Outro Jogo Aleatório\n• Perder 100 Coins\n• DOBRAR SEUS PONTOS (Chance Aumentada!)"
+    embed.title = "🎡 ROLETA DA SORTE COLETIVA! 🎰"
+    embed.description = (
+        "A roleta está girando para **TODOS**! ✨🐲\n\n"
+        "Digite **ROLETA** para girar a sua!\n\n"
+        "```\n"
+        "🏆  TABELA DE PRÊMIOS\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💎  Jackpot     →  +700 coins  (1%)\n"
+        "🥇  Grande      →  +150 coins  (25%)\n"
+        "🥈  Médio       →  +80 coins   (25%)\n"
+        "🎲  Bônus Jogo  →  Jogo extra  (14%)\n"
+        "🔥  Dobrar!     →  x2 risco    (20%)\n"
+        "💀  Azar        →  -100 coins  (15%)\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "```"
+    )
     embed.set_image(url=GIF_ROLETA_GIRANDO)
-    embed.set_footer(text="A roleta ficará aberta por 5 minutos! Digite ROLETA para participar!")
+    embed.set_footer(text="⏱️ Aberta por 5 minutos! Cada pessoa gira UMA vez. 🐲")
     
     await canal_games.send(embed=embed)
 
@@ -1401,7 +1496,7 @@ async def disparar_roleta(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("🎡 A roleta parou de girar! O tempo acabou. 🐲🏁")
+    await canal_games.send("🎡 A roleta parou de girar! Tempo encerrado! 🐲🏁")
 
 async def disparar_tarot(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1414,10 +1509,23 @@ async def disparar_tarot(guild):
 
     embed = discord.Embed(color=0x9B59B6)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.title = "🔮 TIRAGEM DO DESTINO - TAROT MÍSTICO 🔮"
-    embed.description = "As cartas ancestrais aguardam por TODOS! ✨🐲\n\nQuem digitar **TAROT** puxará sua carta do destino!\n\n🎴 **Possibilidades:**\n• Fortuna máxima (até 1000 coins!)\n• Bênçãos moderadas\n• Escolhas místicas\n• Maldições terríveis...\n\nCada pessoa só pode puxar UMA carta! ⚠️"
+    embed.title = "🔮 TIRAGEM DO DESTINO — TAROT MÍSTICO 🔮"
+    embed.description = (
+        "As cartas ancestrais aguardam por **TODOS**! ✨🐲\n\n"
+        "Digite **TAROT** para puxar sua carta do destino!\n\n"
+        "```\n"
+        "🎴  O que pode acontecer?\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "✨  Super Sorte   →  +300 a +1000 coins\n"
+        "💫  Boas Cartas   →  +35 a +150 coins\n"
+        "🔮  Cartas Místicas → Escolhas especiais!\n"
+        "💀  Cartas Ruins  →  -30 a -300 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "```\n"
+        "> ⚠️ Cada pessoa só pode puxar **UMA carta**!"
+    )
     embed.set_image(url=GIF_TAROT)
-    embed.set_footer(text="Você tem 5 minutos para consultar o oráculo! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para consultar o oráculo! As cartas não mentem... 🐲")
     
     await canal_games.send(embed=embed)
 
@@ -1425,7 +1533,7 @@ async def disparar_tarot(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("🔮 As cartas se fecharam... o oráculo descansa! 🐲💫")
+    await canal_games.send("🔮 As cartas se fecharam... o oráculo descansa até a próxima invocação! 🐲💫")
 
 async def disparar_sobrevivamonstro(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1438,10 +1546,26 @@ async def disparar_sobrevivamonstro(guild):
 
     embed = discord.Embed(color=0xFF4500)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.title = "👹 SOBREVIVA AO MONSTRO - HORDA APOCALÍPTICA!"
-    embed.description = "Uma horda de monstros invadiu o chat! TODOS podem enfrentar! 🐲⚔️\n\nEscolha sua ação digitando:\n\n🛡️ **ESCUDO** - 50% de chance de se defender (Ganha 150 coins)\n⚔️ **ESPADA** - 1% de chance épica de vencer (Ganha 700 coins!)\n🏃 **FUGIR** - Seguro, mas perde 50 coins\n\nCada pessoa enfrenta UM monstro! Você só pode participar UMA vez! ⚠️"
+    embed.title = "👹 SOBREVIVA AO MONSTRO — HORDA APOCALÍPTICA! ⚔️"
+    embed.description = (
+        "Uma horda de monstros invadiu o chat! **TODOS** podem enfrentar! 🐲⚔️\n\n"
+        "Escolha sua ação digitando:\n\n"
+        "```\n"
+        "⚔️  AÇÕES DISPONÍVEIS\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️  ESCUDO  →  50% defesa  →  +150 coins\n"
+        "             50% escudo quebra →  -50 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚔️  ESPADA  →   1% épico   →  +700 coins\n"
+        "             99% derrota   → -100 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🏃  FUGIR   →  100% seguro  →  -50 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "```\n"
+        "> ⚠️ Você só pode participar **UMA vez** por evento!"
+    )
     embed.set_image(url=GIF_MONSTRO)
-    embed.set_footer(text="Você tem 5 minutos para enfrentar seu monstro! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para enfrentar seu monstro! Coragem, guerreiro! 🐲")
     
     await canal_games.send(embed=embed)
 
@@ -1449,7 +1573,7 @@ async def disparar_sobrevivamonstro(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("👹 Os monstros recuaram! A batalha acabou! 🐲🏁")
+    await canal_games.send("👹 Os monstros recuaram! A batalha chegou ao fim! 🐲🏁")
 
 async def disparar_detetive(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1463,12 +1587,24 @@ async def disparar_detetive(guild):
     jogo_em_andamento["resposta"] = cenario["culpado"]
     jogo_em_andamento["pergunta"] = cenario["caso"]
 
+    personagens_fmt = "\n".join([f"• {p}" for p in cenario["personagens"]])
     embed = discord.Embed(color=0x1E90FF)
     embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.title = f"🕵️ CASO: {cenario['caso']}"
-    embed.description = f"**👥 Personagens:**\n{', '.join(cenario['personagens'])}\n\n**📋 O que aconteceu:**\n{cenario['situacao']}\n\n🔍 **Quem é o culpado?** Digite apenas o PRIMEIRO NOME!\n\n💰 **Acertar:** +300 Coins | ❌ **Errar:** -100 Coins"
+    embed.title = f"🕵️ CASO ABERTO: {cenario['caso'].upper()}"
+    embed.add_field(name="👥 Suspeitos", value=personagens_fmt, inline=False)
+    embed.add_field(name="📋 O que aconteceu", value=cenario["situacao"], inline=False)
+    embed.add_field(
+        name="🔍 Sua missão",
+        value=(
+            "Analise as pistas e descubra o culpado!\n"
+            "Digite apenas o **PRIMEIRO NOME** do suspeito.\n\n"
+            "✅ **Acertar:** +300 Coins\n"
+            "❌ **Errar:** -100 Coins"
+        ),
+        inline=False
+    )
     embed.set_image(url=GIF_DETETIVE)
-    embed.set_footer(text="Você tem 5 minutos para resolver o mistério! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! O Monstrinho acredita em você! 🐲🔍")
     
     await canal_games.send(embed=embed)
 
@@ -1479,13 +1615,191 @@ async def disparar_detetive(guild):
     if not jogo_em_andamento["venceu"]:
         jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
-        await canal_games.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! 🐲💔")
+        await canal_games.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! Caso encerrado. 🐲💔")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🃏 NOVO JOGO: BLACKJACK (VINTE E UM)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _bj_card_value(card: str) -> int:
+    """Retorna o valor de uma carta de blackjack (Ás = 11 inicialmente)."""
+    if card in ["J", "Q", "K"]: return 10
+    if card == "A": return 11
+    return int(card)
+
+def _bj_hand_value(hand: list) -> int:
+    """Calcula o valor total da mão, ajustando Ás de 11→1 se necessário."""
+    total = sum(_bj_card_value(c) for c in hand)
+    ases = hand.count("A")
+    while total > 21 and ases > 0:
+        total -= 10
+        ases -= 1
+    return total
+
+def _bj_draw(deck: list) -> str:
+    return deck.pop(random.randint(0, len(deck) - 1))
+
+def _bj_hand_str(hand: list) -> str:
+    return "  ".join([f"`{c}`" for c in hand])
+
+def _bj_new_deck() -> list:
+    cartas = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"] * 4
+    random.shuffle(cartas)
+    return cartas
+
+async def disparar_blackjack(guild):
+    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
+    if not canal_games: return
+
+    jogo_em_andamento["tipo"] = "blackjack"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = "blackjack"
+    jogo_em_andamento["dados_blackjack"] = {}   # user_id → {"mao": [...], "deck": [...]}
+
+    embed = discord.Embed(color=0xC0392B)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = "🃏 BLACKJACK — O DEALER ESTÁ NA MESA! 🃏"
+    embed.description = (
+        "O Monstrinho virou dealer e está distribuindo cartas! 🐲🎴\n\n"
+        "Digite **BLACKJACK** para entrar e receber suas 2 cartas!\n"
+        "Depois escolha:\n"
+        "> 🃏 **HIT** — pedir mais uma carta\n"
+        "> 🛑 **STAND** — parar e ver quem venceu\n\n"
+        "```\n"
+        "🏆  PAGAMENTOS\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🌟  Blackjack (21 de cara) →  +350 coins\n"
+        "✅  Vitória normal         →  +200 coins\n"
+        "🤝  Empate                 →    +0 coins\n"
+        "❌  Derrota / Estouro      →  -100 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "```"
+    )
+    embed.set_image(url=GIF_BLACKJACK)
+    embed.set_footer(text="⏱️ Mesa aberta por 5 minutos! Boa sorte! 🐲")
+
+    await canal_games.send(embed=embed)
+    await asyncio.sleep(300)
+
+    jogo_em_andamento["venceu"] = True
+    jogo_em_andamento["resposta"] = None
+    jogo_em_andamento["dados_blackjack"] = {}
+    await canal_games.send("🃏 A mesa de Blackjack foi encerrada! Até a próxima rodada! 🐲🏁")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 💣 NOVO JOGO: CAMPO MINADO
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def disparar_campominado(guild):
+    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
+    if not canal_games: return
+
+    # Gera o campo: 5 cofres, 4 minas (posições 1-9)
+    premios_cofres = [80, 100, 120, 150, 200]
+    random.shuffle(premios_cofres)
+    posicoes = list(range(1, 10))
+    random.shuffle(posicoes)
+    mapa_campo = {}
+    for i, pos in enumerate(posicoes):
+        if i < 5:
+            mapa_campo[str(pos)] = ("cofre", premios_cofres[i])
+        else:
+            mapa_campo[str(pos)] = ("mina", -100)
+
+    jogo_em_andamento["tipo"] = "campominado"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = "campominado"
+    jogo_em_andamento["dados_campo"] = mapa_campo
+
+    embed = discord.Embed(color=0x2ECC71)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = "💣 CAMPO MINADO — CUIDADO COM AS BOMBAS! 💥"
+    embed.description = (
+        "O Monstrinho escondeu cofres e minas num campo 3×3! 🐲💰\n\n"
+        "**Escolha uma casa digitando um número de 1 a 9:**\n\n"
+        "```\n"
+        "┌───┬───┬───┐\n"
+        "│ 1 │ 2 │ 3 │\n"
+        "├───┼───┼───┤\n"
+        "│ 4 │ 5 │ 6 │\n"
+        "├───┼───┼───┤\n"
+        "│ 7 │ 8 │ 9 │\n"
+        "└───┴───┴───┘\n"
+        "```\n"
+        "🟩 **5 cofres** escondidos (80 a 200 coins!)\n"
+        "💣 **4 minas** perigosas (-100 coins)\n\n"
+        "> ⚠️ Cada pessoa só pode escolher **UMA casa**!"
+    )
+    embed.set_image(url=GIF_MINAS)
+    embed.set_footer(text="⏱️ 5 minutos para fazer sua escolha! Confie no seu instinto! 🐲")
+
+    await canal_games.send(embed=embed)
+    await asyncio.sleep(300)
+
+    jogo_em_andamento["venceu"] = True
+    jogo_em_andamento["resposta"] = None
+    jogo_em_andamento["dados_campo"] = {}
+    await canal_games.send("💣 Campo desarmado! Evento encerrado! 🐲🏁")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🐉 NOVO JOGO: DESAFIO DO DRAGÃO
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def disparar_dragao(guild):
+    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
+    if not canal_games: return
+
+    jogo_em_andamento["tipo"] = "dragao"
+    jogo_em_andamento["venceu"] = False
+    jogo_em_andamento["participantes_tentaram"] = []
+    jogo_em_andamento["resposta"] = "dragao"
+
+    embed = discord.Embed(color=0xFF6600)
+    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.title = "🐉 DESAFIO DO DRAGÃO — ESCOLHA SUA ESTRATÉGIA! 🔥"
+    embed.description = (
+        "Um dragão lendário apareceu no servidor! **TODOS** podem enfrentá-lo! 🐲⚔️\n\n"
+        "Escolha sua estratégia digitando:\n\n"
+        "```\n"
+        "🔥  ESTRATÉGIAS\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "CHAMA  →  Magia de fogo contra o dragão\n"
+        "         35% ganhar +350 coins\n"
+        "         65% o dragão ataca de volta -120 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "GELO   →  Congelar o dragão com magia\n"
+        "         50% ganhar +200 coins\n"
+        "         50% o feitiço falha -100 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "OURO   →  Subornar o dragão com tesouros\n"
+        "         75% ele aceita +80 coins\n"
+        "         25% ele fica com raiva -180 coins\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "```\n"
+        "> ⚠️ Você só pode tentar **UMA vez** por evento!"
+    )
+    embed.set_image(url=GIF_DRAGAO)
+    embed.set_footer(text="⏱️ 5 minutos para enfrentar o dragão! Seja corajoso! 🐲")
+
+    await canal_games.send(embed=embed)
+    await asyncio.sleep(300)
+
+    jogo_em_andamento["venceu"] = True
+    jogo_em_andamento["resposta"] = None
+    await canal_games.send("🐉 O dragão voltou para sua caverna! Evento encerrado! 🐲🏁")
 
 async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
     if not canal_games: return
 
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice(["pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji", "roleta", "embaralhada", "caixa", "silencioso", "bauperdido", "sobrevivamonstro", "tarot", "detetive"])
+    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice([
+        "pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji",
+        "roleta", "embaralhada", "caixa", "silencioso", "bauperdido",
+        "sobrevivamonstro", "tarot", "detetive",
+        "blackjack", "campominado", "dragao"   # ← Novos jogos v2.0
+    ])
     
     if tipo_evento == "tarot":
         await disparar_tarot(guild)
@@ -1497,6 +1811,18 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     
     if tipo_evento == "detetive":
         await disparar_detetive(guild)
+        return
+
+    if tipo_evento == "blackjack":
+        await disparar_blackjack(guild)
+        return
+
+    if tipo_evento == "campominado":
+        await disparar_campominado(guild)
+        return
+
+    if tipo_evento == "dragao":
+        await disparar_dragao(guild)
         return
 
     jogo_em_andamento["tipo"] = tipo_evento
@@ -1511,44 +1837,98 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["pergunta"] = pergunta
         jogo_em_andamento["resposta"] = response_str.lower()
         embed.title = "🐲 HORA DO JOGUINHO DO MONSTRINHO! 🐲"
-        embed.description = f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n**PERGUNTA:**\n> {pergunta}\n\nO primeiro que acertar ganha **80 monstrinho-coins**! Boa sorte! 💚🐉"
+        embed.description = (
+            f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n"
+            f"❓ **PERGUNTA:**\n> {pergunta}\n\n"
+            f"⚡ **Seja o PRIMEIRO a acertar e ganhe 80 coins!**\n"
+            f"*(Não tem penalidade por errar essa — só vai rápido! 💨)*"
+        )
 
     elif tipo_evento == "numero":
         res = random.randint(1, 50)
         jogo_em_andamento["resposta"] = str(res)
-        embed.title = "🎯 Evento: Adivinhe o número!"
-        embed.description = "Estou pensando em um número entre **1 e 50**.\n\nQuem acertar primeiro em até 5 minutos ganha!\n💰 **Prêmio:** 700 coins | ❌ **Erro:** -25 coins"
+        embed.title = "🎯 ADIVINHE O NÚMERO SECRETO!"
+        embed.description = (
+            "Estou pensando em um número **entre 1 e 50**...\n\n"
+            "```\n"
+            "💡  DICAS APÓS CADA TENTATIVA\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔺  \"Muito alto!\"  → tente menor\n"
+            "🔻  \"Muito baixo!\" → tente maior\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "```\n"
+            "💰 **Acertar:** +700 coins | ❌ **Errar:** -25 coins\n"
+            "*(Múltiplas tentativas permitidas!)*"
+        )
         embed.set_image(url=GIF_ADIVINHE_NUMERO)
 
     elif tipo_evento == "ppt":
         jogo_em_andamento["resposta"] = "logic_ppt"
-        embed.title = "✊ Evento: Pedra, Papel ou Tesoura!"
-        embed.description = "Digite: **pedra, papel ou tesoura**\n\nO primeiro que vencer o bot ganha!\n💰 **Prêmio:** 200 | ❌ **Perde:** 50 | 🤝 **Empate:** -25"
+        embed.title = "✊ PEDRA, PAPEL OU TESOURA! ✌️"
+        embed.description = (
+            "Me desafie digitando: **pedra**, **papel** ou **tesoura**!\n\n"
+            "```\n"
+            "🏆  RESULTADOS\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "✅  Vitória  →  +200 coins\n"
+            "🤝  Empate   →  -25 coins\n"
+            "❌  Derrota  →  -50 coins\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "```\n"
+            "O Monstrinho vai jogar ao mesmo tempo que você! 🐲"
+        )
         embed.set_image(url=GIF_PPT)
 
     elif tipo_evento == "cara_coroa":
         jogo_em_andamento["resposta"] = random.choice(["cara", "coroa"])
-        embed.title = "🪙 Evento: Cara ou Coroa!"
-        embed.description = "Digite **cara** ou **coroa**\n\nO primeiro que acertar vence!\n💰 **Prêmio:** 200 | ❌ **Perde:** 75"
+        embed.title = "🪙 CARA OU COROA! A MOEDA ESTÁ NO AR!"
+        embed.description = (
+            "A moeda está girando... 🌀🪙\n\n"
+            "Digite **cara** ou **coroa** — pura sorte!\n\n"
+            "```\n"
+            "✅  Acertar  →  +200 coins\n"
+            "❌  Errar    →  -75 coins\n"
+            "```\n"
+            "> 50% de chance — confie no seu instinto! 🍀"
+        )
         embed.set_image(url=GIF_CARA_COROA)
 
     elif tipo_evento == "dado":
         jogo_em_andamento["resposta"] = str(random.randint(1, 6))
-        embed.title = "🎲 Evento: Dado da sorte!"
-        embed.description = "Digite um número de **1 a 6**\n\nQuem acertar o número sorteado vence!\n💰 **Prêmio:** 60 | ❌ **Perde:** 10"
+        embed.title = "🎲 DADO DA SORTE — APOSTE UM NÚMERO!"
+        embed.description = (
+            "Estou rolando o dado... 🎲\n\n"
+            "Digite um número de **1 a 6**!\n\n"
+            "```\n"
+            "✅  Acertar  →  +60 coins\n"
+            "❌  Errar    →  -10 coins\n"
+            "```\n"
+            "> ~16.7% de chance. Sorte boa! 🍀\n"
+            "*(Múltiplas tentativas permitidas!)*"
+        )
         embed.set_image(url=GIF_DADO)
 
     elif tipo_evento == "palavra":
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
         jogo_em_andamento["resposta"] = palavra.lower()
-        embed.title = "⚡ Evento rápido!"
-        embed.description = f"Primeiro a digitar:\n**{palavra}**\n\nvence! Ganha **80 coins**"
+        embed.title = "⚡ EVENTO RÁPIDO — DIGITAÇÃO VELOZ!"
+        embed.description = (
+            f"🏃 **VELOCIDADE É TUDO!**\n\n"
+            f"O primeiro a digitar exatamente:\n\n"
+            f"## ➤ **{palavra}**\n\n"
+            f"vence e ganha **80 coins**! ⚡"
+        )
 
     elif tipo_evento == "emoji":
         emoji = random.choice(LISTA_EMOJIS_RAPIDOS)
         jogo_em_andamento["resposta"] = emoji
-        embed.title = "⚡ Evento de emoji!"
-        embed.description = f"Primeiro a mandar:\n\n**{emoji}**\n\nvence! Ganha **80 coins**"
+        embed.title = "⚡ EVENTO DE EMOJI — SEJA O MAIS RÁPIDO!"
+        embed.description = (
+            f"🏃 **QUEM MANDA PRIMEIRO GANHA!**\n\n"
+            f"Mande exatamente esse emoji:\n\n"
+            f"# {emoji}\n\n"
+            f"Ganha **80 coins**! ⚡"
+        )
 
     elif tipo_evento == "roleta":
         await disparar_roleta(guild)
@@ -1557,23 +1937,56 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     elif tipo_evento == "embaralhada":
         palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
         jogo_em_andamento["resposta"] = palavra.lower()
+        jogo_em_andamento["pergunta"] = palavra   # Salvar original para dica
         lista_letras = list(palavra)
         random.shuffle(lista_letras)
         palavra_shuffled = "".join(lista_letras)
-        embed.title = "🔤 Palavra Embaralhada"
-        embed.description = f"🔤 **Desembaralhe a palavra:**\n> **{palavra_shuffled}**\n\n💰 **Prêmio:** 150 coins | ❌ **Erro:** -25"
+        embed.title = "🔤 PALAVRA EMBARALHADA — DESEMBARALHE!"
+        embed.description = (
+            f"O Monstrinho embaralhou as letras de uma palavra! 🔡\n\n"
+            f"**Letras embaralhadas:**\n"
+            f"# `{palavra_shuffled}`\n\n"
+            f"💡 *Dica: tem {len(palavra)} letras!*\n\n"
+            f"```\n"
+            f"✅  Acertar  →  +150 coins\n"
+            f"❌  Errar    →  -25 coins\n"
+            f"```"
+        )
         embed.set_image(url=GIF_EMBARALHADO)
 
     elif tipo_evento == "caixa":
         jogo_em_andamento["resposta"] = "caixa"
-        embed.title = "📦 Caixa Misteriosa"
-        embed.description = "📦 **Escolha um número: 1, 2 ou 3**\n\nO primeiro que digitar um número abre a caixa! O que será que tem dentro? 🐲✨\n\n🎁 **Possibilidades:**\n• Doar coins ou ganhar 80\n• Prêmio Raro (450 coins)\n• Perder 50 coins"
+        embed.title = "📦 CAIXA MISTERIOSA — QUAL VOCÊ ESCOLHE?"
+        embed.description = (
+            "Três caixas estão na sua frente... O que será que tem dentro? 🐲✨\n\n"
+            "Digite o número da caixa: **1**, **2** ou **3**!\n\n"
+            "```\n"
+            "📦 Caixa 1    →  ???\n"
+            "📦 Caixa 2    →  ???\n"
+            "📦 Caixa 3    →  ???\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎁  Moedas     →  +80 coins ou doação\n"
+            "💎  Prêmio Raro →  +450 coins!\n"
+            "💀  Armadilha  →  -50 coins\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "```\n"
+            "> 🔮 Confie no seu pressentimento!"
+        )
         embed.set_image(url=GIF_CAIXA_MISTERIOSA)
 
     elif tipo_evento == "bauperdido":
         jogo_em_andamento["resposta"] = "abrir"
-        embed.title = "🏴‍☠️ EVENTO: O BAÚ PERDIDO!"
-        embed.description = "Um baú antigo apareceu no chat! Quem será o primeiro a abrir? 🐲✨\n\nDigite **ABRIR** para tentar a sorte!\n\n💰 **Prêmio:** 300 Coins\n💀 **Cuidado:** Pode ser um Mímico e você perder 100 coins!"
+        embed.title = "🏴‍☠️ O BAÚ PERDIDO APARECEU!"
+        embed.description = (
+            "Um baú antigo e misterioso apareceu no chat! 🐲✨\n\n"
+            "Você vai arriscar? Digite **ABRIR** para descobrir!\n\n"
+            "```\n"
+            "🏆  Tesouro  →  +300 coins  (50%)\n"
+            "💀  Mímico   →  -100 coins  (50%)\n"
+            "```\n"
+            "> 🎲 50/50! Você vai arriscar?\n"
+            "> *(Apenas o PRIMEIRO que abrir conta!)*"
+        )
         embed.set_image(url=GIF_BAU_PERDIDO)
 
     elif tipo_evento == "silencioso":
@@ -1583,13 +1996,21 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         evento_silencioso_ativo = True
         jogo_em_andamento["venceu"] = False
         
-        embed.title = "🤫 EVENTO SILENCIOSO ATIVADO!"
-        embed.description = "O Monstrinho escolheu um **número secreto de mensagens**!\n\nQuem enviar a mensagem da sorte ganha o prêmio!\n\n💰 **Prêmio:** 600 Coins\n📝 **Dica:** O número está entre 1 e 20!"
+        embed.title = "🤫 EVENTO SILENCIOSO ATIVADO! SHHH..."
+        embed.description = (
+            "O Monstrinho escolheu um **número secreto de mensagens**! 🤫\n\n"
+            "Continue conversando normalmente — alguém vai ter sorte!\n\n"
+            "```\n"
+            "💰  Prêmio: 600 coins\n"
+            "📝  Dica: o número está entre 1 e 20\n"
+            "```\n"
+            "> *Shhh... não conta pra ninguém!* 🐲"
+        )
         embed.set_image(url=GIF_SILENCIOSO)
         await canal_games.send(embed=embed)
         return
 
-    embed.set_footer(text="Você tem 5 minutos! Responda no monstrinho-games!")
+    embed.set_footer(text="⏱️ Você tem 5 minutos! Responda aqui no monstrinho-games! 🐲")
     await canal_games.send(embed=embed)
 
     for _ in range(300):
@@ -2090,85 +2511,150 @@ async def on_message_delete(message):
 async def jogo(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
-    await ctx.send("🐲 Iniciando rodada aleatória no monstrinho-games, papai!")
+    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
+    if not canal_games:
+        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome exato.")
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
     await disparar_pergunta(ctx.guild)
 
 @bot.command()
 async def pergunta(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "pergunta")
 
 @bot.command()
 async def numero(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "numero")
 
 @bot.command()
 async def ppt(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "ppt")
 
 @bot.command()
 async def caracoroa(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "cara_coroa")
 
 @bot.command()
 async def dado(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "dado")
 
 @bot.command()
 async def palavra(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "palavra")
 
 @bot.command()
 async def emoji(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "emoji")
 
 @bot.command()
 async def embaralhada(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "embaralhada")
 
 @bot.command()
 async def caixa(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "caixa")
 
 @bot.command()
 async def bauperdido(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "bauperdido")
 
 @bot.command()
 async def roleta(ctx):
     if ctx.author.id != DONO_ID:
         return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
-    await ctx.send("🐲 Iniciando Roleta Coletiva no monstrinho-games, papai!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_roleta(ctx.guild)
 
 @bot.command()
 async def silencioso(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "silencioso")
 
 @bot.command()
 async def sobrevivamonstro(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "sobrevivamonstro")
 
 @bot.command()
 async def tarot(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "tarot")
 
 @bot.command()
 async def detetive(ctx):
     if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    try: await ctx.message.delete()
+    except: pass
     await disparar_pergunta(ctx.guild, "detetive")
+
+@bot.command(name="blackjack")
+async def cmd_blackjack(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
+    if not canal_games:
+        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
+    try: await ctx.message.delete()
+    except: pass
+    await disparar_blackjack(ctx.guild)
+
+@bot.command(name="campominado")
+async def cmd_campominado(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
+    if not canal_games:
+        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
+    try: await ctx.message.delete()
+    except: pass
+    await disparar_campominado(ctx.guild)
+
+@bot.command(name="dragao")
+async def cmd_dragao(ctx):
+    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
+    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
+    if not canal_games:
+        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
+    try: await ctx.message.delete()
+    except: pass
+    await disparar_dragao(ctx.guild)
 
 # ============== COMANDOS ADMINISTRATIVOS =================
 
@@ -2295,8 +2781,10 @@ async def on_message(message):
         premio = 0
 
         if user_id in jogo_em_andamento["participantes_tentaram"]:
-            if tipo in ["roleta", "tarot", "sobrevivamonstro"]:
+            if tipo in ["roleta", "tarot", "sobrevivamonstro", "campominado", "dragao"]:
                 return 
+            elif tipo == "blackjack":
+                pass   # Blackjack: HIT/STAND permitidos após entrar
             elif tipo not in ["caixa"]:
                 return
 
@@ -2312,7 +2800,11 @@ async def on_message(message):
             "bauperdido": lambda m: m == "abrir",
             "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"],
             "tarot": lambda m: m == "tarot",
-            "detetive": lambda m: True
+            "detetive": lambda m: True,
+            # Novos jogos v2.0
+            "blackjack": lambda m: m in ["blackjack", "hit", "stand"],
+            "campominado": lambda m: m.isdigit() and 1 <= int(m) <= 9,
+            "dragao": lambda m: m in ["chama", "gelo", "ouro"],
         }
 
         if filtros.get(tipo, lambda m: False)(msg_content):
@@ -2522,6 +3014,242 @@ async def on_message(message):
                     await atualizar_ranking(message.guild) 
                     return
 
+            elif tipo == "blackjack":
+                dados_bj = jogo_em_andamento.setdefault("dados_blackjack", {})
+
+                # ── ENTRADA: jogador ainda não iniciou ──────────────────────
+                if msg_content == "blackjack" and user_id not in dados_bj:
+                    deck = _bj_new_deck()
+                    mao  = [_bj_draw(deck), _bj_draw(deck)]
+                    dados_bj[user_id] = {"mao": mao, "deck": deck}
+                    val = _bj_hand_value(mao)
+
+                    if val == 21:
+                        # Blackjack de cara!
+                        premio_bj = 350
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        embed_bj = discord.Embed(
+                            title="🌟 BLACKJACK! 21 DE CARA!",
+                            description=(
+                                f"{message.author.mention} tirou **Blackjack** imediato!\n\n"
+                                f"Mão: {_bj_hand_str(mao)} — Total: **{val}**\n\n"
+                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
+                            ),
+                            color=0xFFD700
+                        )
+                        embed_bj.set_image(url=GIF_VITORIA)
+                        await message.reply(embed=embed_bj)
+                        await atualizar_ranking(message.guild)
+                        return
+                    else:
+                        embed_bj = discord.Embed(
+                            title="🃏 SUAS CARTAS FORAM DISTRIBUÍDAS!",
+                            description=(
+                                f"{message.author.mention}, suas cartas:\n\n"
+                                f"Mão: {_bj_hand_str(mao)} — Total: **{val}**\n\n"
+                                f"Digite **HIT** para pedir mais uma carta ou **STAND** para parar!"
+                            ),
+                            color=0xC0392B
+                        )
+                        await message.reply(embed=embed_bj)
+                        return
+
+                # ── HIT: pede mais uma carta ─────────────────────────────────
+                elif msg_content == "hit" and user_id in dados_bj:
+                    estado = dados_bj[user_id]
+                    nova_carta = _bj_draw(estado["deck"])
+                    estado["mao"].append(nova_carta)
+                    val = _bj_hand_value(estado["mao"])
+
+                    if val > 21:
+                        # Estourou
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        embed_bj = discord.Embed(
+                            title="💥 ESTOUROU! PASSOU DE 21!",
+                            description=(
+                                f"{message.author.mention}, você pediu demais!\n\n"
+                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
+                                f"Você perdeu **100 Coins**! 🃏💔"
+                            ),
+                            color=0xFF0000
+                        )
+                        embed_bj.set_image(url=GIF_DERROTA)
+                        await message.reply(embed=embed_bj)
+                        del dados_bj[user_id]
+                        await atualizar_ranking(message.guild)
+                        return
+                    elif val == 21:
+                        # Acertou 21 com HIT
+                        ganhou_bj = True
+                        premio_bj = 200
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        embed_bj = discord.Embed(
+                            title="🎯 21! PERFEITO!",
+                            description=(
+                                f"{message.author.mention} acertou 21!\n\n"
+                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
+                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
+                            ),
+                            color=0x00FF7F
+                        )
+                        embed_bj.set_image(url=GIF_VITORIA)
+                        await message.reply(embed=embed_bj)
+                        del dados_bj[user_id]
+                        await atualizar_ranking(message.guild)
+                        return
+                    else:
+                        embed_bj = discord.Embed(
+                            title="🃏 CARTA COMPRADA!",
+                            description=(
+                                f"{message.author.mention}\n\n"
+                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
+                                f"Digite **HIT** para mais uma ou **STAND** para parar!"
+                            ),
+                            color=0xC0392B
+                        )
+                        await message.reply(embed=embed_bj)
+                        return
+
+                # ── STAND: para e compara com o dealer ──────────────────────
+                elif msg_content == "stand" and user_id in dados_bj:
+                    estado = dados_bj[user_id]
+                    val_jogador = _bj_hand_value(estado["mao"])
+                    # Dealer compra até 17+
+                    deck_dealer = _bj_new_deck()
+                    mao_dealer  = [_bj_draw(deck_dealer), _bj_draw(deck_dealer)]
+                    while _bj_hand_value(mao_dealer) < 17:
+                        mao_dealer.append(_bj_draw(deck_dealer))
+                    val_dealer = _bj_hand_value(mao_dealer)
+
+                    dealer_str = _bj_hand_str(mao_dealer)
+                    jogador_str = _bj_hand_str(estado["mao"])
+
+                    if val_dealer > 21 or val_jogador > val_dealer:
+                        # Jogador venceu
+                        premio_bj = 200
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        embed_bj = discord.Embed(
+                            title="✅ VOCÊ VENCEU O DEALER!",
+                            description=(
+                                f"{message.author.mention}\n\n"
+                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
+                                f"Dealer: {dealer_str} — **{val_dealer}** {'(estourou!)' if val_dealer > 21 else ''}\n\n"
+                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
+                            ),
+                            color=0x00FF7F
+                        )
+                        embed_bj.set_image(url=GIF_VITORIA)
+                    elif val_jogador == val_dealer:
+                        embed_bj = discord.Embed(
+                            title="🤝 EMPATE!",
+                            description=(
+                                f"{message.author.mention}\n\n"
+                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
+                                f"Dealer: {dealer_str} — **{val_dealer}**\n\n"
+                                f"Empate! Nenhum coin foi perdido ou ganho. 🃏"
+                            ),
+                            color=0xFFA500
+                        )
+                    else:
+                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        embed_bj = discord.Embed(
+                            title="❌ O DEALER VENCEU!",
+                            description=(
+                                f"{message.author.mention}\n\n"
+                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
+                                f"Dealer: {dealer_str} — **{val_dealer}**\n\n"
+                                f"Você perdeu **100 Coins**! 🃏💔"
+                            ),
+                            color=0xFF0000
+                        )
+                        embed_bj.set_image(url=GIF_DERROTA)
+
+                    await message.reply(embed=embed_bj)
+                    del dados_bj[user_id]
+                    await atualizar_ranking(message.guild)
+                    return
+                else:
+                    return  # Ignorar mensagem inválida no blackjack
+
+            elif tipo == "campominado":
+                mapa_campo = jogo_em_andamento.get("dados_campo", {})
+                if not mapa_campo:
+                    return
+                resultado_campo = mapa_campo.get(msg_content)
+                if not resultado_campo:
+                    return
+                tipo_campo, valor_campo = resultado_campo
+                if tipo_campo == "cofre":
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + valor_campo
+                    embed_campo = discord.Embed(
+                        title="🟩 COFRE ENCONTRADO!",
+                        description=(
+                            f"🎉 {message.author.mention} escolheu a casa **{msg_content}**!\n\n"
+                            f"Era um **COFRE** cheio de tesouros! 💰\n\n"
+                            f"Você ganhou **{valor_campo} Coins**! 💚✨"
+                        ),
+                        color=0x00FF7F
+                    )
+                    embed_campo.set_image(url=GIF_VITORIA)
+                else:
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + valor_campo  # valor negativo
+                    embed_campo = discord.Embed(
+                        title="💣 BOOM! VOCÊ PISOU NUMA MINA!",
+                        description=(
+                            f"💥 {message.author.mention} escolheu a casa **{msg_content}**!\n\n"
+                            f"Era uma **MINA**! Que azar!\n\n"
+                            f"Você perdeu **{abs(valor_campo)} Coins**! 💔"
+                        ),
+                        color=0xFF0000
+                    )
+                    embed_campo.set_image(url=GIF_DERROTA)
+                await message.reply(embed=embed_campo)
+                await atualizar_ranking(message.guild)
+                return
+
+            elif tipo == "dragao":
+                resultados_dragao = {
+                    "chama": {"chance": 0.35, "ganho": 350, "perda": 120,
+                              "win_title": "🔥 CHAMA DEVASTADORA!", "win_desc": "Sua magia de fogo queimou o dragão!",
+                              "lose_title": "🐉 O DRAGÃO CONTRA-ATACOU!", "lose_desc": "O dragão absorveu suas chamas e soltou fogo de volta!"},
+                    "gelo":  {"chance": 0.50, "ganho": 200, "perda": 100,
+                              "win_title": "❄️ DRAGÃO CONGELADO!", "win_desc": "Sua magia de gelo paralisou a besta!",
+                              "lose_title": "💧 O FEITIÇO FALHOU!", "lose_desc": "O calor do dragão derreteu seu gelo!"},
+                    "ouro":  {"chance": 0.75, "ganho": 80, "perda": 180,
+                              "win_title": "✨ O DRAGÃO ACEITOU O OURO!", "win_desc": "Ele ficou satisfeito e foi embora.",
+                              "lose_title": "😡 ELE FICOU COM RAIVA!", "lose_desc": "O dragão achou seu ouro uma ofensa!"},
+                }
+                config_d = resultados_dragao.get(msg_content)
+                if not config_d:
+                    return
+                if random.random() < config_d["chance"]:
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + config_d["ganho"]
+                    embed_dragao = discord.Embed(
+                        title=config_d["win_title"],
+                        description=(
+                            f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
+                            f"*{config_d['win_desc']}*\n\n"
+                            f"Você ganhou **{config_d['ganho']} Coins**! 🐲✨"
+                        ),
+                        color=0x00FF7F
+                    )
+                    embed_dragao.set_image(url=GIF_VITORIA)
+                else:
+                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - config_d["perda"]
+                    embed_dragao = discord.Embed(
+                        title=config_d["lose_title"],
+                        description=(
+                            f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
+                            f"*{config_d['lose_desc']}*\n\n"
+                            f"Você perdeu **{config_d['perda']} Coins**! 🐲💔"
+                        ),
+                        color=0xFF0000
+                    )
+                    embed_dragao.set_image(url=GIF_DERROTA)
+                await message.reply(embed=embed_dragao)
+                await atualizar_ranking(message.guild)
+                return
+
             elif tipo == "caixa":
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
@@ -2569,7 +3297,13 @@ async def on_message(message):
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 700
                 else:
                     pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
-                    await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
+                    if msg_content.isdigit():
+                        tentado = int(msg_content)
+                        correto  = int(jogo_em_andamento["resposta"])
+                        dica = "🔺 **Muito alto!** Tente menor." if tentado > correto else "🔻 **Muito baixo!** Tente maior."
+                        await message.reply(f"❌ {dica} (-25 coins) 🐲")
+                    else:
+                        await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "ppt":
