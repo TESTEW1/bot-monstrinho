@@ -2773,11 +2773,253 @@ async def on_message(message):
 # 🚀  INICIALIZAÇÃO — Carrega o Security COG e sobe o bot
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║              📩  LINHA INDIRETA — CSI  (Anônimo)                ║
+# ║   Sugestões/Reclamações enviadas anonimamente ao Líder (Akeido) ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+LINHA_INDIRETA_CANAL_ID = 1482855537086304446   # 📩・linha-indireta
+AKEIDO_ID               = 445937581566197761    # Líder CSI — recebe a msg anônima
+REALITY_ID              = 769951556388257812    # Dono — recebe quem enviou (secreto)
+
+TIPOS_MENSAGEM = [
+    discord.SelectOption(label="💡 Sugestão",       value="Sugestão",       description="Tem uma ideia pra melhorar a CSI?"),
+    discord.SelectOption(label="😤 Reclamação",      value="Reclamação",     description="Algo te incomodou? Fala com a gente."),
+    discord.SelectOption(label="💬 Feedback Geral",  value="Feedback Geral", description="Opinião geral sobre o servidor/CSI."),
+    discord.SelectOption(label="🚨 Denúncia",        value="Denúncia",       description="Algo errado acontecendo? Avise anonimamente."),
+    discord.SelectOption(label="❓ Dúvida",          value="Dúvida",         description="Alguma dúvida sobre a CSI?"),
+    discord.SelectOption(label="🙏 Elogio",          value="Elogio",         description="Quer elogiar alguém ou algo?"),
+    discord.SelectOption(label="📋 Outro",           value="Outro",          description="Qualquer outra coisa que queira dizer."),
+]
+
+
+class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
+    """Modal que coleta o tipo e a mensagem do usuário."""
+
+    tipo_selecionado: str = "Outro"  # preenchido pela View antes de enviar o modal
+
+    mensagem = discord.ui.TextInput(
+        label="✍️ Sua mensagem",
+        style=discord.TextStyle.paragraph,
+        placeholder="Escreva aqui sua sugestão, reclamação, elogio... Seja claro e respeitoso.",
+        min_length=10,
+        max_length=1500,
+        required=True,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        tipo   = self.tipo_selecionado
+        texto  = self.mensagem.value
+        autor  = interaction.user
+
+        # ── Embed que vai pro Akeido (sem revelar o autor) ────────────────
+        embed_akeido = discord.Embed(
+            title="📩 Nova mensagem na Linha Indireta — CSI",
+            description=texto,
+            color=0x5865F2,
+            timestamp=datetime.utcnow(),
+        )
+        embed_akeido.add_field(name="📌 Tipo",   value=f"`{tipo}`", inline=True)
+        embed_akeido.add_field(name="🔒 Autor",  value="`Anônimo`", inline=True)
+        embed_akeido.set_footer(text="📩 Linha Indireta CSI • Mensagem anônima")
+
+        # ── Embed secreto que vai pro Reality (revela o autor) ────────────
+        embed_reality = discord.Embed(
+            title="🔍 [SECRETO] Linha Indireta — Identificação",
+            description=f"Uma mensagem do tipo **{tipo}** foi enviada anonimamente ao Akeido.",
+            color=0xff6600,
+            timestamp=datetime.utcnow(),
+        )
+        embed_reality.add_field(name="👤 Enviado por", value=f"{autor.mention} (`{autor}` | ID: `{autor.id}`)", inline=False)
+        embed_reality.set_thumbnail(url=autor.display_avatar.url)
+        embed_reality.set_footer(text="🐲 Monstrinho — Linha Indireta • Apenas você vê isso, Reality.")
+
+        # ── Envia pro Akeido ──────────────────────────────────────────────
+        try:
+            akeido = await interaction.client.fetch_user(AKEIDO_ID)
+            await akeido.send(embed=embed_akeido)
+            enviado_akeido = True
+        except Exception:
+            enviado_akeido = False
+
+        # ── Envia pro Reality (secreto) ───────────────────────────────────
+        try:
+            reality = await interaction.client.fetch_user(REALITY_ID)
+            await reality.send(embed=embed_reality)
+        except Exception:
+            pass  # silencia qualquer erro no aviso secreto
+
+        # ── Confirmação pro usuário (efêmera) ─────────────────────────────
+        if enviado_akeido:
+            await interaction.followup.send(
+                "✅ **Mensagem enviada com sucesso!**\n"
+                "Sua identidade foi mantida em **sigilo total**. "
+                "O Líder da CSI recebeu sua mensagem anonimamente. 🐲🔒",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                "⚠️ Houve um problema ao entregar sua mensagem. "
+                "O Líder pode estar com o PV fechado. Tente novamente mais tarde.",
+                ephemeral=True,
+            )
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception):
+        await interaction.response.send_message(
+            "❌ Ocorreu um erro ao enviar sua mensagem. Tente novamente.", ephemeral=True
+        )
+
+
+class LinhaIndiretaSelectView(discord.ui.View):
+    """View com o Select de tipo + botão Continuar."""
+
+    def __init__(self):
+        super().__init__(timeout=120)
+        self.tipo_escolhido: str | None = None
+
+    @discord.ui.select(
+        placeholder="📌 Selecione o tipo da sua mensagem...",
+        options=TIPOS_MENSAGEM,
+        min_values=1,
+        max_values=1,
+    )
+    async def select_tipo(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.tipo_escolhido = select.values[0]
+        # Habilita o botão de continuar
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = False
+        await interaction.response.edit_message(
+            content=(
+                f"**Tipo selecionado:** `{self.tipo_escolhido}` ✅\n"
+                "Agora clique em **✍️ Escrever mensagem** para continuar."
+            ),
+            view=self,
+        )
+
+    @discord.ui.button(label="✍️ Escrever mensagem", style=discord.ButtonStyle.primary, disabled=True, emoji="📝")
+    async def abrir_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = LinhaIndiretaModal()
+        modal.tipo_selecionado = self.tipo_escolhido or "Outro"
+        await interaction.response.send_modal(modal)
+
+
+class LinhaIndiretaInicioView(discord.ui.View):
+    """View permanente no canal com o botão de abertura."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Enviar mensagem anônima",
+        style=discord.ButtonStyle.danger,
+        emoji="📩",
+        custom_id="linha_indireta_abrir",
+    )
+    async def abrir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = LinhaIndiretaSelectView()
+        await interaction.response.send_message(
+            "## 📩 Linha Indireta — CSI\n"
+            "Sua mensagem será entregue **anonimamente** ao Líder da CSI.\n"
+            "**Ninguém saberá que foi você.** 🔒\n\n"
+            "**1️⃣** Selecione o tipo da sua mensagem abaixo.\n"
+            "**2️⃣** Clique em **Escrever mensagem** e escreva.\n"
+            "**3️⃣** Confirme — e pronto! ✅",
+            view=view,
+            ephemeral=True,
+        )
+
+
+@bot.command(name="linha_indireta")
+async def setup_linha_indireta(ctx: commands.Context):
+    """Posta o embed da Linha Indireta no canal correto. Apenas o dono pode usar."""
+    if ctx.author.id != REALITY_ID:
+        return await ctx.send("❌ Apenas o Reality pode configurar a Linha Indireta.", delete_after=5)
+
+    canal = bot.get_channel(LINHA_INDIRETA_CANAL_ID)
+    if canal is None:
+        return await ctx.send("❌ Canal da Linha Indireta não encontrado.", delete_after=5)
+
+    embed = discord.Embed(
+        title="📩 Linha Indireta — CSI",
+        description=(
+            "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
+            "diretamente ao **Líder da CSI**, de forma completamente **anônima**.\n\n"
+            "🔒 **Sua identidade nunca será revelada.**\n"
+            "📌 Escolha o tipo da mensagem, escreva e envie — é simples assim.\n\n"
+            "**Tipos disponíveis:**\n"
+            "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
+            "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
+            "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
+        ),
+        color=0x5865F2,
+    )
+    embed.set_footer(text="📩 Linha Indireta CSI • Anônimo & Seguro 🔒")
+
+    await canal.send(embed=embed, view=LinhaIndiretaInicioView())
+    await ctx.send("✅ Linha Indireta configurada com sucesso!", delete_after=5)
+
+    # Registra a view persistente para sobreviver a restarts
+    bot.add_view(LinhaIndiretaInicioView())
+
+
 import asyncio as _asyncio
+
+async def _setup_linha_indireta():
+    """Aguarda o bot ficar pronto e posta/atualiza o embed da Linha Indireta automaticamente."""
+    await bot.wait_until_ready()
+
+    # Registra a view persistente (necessário para os botões funcionarem após restart)
+    bot.add_view(LinhaIndiretaInicioView())
+
+    canal = bot.get_channel(LINHA_INDIRETA_CANAL_ID)
+    if canal is None:
+        return
+
+    embed = discord.Embed(
+        title="📩 Linha Indireta — CSI",
+        description=(
+            "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
+            "diretamente ao **Líder da CSI**, de forma completamente **anônima**.\n\n"
+            "🔒 **Sua identidade nunca será revelada.**\n"
+            "📌 Escolha o tipo da mensagem, escreva e envie — é simples assim.\n\n"
+            "**Tipos disponíveis:**\n"
+            "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
+            "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
+            "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
+        ),
+        color=0x5865F2,
+    )
+    embed.set_footer(text="📩 Linha Indireta CSI • Anônimo & Seguro 🔒")
+
+    # Procura se já existe uma mensagem do bot com o embed no canal
+    mensagem_existente = None
+    async for msg in canal.history(limit=30):
+        if msg.author.id == bot.user.id and msg.embeds and msg.embeds[0].title == "📩 Linha Indireta — CSI":
+            mensagem_existente = msg
+            break
+
+    if mensagem_existente:
+        # Atualiza a mensagem existente (garante botão funcionando após restart)
+        try:
+            await mensagem_existente.edit(embed=embed, view=LinhaIndiretaInicioView())
+        except Exception:
+            pass
+    else:
+        # Limpa mensagens antigas do bot no canal e posta novo embed
+        try:
+            await canal.purge(limit=20, check=lambda m: m.author.id == bot.user.id)
+        except Exception:
+            pass
+        await canal.send(embed=embed, view=LinhaIndiretaInicioView())
+
 
 async def _main():
     async with bot:
         await bot.add_cog(MonstrinhoCog(bot))
+        bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
 _asyncio.run(_main())
