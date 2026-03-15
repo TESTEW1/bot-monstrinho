@@ -1341,68 +1341,6 @@ async def enviar_prologo_games(guild):
     embed4.set_footer(text="Monstrinho-Games 🐲 | Boa sorte a todos! 💚")
     await canal_games.send(embed=embed4)
 
-    await asyncio.sleep(2)
-
-    embed5 = discord.Embed(
-        title="⚙️ COMANDOS DO PAPAI — FORÇAR JOGOS 🐲",
-        description=(
-            "Esses comandos são **exclusivos do dono** para forçar qualquer jogo na hora! 🔧\n\n"
-            "*(Os membros não precisam de comandos — é só responder quando o jogo aparecer!)*"
-        ),
-        color=0x2C3E50
-    )
-    embed5.add_field(
-        name="🎲 Jogos Clássicos",
-        value=(
-            "`!jogo` — Dispara um jogo **aleatório**\n"
-            "`!pergunta` — Pergunta relâmpago\n"
-            "`!numero` — Adivinhe o número (1-50)\n"
-            "`!ppt` — Pedra, papel ou tesoura\n"
-            "`!caracoroa` — Cara ou coroa\n"
-            "`!dado` — Dado da sorte (1-6)\n"
-            "`!palavra` — Digitação veloz\n"
-            "`!emoji` — Emoji rápido\n"
-            "`!embaralhada` — Palavra embaralhada"
-        ),
-        inline=True
-    )
-    embed5.add_field(
-        name="🌟 Jogos Especiais",
-        value=(
-            "`!caixa` — Caixa misteriosa\n"
-            "`!bauperdido` — Baú perdido\n"
-            "`!silencioso` — Evento silencioso\n"
-            "`!roleta` — Roleta coletiva\n"
-            "`!sobrevivamonstro` — Horda de monstros\n"
-            "`!tarot` — Tiragem de tarot\n"
-            "`!detetive` — Caso policial"
-        ),
-        inline=True
-    )
-    embed5.add_field(
-        name="✨ Jogos Novos (v2.0)",
-        value=(
-            "`!blackjack` — Mesa de blackjack 🃏\n"
-            "`!campominado` — Campo minado 💣\n"
-            "`!dragao` — Desafio do dragão 🐉"
-        ),
-        inline=False
-    )
-    embed5.add_field(
-        name="🔧 Outros Comandos Administrativos",
-        value=(
-            "`!resetar_ranking` — Zera todos os coins\n"
-            "`!bauadm` — Dar coins manualmente a alguém\n"
-            "`!removercastigo @user` — Remove castigo de membro\n"
-            "`!resetticket` — Recria o painel de tickets\n"
-            "`!linha_indireta` — Recria o embed da linha indireta"
-        ),
-        inline=False
-    )
-    embed5.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed5.set_footer(text="🐲 Monstrinho v2.0 — Apenas o dono vê isso aqui no games!")
-    await canal_games.send(embed=embed5)
-
 async def atualizar_ranking(guild):
     canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_MONSTRINHO)
     if not canal_rank: return
