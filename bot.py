@@ -3452,6 +3452,8 @@ async def on_message(message):
 
 LINHA_INDIRETA_CANAL_ID = 1482855537086304446   # 📩・linha-indireta
 AKEIDO_ID               = 445937581566197761    # Líder CSI — recebe a msg anônima
+WLU_ID                  = 940036086074343505    # Vice-líder wlu — recebe a msg anônima
+AMBER_ID                = 918222382840291369    # Vice-líder Amber — recebe a msg anônima
 REALITY_ID              = 769951556388257812    # Dono — recebe quem enviou (secreto)
 
 TIPOS_MENSAGEM = [
@@ -3464,11 +3466,25 @@ TIPOS_MENSAGEM = [
     discord.SelectOption(label="📋 Outro",           value="Outro",          description="Qualquer outra coisa que queira dizer."),
 ]
 
+DESTINATARIOS = [
+    discord.SelectOption(label="👑 Akeido (Líder)",       value="akeido", description="Enviar para o Líder da CSI."),
+    discord.SelectOption(label="🥈 wlu (Vice-líder)",     value="wlu",    description="Enviar para o Vice-líder wlu."),
+    discord.SelectOption(label="🥈 Amber (Vice-líder)",   value="amber",  description="Enviar para a Vice-líder Amber."),
+]
+
+# Mapeamento: valor do select → (ID do usuário, nome de exibição)
+DESTINATARIO_MAP = {
+    "akeido": (AKEIDO_ID, "Akeido (Líder)"),
+    "wlu":    (WLU_ID,    "wlu (Vice-líder)"),
+    "amber":  (AMBER_ID,  "Amber (Vice-líder)"),
+}
+
 
 class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
     """Modal que coleta o tipo e a mensagem do usuário."""
 
-    tipo_selecionado: str = "Outro"  # preenchido pela View antes de enviar o modal
+    tipo_selecionado: str  = "Outro"   # preenchido pela View antes de enviar o modal
+    destinatario_key: str  = "akeido"  # preenchido pela View antes de enviar o modal
 
     mensagem = discord.ui.TextInput(
         label="✍️ Sua mensagem",
@@ -3486,35 +3502,41 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
         texto  = self.mensagem.value
         autor  = interaction.user
 
-        # ── Embed que vai pro Akeido (sem revelar o autor) ────────────────
-        embed_akeido = discord.Embed(
+        # ── Resolve destinatário ──────────────────────────────────────────
+        dest_id, dest_nome = DESTINATARIO_MAP.get(self.destinatario_key, (AKEIDO_ID, "Akeido (Líder)"))
+
+        # ── Embed que vai ao destinatário (sem revelar o autor) ───────────
+        embed_dest = discord.Embed(
             title="📩 Nova mensagem na Linha Indireta — CSI",
             description=texto,
             color=0x5865F2,
             timestamp=datetime.utcnow(),
         )
-        embed_akeido.add_field(name="📌 Tipo",   value=f"`{tipo}`", inline=True)
-        embed_akeido.add_field(name="🔒 Autor",  value="`Anônimo`", inline=True)
-        embed_akeido.set_footer(text="📩 Linha Indireta CSI • Mensagem anônima")
+        embed_dest.add_field(name="📌 Tipo",          value=f"`{tipo}`",      inline=True)
+        embed_dest.add_field(name="🔒 Autor",         value="`Anônimo`",      inline=True)
+        embed_dest.add_field(name="📬 Destinatário",  value=f"`{dest_nome}`", inline=True)
+        embed_dest.set_footer(text="📩 Linha Indireta CSI • Mensagem anônima")
 
         # ── Embed secreto que vai pro Reality (revela o autor) ────────────
         embed_reality = discord.Embed(
             title="🔍 [SECRETO] Linha Indireta — Identificação",
-            description=f"Uma mensagem do tipo **{tipo}** foi enviada anonimamente ao Akeido.",
+            description=f"Uma mensagem do tipo **{tipo}** foi enviada anonimamente para **{dest_nome}**.",
             color=0xff6600,
             timestamp=datetime.utcnow(),
         )
-        embed_reality.add_field(name="👤 Enviado por", value=f"{autor.mention} (`{autor}` | ID: `{autor.id}`)", inline=False)
+        embed_reality.add_field(name="👤 Enviado por",    value=f"{autor.mention} (`{autor}` | ID: `{autor.id}`)", inline=False)
+        embed_reality.add_field(name="📬 Destinatário",   value=dest_nome,                                         inline=False)
         embed_reality.set_thumbnail(url=autor.display_avatar.url)
         embed_reality.set_footer(text="🐲 Monstrinho — Linha Indireta • Apenas você vê isso, Reality.")
 
-        # ── Envia pro Akeido ──────────────────────────────────────────────
+        # ── Envia ao destinatário escolhido ───────────────────────────────
+        enviado = False
         try:
-            akeido = await interaction.client.fetch_user(AKEIDO_ID)
-            await akeido.send(embed=embed_akeido)
-            enviado_akeido = True
+            dest_user = await interaction.client.fetch_user(dest_id)
+            await dest_user.send(embed=embed_dest)
+            enviado = True
         except Exception:
-            enviado_akeido = False
+            enviado = False
 
         # ── Envia pro Reality (secreto) ───────────────────────────────────
         try:
@@ -3524,17 +3546,17 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
             pass  # silencia qualquer erro no aviso secreto
 
         # ── Confirmação pro usuário (efêmera) ─────────────────────────────
-        if enviado_akeido:
+        if enviado:
             await interaction.followup.send(
-                "✅ **Mensagem enviada com sucesso!**\n"
-                "Sua identidade foi mantida em **sigilo total**. "
-                "O Líder da CSI recebeu sua mensagem anonimamente. 🐲🔒",
+                f"✅ **Mensagem enviada com sucesso!**\n"
+                f"Sua identidade foi mantida em **sigilo total**. "
+                f"**{dest_nome}** recebeu sua mensagem anonimamente. 🐲🔒",
                 ephemeral=True,
             )
         else:
             await interaction.followup.send(
-                "⚠️ Houve um problema ao entregar sua mensagem. "
-                "O Líder pode estar com o PV fechado. Tente novamente mais tarde.",
+                f"⚠️ Houve um problema ao entregar sua mensagem para **{dest_nome}**. "
+                "Essa pessoa pode estar com o PV fechado. Tente novamente mais tarde.",
                 ephemeral=True,
             )
 
@@ -3545,11 +3567,30 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
 
 
 class LinhaIndiretaSelectView(discord.ui.View):
-    """View com o Select de tipo + botão Continuar."""
+    """View com o Select de tipo + Select de destinatário + botão Continuar."""
 
     def __init__(self):
         super().__init__(timeout=120)
-        self.tipo_escolhido: str | None = None
+        self.tipo_escolhido:        str | None = None
+        self.destinatario_escolhido: str | None = None
+
+    def _atualizar_botao(self):
+        """Habilita o botão apenas quando tipo E destinatário estiverem escolhidos."""
+        pronto = self.tipo_escolhido is not None and self.destinatario_escolhido is not None
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = not pronto
+
+    def _status_text(self) -> str:
+        tipo  = f"`{self.tipo_escolhido}`" if self.tipo_escolhido else "*(aguardando...)*"
+        dest  = f"`{DESTINATARIO_MAP[self.destinatario_escolhido][1]}`" if self.destinatario_escolhido else "*(aguardando...)*"
+        return (
+            f"**Tipo:** {tipo}\n"
+            f"**Destinatário:** {dest}\n\n"
+            "Clique em **✍️ Escrever mensagem** para continuar."
+            if (self.tipo_escolhido and self.destinatario_escolhido)
+            else f"**Tipo:** {tipo}\n**Destinatário:** {dest}"
+        )
 
     @discord.ui.select(
         placeholder="📌 Selecione o tipo da sua mensagem...",
@@ -3559,22 +3600,25 @@ class LinhaIndiretaSelectView(discord.ui.View):
     )
     async def select_tipo(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.tipo_escolhido = select.values[0]
-        # Habilita o botão de continuar
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = False
-        await interaction.response.edit_message(
-            content=(
-                f"**Tipo selecionado:** `{self.tipo_escolhido}` ✅\n"
-                "Agora clique em **✍️ Escrever mensagem** para continuar."
-            ),
-            view=self,
-        )
+        self._atualizar_botao()
+        await interaction.response.edit_message(content=self._status_text(), view=self)
+
+    @discord.ui.select(
+        placeholder="📬 Para quem deseja enviar?",
+        options=DESTINATARIOS,
+        min_values=1,
+        max_values=1,
+    )
+    async def select_destinatario(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.destinatario_escolhido = select.values[0]
+        self._atualizar_botao()
+        await interaction.response.edit_message(content=self._status_text(), view=self)
 
     @discord.ui.button(label="✍️ Escrever mensagem", style=discord.ButtonStyle.primary, disabled=True, emoji="📝")
     async def abrir_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = LinhaIndiretaModal()
-        modal.tipo_selecionado = self.tipo_escolhido or "Outro"
+        modal.tipo_selecionado  = self.tipo_escolhido or "Outro"
+        modal.destinatario_key  = self.destinatario_escolhido or "akeido"
         await interaction.response.send_modal(modal)
 
 
@@ -3594,11 +3638,11 @@ class LinhaIndiretaInicioView(discord.ui.View):
         view = LinhaIndiretaSelectView()
         await interaction.response.send_message(
             "## 📩 Linha Indireta — CSI\n"
-            "Sua mensagem será entregue **anonimamente** ao Líder da CSI.\n"
+            "Sua mensagem será entregue **anonimamente** ao destinatário escolhido.\n"
             "**Ninguém saberá que foi você.** 🔒\n\n"
-            "**1️⃣** Selecione o tipo da sua mensagem abaixo.\n"
-            "**2️⃣** Clique em **Escrever mensagem** e escreva.\n"
-            "**3️⃣** Confirme — e pronto! ✅",
+            "**1️⃣** Selecione o **tipo** da sua mensagem.\n"
+            "**2️⃣** Selecione o **destinatário** (Líder ou Vice-líder).\n"
+            "**3️⃣** Clique em **Escrever mensagem**, escreva e confirme. ✅",
             view=view,
             ephemeral=True,
         )
@@ -3618,12 +3662,14 @@ async def setup_linha_indireta(ctx: commands.Context):
         title="📩 Linha Indireta — CSI",
         description=(
             "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Líder da CSI**, de forma completamente **anônima**.\n\n"
+            "diretamente ao **Líder ou Vice-líder da CSI**, de forma completamente **anônima**.\n\n"
             "🔒 **Sua identidade nunca será revelada.**\n"
-            "📌 Escolha o tipo da mensagem, escreva e envie — é simples assim.\n\n"
+            "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
             "**Tipos disponíveis:**\n"
             "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
             "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
+            "**Quem pode receber:**\n"
+            "👑 Akeido (Líder) • 🥈 wlu (Vice-líder) • 🥈 Amber (Vice-líder)\n\n"
             "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
         ),
         color=0x5865F2,
@@ -3654,12 +3700,14 @@ async def _setup_linha_indireta():
         title="📩 Linha Indireta — CSI",
         description=(
             "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Líder da CSI**, de forma completamente **anônima**.\n\n"
+            "diretamente ao **Líder ou Vice-líder da CSI**, de forma completamente **anônima**.\n\n"
             "🔒 **Sua identidade nunca será revelada.**\n"
-            "📌 Escolha o tipo da mensagem, escreva e envie — é simples assim.\n\n"
+            "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
             "**Tipos disponíveis:**\n"
             "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
             "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
+            "**Quem pode receber:**\n"
+            "👑 Akeido (Líder) • 🥈 wlu (Vice-líder) • 🥈 Amber (Vice-líder)\n\n"
             "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
         ),
         color=0x5865F2,
