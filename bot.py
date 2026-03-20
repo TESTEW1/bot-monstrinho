@@ -3736,9 +3736,671 @@ async def _setup_linha_indireta():
         await canal.send(embed=embed, view=LinhaIndiretaInicioView())
 
 
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║         MONSTRINHO VOICEMASTER — Calls Fofas v1.0               ║
+# ║   Sistema completo de calls temporárias • Estilo Monstrinho     ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚙️  CONFIGURAÇÕES DO VOICEMASTER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VM_LOBBY_NAME        = "🎙️ Criar Call"       # Nome do canal lobby
+VM_DEFAULT_NAME      = "🐾 Call da {user}"   # Nome padrão da call criada
+VM_DEFAULT_LIMIT     = 0                      # 0 = sem limite
+VM_EMPTY_DELAY       = 3                      # Segundos antes de deletar call vazia
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 💬  MENSAGENS FOFAS DO VOICEMASTER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_VM_MSGS = {
+    "sem_call":            "Você não tem uma call ativa ainda, {user}!! Entra no 🎙️ Criar Call pra começar!! 🐾",
+    "renomeada":           "Prontinho!! Renomeei sua call pra **{nome}**!! Ficou lindo!! ✨🐾",
+    "limite_set":          "Ok!! Agora sua call aceita até **{limite}** pessoas!! 🎯🐲",
+    "limite_removido":     "Removido!! Qualquer quantidade de pessoas pode entrar agora!! 🥳🐾",
+    "trancada":            "Call trancada!! Só quem você convidar pode entrar agora!! 🔒🐲",
+    "destrancada":         "Call aberta!! Qualquer pessoa pode entrar agora!! 🔓🐾",
+    "invisivel":           "Agora sua call tá oculta!! Ninguém vai saber que ela existe!! 👻🐲",
+    "visivel":             "Sua call voltou a aparecer pra todo mundo!! 👁️🐾",
+    "usuario_kickado":     "Tchau tchau, **{user}**!! O dono te pediu pra sair da call!! 👋🐲",
+    "usuario_banido":      "**{user}** foi banido(a) da call!! Não pode mais entrar!! 🚫🐾",
+    "usuario_permitido":   "**{user}** agora pode entrar na sua call!! Bem-vindo(a)!! 💕🐲",
+    "dono_transferido":    "Transferido!! Agora **{user}** é o(a) novo(a) dono(a) da call!! 👑🐲",
+    "dono_reivindicado":   "Você assumiu o controle da call!! Agora é sua!! 👑🥳🐾",
+    "bitrate_set":         "Qualidade de áudio atualizada pra **{bitrate}kbps**!! Ficou top!! 🎧🐲",
+    "permanente":          "Sua call agora é **permanente**!! Não vai sumir mesmo vazia!! 💎🐾",
+    "temporaria":          "Sua call voltou a ser **temporária**!! Vai sumir quando ficar vazia!! 🕐🐲",
+    "nao_na_call":         "Você precisa tá dentro da call pra usar isso, {user}!! 🥺🐾",
+    "user_nao_na_call":    "Esse(a) usuário(a) não tá na sua call!! 🤔🐲",
+    "ja_dono":             "Você já é o(a) dono(a) dessa call!! 😄🐾",
+    "dono_ainda_na_call":  "O dono ainda tá na call!! Só dá pra reivindicar quando ele sair!! 🥺🐲",
+    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use !vm reset pra recriar!! 🤔🐲",
+}
+
+def _vm_msg(key: str, **kwargs) -> str:
+    m = _VM_MSGS.get(key, "Algo deu errado... 🥺")
+    return m.format(**kwargs)
+
+# Cores do VoiceMaster
+_VM_COR_FOFA  = 0xFF69B4
+_VM_COR_OK    = 0x00ff99
+_VM_COR_ERRO  = 0xFF6B6B
+
+def _vm_embed_ok(titulo: str, desc: str) -> discord.Embed:
+    e = discord.Embed(title=titulo, description=desc, color=_VM_COR_OK, timestamp=datetime.utcnow())
+    e.set_footer(text="🐾 Monstrinho VoiceMaster")
+    return e
+
+def _vm_embed_erro(desc: str) -> discord.Embed:
+    e = discord.Embed(title="❌ Eita!!", description=desc, color=_VM_COR_ERRO, timestamp=datetime.utcnow())
+    e.set_footer(text="🐾 Monstrinho VoiceMaster")
+    return e
+
+def _vm_embed_info(titulo: str, desc: str) -> discord.Embed:
+    e = discord.Embed(title=titulo, description=desc, color=_VM_COR_FOFA, timestamp=datetime.utcnow())
+    e.set_footer(text="🐾 Monstrinho VoiceMaster")
+    return e
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📝  MODAIS DO VOICEMASTER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class VMModalRenomear(discord.ui.Modal, title="✏️ Renomear Sua Call"):
+    nome = discord.ui.TextInput(label="Novo nome da call", placeholder="Ex: 🎮 Call dos Gamers", min_length=1, max_length=100, required=True)
+
+    def __init__(self, cog, channel):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            await self.channel.edit(name=self.nome.value)
+            await interaction.response.send_message(embed=_vm_embed_ok("✏️ Renomeada!!", _vm_msg("renomeada", nome=self.nome.value)), ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(embed=_vm_embed_erro("Não consegui renomear... sem permissão!! 😢🐾"), ephemeral=True)
+
+
+class VMModalLimite(discord.ui.Modal, title="👥 Limite de Usuários"):
+    limite = discord.ui.TextInput(label="Limite (0 = sem limite, máx 99)", placeholder="Ex: 5", min_length=1, max_length=2, required=True)
+
+    def __init__(self, cog, channel):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            n = int(self.limite.value)
+            if n < 0 or n > 99:
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message(embed=_vm_embed_erro("Número inválido!! Coloca entre 0 e 99!! 🥺🐾"), ephemeral=True)
+            return
+        try:
+            await self.channel.edit(user_limit=n)
+            txt = _vm_msg("limite_removido") if n == 0 else _vm_msg("limite_set", limite=n)
+            titulo = "👥 Limite Removido!!" if n == 0 else "👥 Limite Definido!!"
+            await interaction.response.send_message(embed=_vm_embed_ok(titulo, txt), ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra alterar o limite!! 😢🐾"), ephemeral=True)
+
+
+class VMModalBitrate(discord.ui.Modal, title="🎙️ Qualidade de Áudio"):
+    bitrate = discord.ui.TextInput(label="Bitrate em kbps (8–384)", placeholder="Ex: 64, 96, 128", min_length=1, max_length=3, required=True)
+
+    def __init__(self, cog, channel):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            n = int(self.bitrate.value)
+            if n < 8 or n > 384:
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message(embed=_vm_embed_erro("Coloca um bitrate entre 8 e 384 kbps!! 🥺🐾"), ephemeral=True)
+            return
+        try:
+            await self.channel.edit(bitrate=n * 1000)
+            await interaction.response.send_message(embed=_vm_embed_ok("🎙️ Bitrate Atualizado!!", _vm_msg("bitrate_set", bitrate=n)), ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra mudar o bitrate!! 😢🐾"), ephemeral=True)
+
+
+def _vm_find_member(guild: discord.Guild, texto: str):
+    texto = texto.strip().lstrip("<@!>").rstrip(">")
+    try:
+        return guild.get_member(int(texto))
+    except ValueError:
+        return discord.utils.find(lambda m: m.name.lower() == texto.lower() or m.display_name.lower() == texto.lower(), guild.members)
+
+
+class VMModalKick(discord.ui.Modal, title="👋 Kickar da Call"):
+    usuario = discord.ui.TextInput(label="Nome ou ID do usuário", placeholder="Ex: fulano ou 123456789", required=True)
+
+    def __init__(self, cog, channel, guild):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+        self.guild = guild
+
+    async def on_submit(self, interaction: discord.Interaction):
+        target = _vm_find_member(self.guild, self.usuario.value)
+        if not target:
+            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🐾"), ephemeral=True)
+            return
+        if target not in self.channel.members:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("user_nao_na_call")), ephemeral=True)
+            return
+        if target.id == interaction.user.id:
+            await interaction.response.send_message(embed=_vm_embed_erro("Você não pode kickar você mesmo, bobão(a)!! 🥺🐾"), ephemeral=True)
+            return
+        try:
+            await target.move_to(None, reason="Kickado da call pelo dono — Monstrinho VoiceMaster")
+            await interaction.response.send_message(embed=_vm_embed_ok("👋 Kickado!!", _vm_msg("usuario_kickado", user=target.display_name)), ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(embed=_vm_embed_erro("Não consegui kickar... sem permissão!! 😢🐾"), ephemeral=True)
+
+
+class VMModalBanir(discord.ui.Modal):
+    usuario = discord.ui.TextInput(label="Nome ou ID do usuário", placeholder="Ex: fulano ou 123456789", required=True)
+
+    def __init__(self, cog, channel, guild, ban: bool = True):
+        super().__init__(title="🚫 Banir da Call" if ban else "✅ Permitir na Call")
+        self.cog = cog
+        self.channel = channel
+        self.guild = guild
+        self.ban = ban
+
+    async def on_submit(self, interaction: discord.Interaction):
+        target = _vm_find_member(self.guild, self.usuario.value)
+        if not target:
+            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🐾"), ephemeral=True)
+            return
+        info = self.cog.vm_channels.get(self.channel.id, {})
+        if self.ban:
+            info.setdefault("banned", [])
+            if target.id not in info["banned"]:
+                info["banned"].append(target.id)
+            await self.channel.set_permissions(target, connect=False, view_channel=False)
+            if target in self.channel.members:
+                try:
+                    await target.move_to(None)
+                except Exception:
+                    pass
+            await interaction.response.send_message(embed=_vm_embed_ok("🚫 Banido!!", _vm_msg("usuario_banido", user=target.display_name)), ephemeral=True)
+        else:
+            if "banned" in info and target.id in info["banned"]:
+                info["banned"].remove(target.id)
+            await self.channel.set_permissions(target, connect=True, view_channel=True)
+            await interaction.response.send_message(embed=_vm_embed_ok("✅ Permitido!!", _vm_msg("usuario_permitido", user=target.display_name)), ephemeral=True)
+
+
+class VMModalTransferir(discord.ui.Modal, title="👑 Transferir Dono"):
+    usuario = discord.ui.TextInput(label="Nome ou ID do novo dono", placeholder="Ex: fulano ou 123456789", required=True)
+
+    def __init__(self, cog, channel, guild):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+        self.guild = guild
+
+    async def on_submit(self, interaction: discord.Interaction):
+        target = _vm_find_member(self.guild, self.usuario.value)
+        if not target:
+            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🐾"), ephemeral=True)
+            return
+        if target.id == interaction.user.id:
+            await interaction.response.send_message(embed=_vm_embed_erro("Você já é o(a) dono(a)!! 😄🐾"), ephemeral=True)
+            return
+        if target not in self.channel.members:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("user_nao_na_call")), ephemeral=True)
+            return
+        info = self.cog.vm_channels.get(self.channel.id, {})
+        info["owner"] = target.id
+        await interaction.response.send_message(embed=_vm_embed_ok("👑 Dono Transferido!!", _vm_msg("dono_transferido", user=target.display_name)), ephemeral=True)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎛️  PAINEL DE CONTROLE (View com Botões)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class VMPainelView(discord.ui.View):
+    """Painel de controle fofo das calls — botões persistentes."""
+
+    def __init__(self, cog: "VoiceMasterCog"):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    def _get_owner_channel(self, interaction: discord.Interaction):
+        """Retorna o canal do qual o usuário é dono E está dentro, ou None."""
+        for ch_id, info in self.cog.vm_channels.items():
+            if info["owner"] == interaction.user.id:
+                ch = interaction.guild.get_channel(ch_id)
+                if ch and interaction.user in ch.members:
+                    return ch
+        return None
+
+    async def _check(self, interaction: discord.Interaction):
+        ch = self._get_owner_channel(interaction)
+        if not ch:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("sem_call", user=interaction.user.mention)), ephemeral=True)
+        return ch
+
+    # ── Linha 1 ──────────────────────────────────
+
+    @discord.ui.button(label="✏️ Renomear", style=discord.ButtonStyle.primary, custom_id="vm_renomear", row=0)
+    async def btn_renomear(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalRenomear(self.cog, ch))
+
+    @discord.ui.button(label="👥 Limite", style=discord.ButtonStyle.primary, custom_id="vm_limite", row=0)
+    async def btn_limite(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalLimite(self.cog, ch))
+
+    @discord.ui.button(label="🔒 Trancar", style=discord.ButtonStyle.secondary, custom_id="vm_trancar", row=0)
+    async def btn_trancar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if not ch:
+            return
+        info = self.cog.vm_channels[ch.id]
+        everyone = interaction.guild.default_role
+        if info.get("locked"):
+            await ch.set_permissions(everyone, connect=None)
+            info["locked"] = False
+            await interaction.response.send_message(embed=_vm_embed_ok("🔓 Destrancada!!", _vm_msg("destrancada")), ephemeral=True)
+        else:
+            await ch.set_permissions(everyone, connect=False)
+            info["locked"] = True
+            await interaction.response.send_message(embed=_vm_embed_ok("🔒 Trancada!!", _vm_msg("trancada")), ephemeral=True)
+
+    @discord.ui.button(label="👻 Ocultar", style=discord.ButtonStyle.secondary, custom_id="vm_ocultar", row=0)
+    async def btn_ocultar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if not ch:
+            return
+        info = self.cog.vm_channels[ch.id]
+        everyone = interaction.guild.default_role
+        if info.get("hidden"):
+            await ch.set_permissions(everyone, view_channel=None)
+            info["hidden"] = False
+            await interaction.response.send_message(embed=_vm_embed_ok("👁️ Visível!!", _vm_msg("visivel")), ephemeral=True)
+        else:
+            await ch.set_permissions(everyone, view_channel=False)
+            info["hidden"] = True
+            await interaction.response.send_message(embed=_vm_embed_ok("👻 Oculta!!", _vm_msg("invisivel")), ephemeral=True)
+
+    # ── Linha 2 ──────────────────────────────────
+
+    @discord.ui.button(label="👋 Kickar", style=discord.ButtonStyle.danger, custom_id="vm_kickar", row=1)
+    async def btn_kickar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalKick(self.cog, ch, interaction.guild))
+
+    @discord.ui.button(label="🚫 Banir", style=discord.ButtonStyle.danger, custom_id="vm_banir", row=1)
+    async def btn_banir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalBanir(self.cog, ch, interaction.guild, ban=True))
+
+    @discord.ui.button(label="✅ Permitir", style=discord.ButtonStyle.success, custom_id="vm_permitir", row=1)
+    async def btn_permitir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalBanir(self.cog, ch, interaction.guild, ban=False))
+
+    @discord.ui.button(label="👑 Transferir", style=discord.ButtonStyle.success, custom_id="vm_transferir", row=1)
+    async def btn_transferir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalTransferir(self.cog, ch, interaction.guild))
+
+    # ── Linha 3 ──────────────────────────────────
+
+    @discord.ui.button(label="📊 Info", style=discord.ButtonStyle.secondary, custom_id="vm_info", row=2)
+    async def btn_info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if not user.voice or not user.voice.channel:
+            await interaction.response.send_message(embed=_vm_embed_erro("Você não tá em nenhuma call!! 🥺🐾"), ephemeral=True)
+            return
+        ch = user.voice.channel
+        info = self.cog.vm_channels.get(ch.id)
+        if not info:
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Monstrinho!! 🤔🐾"), ephemeral=True)
+            return
+        dono = interaction.guild.get_member(info["owner"])
+        banidos = ", ".join(f"<@{uid}>" for uid in info.get("banned", [])) or "Ninguém"
+        embed = discord.Embed(title=f"📊 Info: {ch.name}", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
+        embed.add_field(name="👑 Dono(a)", value=dono.mention if dono else "Desconhecido", inline=True)
+        embed.add_field(name="👥 Membros", value=f"`{len(ch.members)}`" + (f"/{ch.user_limit}" if ch.user_limit else " (sem limite)"), inline=True)
+        embed.add_field(name="🎧 Bitrate", value=f"`{ch.bitrate // 1000}kbps`", inline=True)
+        embed.add_field(name="🔒 Trancada", value="Sim 🔒" if info.get("locked") else "Não 🔓", inline=True)
+        embed.add_field(name="👻 Oculta", value="Sim 👻" if info.get("hidden") else "Não 👁️", inline=True)
+        embed.add_field(name="💎 Permanente", value="Sim 💎" if info.get("permanent") else "Não 🕐", inline=True)
+        embed.add_field(name="🚫 Banidos", value=banidos, inline=False)
+        embed.set_footer(text="🐾 Monstrinho VoiceMaster")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="🎙️ Bitrate", style=discord.ButtonStyle.secondary, custom_id="vm_bitrate", row=2)
+    async def btn_bitrate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalBitrate(self.cog, ch))
+
+    @discord.ui.button(label="💎 Permanente", style=discord.ButtonStyle.secondary, custom_id="vm_permanente", row=2)
+    async def btn_permanente(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if not ch:
+            return
+        info = self.cog.vm_channels[ch.id]
+        if info.get("permanent"):
+            info["permanent"] = False
+            await interaction.response.send_message(embed=_vm_embed_ok("🕐 Temporária!!", _vm_msg("temporaria")), ephemeral=True)
+        else:
+            info["permanent"] = True
+            await interaction.response.send_message(embed=_vm_embed_ok("💎 Permanente!!", _vm_msg("permanente")), ephemeral=True)
+
+    @discord.ui.button(label="🏳️ Reivindicar", style=discord.ButtonStyle.success, custom_id="vm_reivindicar", row=2)
+    async def btn_reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if not user.voice or not user.voice.channel:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("nao_na_call", user=user.mention)), ephemeral=True)
+            return
+        ch = user.voice.channel
+        info = self.cog.vm_channels.get(ch.id)
+        if not info:
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Monstrinho!! 🤔🐾"), ephemeral=True)
+            return
+        if info["owner"] == user.id:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("ja_dono")), ephemeral=True)
+            return
+        dono_atual = interaction.guild.get_member(info["owner"])
+        if dono_atual and dono_atual in ch.members:
+            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("dono_ainda_na_call")), ephemeral=True)
+            return
+        info["owner"] = user.id
+        await interaction.response.send_message(embed=_vm_embed_ok("👑 Reivindicado!!", _vm_msg("dono_reivindicado")), ephemeral=True)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🐲  COG — VOICEMASTER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
+    """MONSTRINHO VOICEMASTER — Calls Fofas v1.0 🐾"""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.vm_channels: dict[int, dict] = {}   # {ch_id: {owner, locked, hidden, permanent, banned, lobby_id}}
+        self.vm_lobbies:  dict[int, int]  = {}   # {guild_id: lobby_ch_id}
+        self._painel_view = VMPainelView(self)
+        bot.add_view(self._painel_view)
+
+    # ── Utilitário ────────────────────────────────
+
+    async def _log(self, guild: discord.Guild) -> discord.TextChannel | None:
+        return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+
+    def _nome(self, member: discord.Member) -> str:
+        return VM_DEFAULT_NAME.format(user=member.display_name)
+
+    # ── 🟢 Boot ───────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await asyncio.sleep(6)  # ligeiramente após o Security
+        for guild in self.bot.guilds:
+            # Reconectar lobbies que já existam no servidor
+            if guild.id not in self.vm_lobbies:
+                existing = discord.utils.get(guild.voice_channels, name=VM_LOBBY_NAME)
+                if existing:
+                    self.vm_lobbies[guild.id] = existing.id
+
+            log_ch = await self._log(guild)
+            if not log_ch:
+                continue
+            lobby_id = self.vm_lobbies.get(guild.id)
+            lobby    = guild.get_channel(lobby_id) if lobby_id else None
+            embed = discord.Embed(
+                title="🎙️ Monstrinho VoiceMaster Online!!",
+                description=(
+                    "```\n"
+                    "╔══════════════════════════════════════╗\n"
+                    "║   MONSTRINHO VOICEMASTER  🐾          ║\n"
+                    "║     — Calls Fofas v1.0 —            ║\n"
+                    "║       ✅  ONLINE  ✅                 ║\n"
+                    "╚══════════════════════════════════════╝\n"
+                    "```"
+                ),
+                color=_VM_COR_OK,
+                timestamp=datetime.utcnow()
+            )
+            embed.add_field(
+                name="🎙️ Status",
+                value=(
+                    f"**Lobby:** {lobby.mention if lobby else '❌ Use `!vm setup`'}\n"
+                    f"**Servidor:** `{guild.name}` | **Membros:** `{guild.member_count}`"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="📋 Comandos",
+                value="`!vm setup` • `!vm painel` • `!vm reset` • `!vm info`",
+                inline=False
+            )
+            embed.set_footer(text="🐾 Monstrinho VoiceMaster • Calls com muito amor!!")
+            await log_ch.send(embed=embed)
+
+    # ── 🎙️ Entrou/saiu de voz ─────────────────────
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        guild = member.guild
+
+        # Entrou em um canal
+        if after.channel:
+            lobby_id = self.vm_lobbies.get(guild.id)
+            if lobby_id and after.channel.id == lobby_id:
+                await self._criar_call(member, after.channel)
+
+        # Saiu de um canal gerenciado
+        if before.channel and before.channel.id in self.vm_channels:
+            ch   = before.channel
+            info = self.vm_channels[ch.id]
+            await asyncio.sleep(VM_EMPTY_DELAY)
+            ch = guild.get_channel(ch.id)
+            if ch and len(ch.members) == 0 and not info.get("permanent"):
+                await self._deletar_call(ch)
+
+    async def _criar_call(self, member: discord.Member, lobby: discord.VoiceChannel):
+        guild = member.guild
+        try:
+            novo = await guild.create_voice_channel(
+                name=self._nome(member),
+                category=lobby.category,
+                user_limit=VM_DEFAULT_LIMIT,
+                reason=f"Monstrinho VoiceMaster: call de {member}"
+            )
+            await novo.set_permissions(member, connect=True, manage_channels=True, move_members=True)
+            self.vm_channels[novo.id] = {
+                "owner": member.id, "locked": False, "hidden": False,
+                "permanent": False, "banned": [], "lobby_id": lobby.id,
+                "created_at": datetime.utcnow()
+            }
+            try:
+                await member.move_to(novo, reason="Monstrinho VoiceMaster")
+            except discord.HTTPException:
+                pass
+            # Log
+            log_ch = await self._log(guild)
+            if log_ch:
+                embed = discord.Embed(
+                    title="🎙️ Nova Call Criada!!",
+                    description=f"{member.mention} criou a call **{novo.name}**!! 🥳🐾",
+                    color=_VM_COR_OK, timestamp=datetime.utcnow()
+                )
+                embed.set_thumbnail(url=member.display_avatar.url)
+                embed.set_footer(text="🐾 Monstrinho VoiceMaster")
+                await log_ch.send(embed=embed)
+        except discord.Forbidden:
+            pass
+
+    async def _deletar_call(self, channel: discord.VoiceChannel):
+        self.vm_channels.pop(channel.id, None)
+        try:
+            await channel.delete(reason="Monstrinho VoiceMaster: call vazia")
+        except (discord.NotFound, discord.Forbidden):
+            pass
+
+    # ── 🎛️ Painel ─────────────────────────────────
+
+    async def _enviar_painel(self, channel: discord.TextChannel):
+        embed = discord.Embed(
+            title="🎙️ Painel de Controle — Calls do Monstrinho",
+            description=(
+                "Gerencie sua call com os botinhos aqui embaixo!! 🐾\n"
+                "Você precisa ser **dono(a)** de uma call e estar **dentro dela** pra usar!! 💕\n\n"
+                "```\n"
+                "╔══════════════════════════════════════╗\n"
+                "║   MONSTRINHO VOICEMASTER  🐾          ║\n"
+                "║     — Calls Fofas v1.0 —            ║\n"
+                "╚══════════════════════════════════════╝\n"
+                "```"
+            ),
+            color=_VM_COR_FOFA, timestamp=datetime.utcnow()
+        )
+        campos = [
+            ("✏️ Renomear", "Muda o nome da call"),
+            ("👥 Limite",   "Define qtd máxima de pessoas"),
+            ("🔒 Trancar",  "Bloqueia novas entradas"),
+            ("👻 Ocultar",  "Esconde a call de todos"),
+            ("👋 Kickar",   "Remove alguém da call"),
+            ("🚫 Banir",    "Bloqueia alguém de entrar"),
+            ("✅ Permitir", "Desbanir / liberar alguém"),
+            ("👑 Transferir","Passa o dono pra outra pessoa"),
+            ("📊 Info",     "Mostra detalhes da call"),
+            ("🎙️ Bitrate",  "Muda a qualidade do áudio"),
+            ("💎 Permanente","Call não some quando vazia"),
+            ("🏳️ Reivindicar","Assume a call se o dono saiu"),
+        ]
+        for titulo, desc in campos:
+            embed.add_field(name=titulo, value=desc, inline=True)
+        embed.set_footer(text="🐾 Monstrinho VoiceMaster • Feito com muito amor!!")
+        view = VMPainelView(self)
+        return await channel.send(embed=embed, view=view)
+
+    # ── 🔧 Comandos !vm ───────────────────────────
+
+    @commands.group(name="vm", aliases=["voicemaster", "call"], invoke_without_command=True)
+    async def vm_group(self, ctx: commands.Context):
+        await ctx.send(embed=_vm_embed_info(
+            "🎙️ Monstrinho VoiceMaster",
+            "`!vm setup` • `!vm painel` • `!vm reset` • `!vm info`\n\nOu use os botões no painel de controle!! 🐾"
+        ), delete_after=15)
+
+    @vm_group.command(name="setup")
+    @commands.has_permissions(administrator=True)
+    async def vm_setup(self, ctx: commands.Context):
+        guild = ctx.guild
+        if guild.id in self.vm_lobbies:
+            existing = guild.get_channel(self.vm_lobbies[guild.id])
+            if existing:
+                await ctx.send(embed=_vm_embed_erro(_vm_msg("setup_existe")), delete_after=10)
+                return
+        try:
+            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, reason="Monstrinho VoiceMaster Setup")
+            self.vm_lobbies[guild.id] = lobby.id
+            await self._enviar_painel(ctx.channel)
+            embed = discord.Embed(
+                title="🎉 VoiceMaster Configurado!!",
+                description=f"Tudo prontinho!! 🥳🐾\n\n**Canal Lobby:** {lobby.mention}\n\nPeça pras pessoas entrarem em {lobby.mention} pra criar uma call!!",
+                color=_VM_COR_OK, timestamp=datetime.utcnow()
+            )
+            embed.set_footer(text="🐾 Monstrinho VoiceMaster")
+            await ctx.send(embed=embed, delete_after=20)
+            log_ch = await self._log(guild)
+            if log_ch:
+                await log_ch.send(embed=discord.Embed(
+                    title="✅ VoiceMaster Ativado!!",
+                    description=f"Configurado por **{ctx.author.mention}**!! Lobby: {lobby.mention} 🎙️🐾",
+                    color=_VM_COR_OK, timestamp=datetime.utcnow()
+                ))
+        except discord.Forbidden:
+            await ctx.send(embed=_vm_embed_erro("Sem permissão pra criar canais!! 😢🐾"), delete_after=10)
+
+    @vm_group.command(name="painel")
+    @commands.has_permissions(manage_channels=True)
+    async def vm_painel(self, ctx: commands.Context):
+        await self._enviar_painel(ctx.channel)
+        try:
+            await ctx.message.delete()
+        except Exception:
+            pass
+
+    @vm_group.command(name="reset")
+    @commands.has_permissions(administrator=True)
+    async def vm_reset(self, ctx: commands.Context):
+        guild   = ctx.guild
+        deletadas = 0
+        lobby_id  = self.vm_lobbies.pop(guild.id, None)
+        for ch_id in list(self.vm_channels.keys()):
+            info = self.vm_channels.get(ch_id, {})
+            if info.get("lobby_id") == lobby_id:
+                ch = guild.get_channel(ch_id)
+                if ch:
+                    try:
+                        await ch.delete(reason="Monstrinho VoiceMaster Reset")
+                        deletadas += 1
+                    except Exception:
+                        pass
+                self.vm_channels.pop(ch_id, None)
+        if lobby_id:
+            old = guild.get_channel(lobby_id)
+            if old:
+                try:
+                    await old.delete(reason="Monstrinho VoiceMaster Reset")
+                except Exception:
+                    pass
+        await ctx.send(embed=_vm_embed_ok("🧹 Resetado!!", f"Limpei **{deletadas}** call(s)!! Use `!vm setup` pra configurar de novo!! 🐾"), delete_after=15)
+
+    @vm_group.command(name="info")
+    @commands.has_permissions(manage_channels=True)
+    async def vm_info(self, ctx: commands.Context):
+        guild    = ctx.guild
+        lobby_id = self.vm_lobbies.get(guild.id)
+        lobby    = guild.get_channel(lobby_id) if lobby_id else None
+        ativas   = sum(1 for ch_id in self.vm_channels if guild.get_channel(ch_id))
+        perms    = sum(1 for ch_id, i in self.vm_channels.items() if i.get("permanent") and guild.get_channel(ch_id))
+        tran     = sum(1 for ch_id, i in self.vm_channels.items() if i.get("locked")    and guild.get_channel(ch_id))
+        embed = discord.Embed(title="📊 Monstrinho VoiceMaster — Info", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
+        embed.add_field(name="🎙️ Canal Lobby",  value=lobby.mention if lobby else "❌ Não configurado", inline=False)
+        embed.add_field(name="📞 Calls Ativas", value=f"`{ativas}`",  inline=True)
+        embed.add_field(name="💎 Permanentes",  value=f"`{perms}`",   inline=True)
+        embed.add_field(name="🔒 Trancadas",    value=f"`{tran}`",    inline=True)
+        embed.set_footer(text="🐾 Monstrinho VoiceMaster")
+        await ctx.send(embed=embed)
+
+    @vm_group.error
+    async def vm_error(self, ctx: commands.Context, error: Exception):
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send(embed=_vm_embed_erro("Você não tem permissão pra usar esse comando!! 🥺🐾"), delete_after=8)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FIM DO VOICEMASTER
+# ══════════════════════════════════════════════════════════════════
+
 async def _main():
     async with bot:
         await bot.add_cog(MonstrinhoCog(bot))
+        await bot.add_cog(VoiceMasterCog(bot))
         bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
