@@ -3749,6 +3749,7 @@ VM_LOBBY_NAME        = "🎙️ Criar Call"       # Nome do canal lobby
 VM_DEFAULT_NAME      = "🐾 Call da {user}"   # Nome padrão da call criada
 VM_DEFAULT_LIMIT     = 0                      # 0 = sem limite
 VM_EMPTY_DELAY       = 3                      # Segundos antes de deletar call vazia
+VM_CATEGORY_ID       = 1304658655026741260    # ID da categoria onde o lobby e as calls serão criados
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 💬  MENSAGENS FOFAS DO VOICEMASTER
@@ -3868,6 +3869,45 @@ class VMModalBitrate(discord.ui.Modal, title="🎙️ Qualidade de Áudio"):
             await interaction.response.send_message(embed=_vm_embed_ok("🎙️ Bitrate Atualizado!!", _vm_msg("bitrate_set", bitrate=n)), ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra mudar o bitrate!! 😢🐾"), ephemeral=True)
+
+
+class VMModalStatus(discord.ui.Modal, title="📝 Status da Call"):
+    status = discord.ui.TextInput(
+        label="Status (deixe vazio pra remover)",
+        placeholder="Ex: 🎮 Jogando Valorant • 🎵 Ouvindo música",
+        min_length=0,
+        max_length=500,
+        required=False,
+        style=discord.TextStyle.short
+    )
+
+    def __init__(self, cog, channel):
+        super().__init__()
+        self.cog = cog
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        novo_status = self.status.value.strip()
+        try:
+            await self.channel.edit(status=novo_status if novo_status else None)
+            if novo_status:
+                await interaction.response.send_message(
+                    embed=_vm_embed_ok("📝 Status Atualizado!!", f"Status da call agora é: **{novo_status}** ✨🐾"),
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    embed=_vm_embed_ok("📝 Status Removido!!", "O status da call foi removido!! 🧹🐾"),
+                    ephemeral=True
+                )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                embed=_vm_embed_erro("Sem permissão pra mudar o status!! 😢🐾"), ephemeral=True
+            )
+        except Exception:
+            await interaction.response.send_message(
+                embed=_vm_embed_erro("Não consegui mudar o status... tenta de novo!! 🥺🐾"), ephemeral=True
+            )
 
 
 def _vm_find_member(guild: discord.Guild, texto: str):
@@ -4064,6 +4104,12 @@ class VMPainelView(discord.ui.View):
 
     # ── Linha 3 ──────────────────────────────────
 
+    @discord.ui.button(label="📝 Status", style=discord.ButtonStyle.secondary, custom_id="vm_status", row=2)
+    async def btn_status(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if ch:
+            await interaction.response.send_modal(VMModalStatus(self.cog, ch))
+
     @discord.ui.button(label="📊 Info", style=discord.ButtonStyle.secondary, custom_id="vm_info", row=2)
     async def btn_info(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
@@ -4093,19 +4139,6 @@ class VMPainelView(discord.ui.View):
         ch = await self._check(interaction)
         if ch:
             await interaction.response.send_modal(VMModalBitrate(self.cog, ch))
-
-    @discord.ui.button(label="💎 Permanente", style=discord.ButtonStyle.secondary, custom_id="vm_permanente", row=2)
-    async def btn_permanente(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if not ch:
-            return
-        info = self.cog.vm_channels[ch.id]
-        if info.get("permanent"):
-            info["permanent"] = False
-            await interaction.response.send_message(embed=_vm_embed_ok("🕐 Temporária!!", _vm_msg("temporaria")), ephemeral=True)
-        else:
-            info["permanent"] = True
-            await interaction.response.send_message(embed=_vm_embed_ok("💎 Permanente!!", _vm_msg("permanente")), ephemeral=True)
 
     @discord.ui.button(label="🏳️ Reivindicar", style=discord.ButtonStyle.success, custom_id="vm_reivindicar", row=2)
     async def btn_reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -4222,9 +4255,10 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
     async def _criar_call(self, member: discord.Member, lobby: discord.VoiceChannel):
         guild = member.guild
         try:
+            categoria = guild.get_channel(VM_CATEGORY_ID) or lobby.category
             novo = await guild.create_voice_channel(
                 name=self._nome(member),
-                category=lobby.category,
+                category=categoria,
                 user_limit=VM_DEFAULT_LIMIT,
                 reason=f"Monstrinho VoiceMaster: call de {member}"
             )
@@ -4287,7 +4321,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
             ("👑 Transferir","Passa o dono pra outra pessoa"),
             ("📊 Info",     "Mostra detalhes da call"),
             ("🎙️ Bitrate",  "Muda a qualidade do áudio"),
-            ("💎 Permanente","Call não some quando vazia"),
+            ("📝 Status",   "Define o status/tema da call"),
             ("🏳️ Reivindicar","Assume a call se o dono saiu"),
         ]
         for titulo, desc in campos:
@@ -4315,7 +4349,8 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 await ctx.send(embed=_vm_embed_erro(_vm_msg("setup_existe")), delete_after=10)
                 return
         try:
-            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, reason="Monstrinho VoiceMaster Setup")
+            categoria = guild.get_channel(VM_CATEGORY_ID)
+            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, category=categoria, reason="Monstrinho VoiceMaster Setup")
             self.vm_lobbies[guild.id] = lobby.id
             await self._enviar_painel(ctx.channel)
             embed = discord.Embed(
