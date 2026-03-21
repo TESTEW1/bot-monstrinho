@@ -4190,11 +4190,24 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
     async def on_ready(self):
         await asyncio.sleep(6)  # ligeiramente após o Security
         for guild in self.bot.guilds:
-            # Reconectar lobbies que já existam no servidor
-            if guild.id not in self.vm_lobbies:
-                existing = discord.utils.get(guild.voice_channels, name=VM_LOBBY_NAME)
-                if existing:
-                    self.vm_lobbies[guild.id] = existing.id
+            # ── Verificar se já existe o lobby pelo nome na categoria ──
+            categoria = guild.get_channel(VM_CATEGORY_ID)
+            existing  = discord.utils.get(guild.voice_channels, name=VM_LOBBY_NAME)
+
+            if existing:
+                # Já existe — só registrar
+                self.vm_lobbies[guild.id] = existing.id
+            else:
+                # Não existe — criar automaticamente na categoria certa
+                try:
+                    lobby = await guild.create_voice_channel(
+                        name=VM_LOBBY_NAME,
+                        category=categoria,
+                        reason="Monstrinho VoiceMaster — criação automática no boot"
+                    )
+                    self.vm_lobbies[guild.id] = lobby.id
+                except discord.Forbidden:
+                    pass
 
             log_ch = await self._log(guild)
             if not log_ch:
@@ -4218,14 +4231,15 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
             embed.add_field(
                 name="🎙️ Status",
                 value=(
-                    f"**Lobby:** {lobby.mention if lobby else '❌ Use `!vm setup`'}\n"
+                    f"**Lobby:** {lobby.mention if lobby else '❌ Sem permissão pra criar!!'}\n"
+                    f"**Categoria:** {categoria.name if categoria else '❌ ID não encontrado'}\n"
                     f"**Servidor:** `{guild.name}` | **Membros:** `{guild.member_count}`"
                 ),
                 inline=False
             )
             embed.add_field(
                 name="📋 Comandos",
-                value="`!vm setup` • `!vm painel` • `!vm reset` • `!vm info`",
+                value="`!vm painel` • `!vm reset` • `!vm info`",
                 inline=False
             )
             embed.set_footer(text="🐾 Monstrinho VoiceMaster • Calls com muito amor!!")
