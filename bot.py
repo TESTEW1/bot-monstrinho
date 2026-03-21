@@ -4286,6 +4286,45 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 await member.move_to(novo, reason="Monstrinho VoiceMaster")
             except discord.HTTPException:
                 pass
+
+            # ── Enviar painel de controle via DM pra pessoa ──
+            try:
+                embed_dm = discord.Embed(
+                    title="🎙️ Painel de Controle — Calls do Monstrinho",
+                    description=(
+                        f"Sua call **{novo.name}** foi criada!! 🥳🐾\n"
+                        "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
+                        "```\n"
+                        "╔══════════════════════════════════════╗\n"
+                        "║   MONSTRINHO VOICEMASTER  🐾          ║\n"
+                        "║     — Calls Fofas v1.0 —            ║\n"
+                        "╚══════════════════════════════════════╝\n"
+                        "```"
+                    ),
+                    color=_VM_COR_FOFA,
+                    timestamp=datetime.utcnow()
+                )
+                campos_dm = [
+                    ("✏️ Renomear",    "Muda o nome da call"),
+                    ("👥 Limite",      "Define qtd máxima de pessoas"),
+                    ("🔒 Trancar",     "Bloqueia novas entradas"),
+                    ("👻 Ocultar",     "Esconde a call de todos"),
+                    ("👋 Kickar",      "Remove alguém da call"),
+                    ("🚫 Banir",       "Bloqueia alguém de entrar"),
+                    ("✅ Permitir",    "Desbanir / liberar alguém"),
+                    ("👑 Transferir",  "Passa o dono pra outra pessoa"),
+                    ("📝 Status",      "Define o status/tema da call"),
+                    ("📊 Info",        "Mostra detalhes da call"),
+                    ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
+                    ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
+                ]
+                for titulo, desc in campos_dm:
+                    embed_dm.add_field(name=titulo, value=desc, inline=True)
+                embed_dm.set_footer(text="🐾 Monstrinho VoiceMaster • Feito com muito amor!!")
+                await member.send(embed=embed_dm, view=VMPainelView(self))
+            except discord.Forbidden:
+                pass  # DMs fechadas — ignora silenciosamente
+
             # Log
             log_ch = await self._log(guild)
             if log_ch:
