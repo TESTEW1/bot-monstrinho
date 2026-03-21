@@ -4287,12 +4287,12 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
             except discord.HTTPException:
                 pass
 
-            # ── Enviar painel de controle via DM pra pessoa ──
+            # ── Enviar painel de controle no chat de texto da call ──
             try:
-                embed_dm = discord.Embed(
+                embed_call = discord.Embed(
                     title="🎙️ Painel de Controle — Calls do Monstrinho",
                     description=(
-                        f"Sua call **{novo.name}** foi criada!! 🥳🐾\n"
+                        f"Oi, {member.mention}!! Sua call foi criada!! 🥳🐾\n"
                         "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
                         "```\n"
                         "╔══════════════════════════════════════╗\n"
@@ -4304,7 +4304,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                     color=_VM_COR_FOFA,
                     timestamp=datetime.utcnow()
                 )
-                campos_dm = [
+                campos_call = [
                     ("✏️ Renomear",    "Muda o nome da call"),
                     ("👥 Limite",      "Define qtd máxima de pessoas"),
                     ("🔒 Trancar",     "Bloqueia novas entradas"),
@@ -4318,12 +4318,13 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                     ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
                     ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
                 ]
-                for titulo, desc in campos_dm:
-                    embed_dm.add_field(name=titulo, value=desc, inline=True)
-                embed_dm.set_footer(text="🐾 Monstrinho VoiceMaster • Feito com muito amor!!")
-                await member.send(embed=embed_dm, view=VMPainelView(self))
-            except discord.Forbidden:
-                pass  # DMs fechadas — ignora silenciosamente
+                for titulo, desc in campos_call:
+                    embed_call.add_field(name=titulo, value=desc, inline=True)
+                embed_call.set_footer(text="🐾 Monstrinho VoiceMaster • Feito com muito amor!!")
+                # Envia no chat de texto interno do canal de voz
+                await novo.send(embed=embed_call, view=VMPainelView(self))
+            except (discord.Forbidden, discord.HTTPException):
+                pass  # sem permissão ou canal sem chat — ignora
 
             # Log
             log_ch = await self._log(guild)
