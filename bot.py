@@ -2340,6 +2340,7 @@ async def on_ready():
     bot.add_view(FecharTicketView())
     bot.add_view(DesfazerAvisoView(0))
     bot.add_view(LojaView())
+    bot.add_view(BanirMembroView())   # intercepta "Revogar banimento" + "Pronto" existentes
     
     if not loop_jogo_monstrinho.is_running():
         loop_jogo_monstrinho.start()
@@ -3772,10 +3773,13 @@ class BanirMembroView(discord.ui.View):
         custom_id="revogar_banimento"
     )
     async def revogar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # ── Responde IMEDIATAMENTE para o Discord não cancelar a interação ──
+        await interaction.response.defer(ephemeral=True)
+
         # Verifica permissão
         eh_votante = any(r.id in CARGOS_VOTANTES_IDS for r in interaction.user.roles)
         if not interaction.user.guild_permissions.ban_members and not eh_votante:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ Você não tem permissão para solicitar a revogação do banimento!",
                 ephemeral=True
             )
@@ -3787,22 +3791,23 @@ class BanirMembroView(discord.ui.View):
         # Lê membro_id e nome do embed da própria mensagem
         membro_id, membro_nome = _extrair_membro_do_embed(interaction.message)
         if membro_id is None:
-            await interaction.response.send_message(
-                "❌ Não consegui identificar o membro nessa mensagem. Tenta usar `!votobanner <id>`.",
+            await interaction.followup.send(
+                "❌ Não consegui identificar o membro nessa mensagem. "
+                "Use `!votobanner <id>` manualmente.",
                 ephemeral=True
             )
             return
 
         # Verifica se já tem votação ativa
         if guild_id in _active_votes and membro_id in _active_votes[guild_id]:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "⏳ Já existe uma votação ativa para esse membro!", ephemeral=True
             )
             return
 
         direcao_ch = guild.get_channel(DIRECAO_CHANNEL_ID)
         if direcao_ch is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ Canal da direção não encontrado!", ephemeral=True
             )
             return
@@ -3813,7 +3818,7 @@ class BanirMembroView(discord.ui.View):
                 f"**{interaction.user.mention}** solicitou a revogação do banimento de "
                 f"**{membro_nome}** (`{membro_id}`).\n\n"
                 f"Os membros da **direção** devem votar abaixo.\n"
-                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
+                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até todos votarem."
             ),
             color=0xffaa00,
             timestamp=datetime.utcnow()
@@ -3831,7 +3836,11 @@ class BanirMembroView(discord.ui.View):
         # Desabilita o botão Revogar na mensagem original
         button.label    = "⏳ Votação Iniciada"
         button.disabled = True
-        await interaction.response.edit_message(view=self)
+        try:
+            await interaction.message.edit(view=self)
+        except Exception:
+            pass
+
         await interaction.followup.send(
             "✅ Votação de revogação iniciada no canal da direção!! 🦇",
             ephemeral=True
@@ -3843,12 +3852,16 @@ class BanirMembroView(discord.ui.View):
         custom_id="banir_pronto"
     )
     async def pronto(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.ban_members:
-            await interaction.response.send_message("❌ Sem permissão!", ephemeral=True)
+            await interaction.followup.send("❌ Sem permissão!", ephemeral=True)
             return
         for item in self.children:
             item.disabled = True  # type: ignore
-        await interaction.response.edit_message(view=self)
+        try:
+            await interaction.message.edit(view=self)
+        except Exception:
+            pass
         await interaction.followup.send("✅ Ação concluída! 🦇", ephemeral=True)
 
 
