@@ -3737,6 +3737,209 @@ async def _setup_linha_indireta():
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║         MONSTRINHO BANIR — Painel de Banimento v1.0             ║
+# ║   Bane o membro + painel com Revogar → votação da direção       ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+def _extrair_membro_do_embed(message: discord.Message) -> tuple[int | None, str]:
+    """Lê o membro_id e membro_nome do embed da mensagem de banimento."""
+    if not message or not message.embeds:
+        return None, "Desconhecido"
+    embed = message.embeds[0]
+    for field in embed.fields:
+        # Campo "👤 Membro" tem formato "**nome** (`id`)"
+        if "Membro" in (field.name or ""):
+            import re
+            match = re.search(r"`(\d{15,20})`", field.value or "")
+            if match:
+                uid = int(match.group(1))
+                nome_match = re.match(r"\*\*(.+?)\*\*", field.value or "")
+                nome = nome_match.group(1) if nome_match else "Desconhecido"
+                return uid, nome
+    return None, "Desconhecido"
+
+
+class BanirMembroView(discord.ui.View):
+    """Painel pós-banimento — view persistente (stateless).
+    Lê membro_id/nome do embed da mensagem ao clicar, sem precisar de estado."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Revogar banimento",
+        style=discord.ButtonStyle.danger,
+        custom_id="revogar_banimento"
+    )
+    async def revogar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Verifica permissão
+        eh_votante = any(r.id in CARGOS_VOTANTES_IDS for r in interaction.user.roles)
+        if not interaction.user.guild_permissions.ban_members and not eh_votante:
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para solicitar a revogação do banimento!",
+                ephemeral=True
+            )
+            return
+
+        guild    = interaction.guild
+        guild_id = guild.id
+
+        # Lê membro_id e nome do embed da própria mensagem
+        membro_id, membro_nome = _extrair_membro_do_embed(interaction.message)
+        if membro_id is None:
+            await interaction.response.send_message(
+                "❌ Não consegui identificar o membro nessa mensagem. Tenta usar `!votobanner <id>`.",
+                ephemeral=True
+            )
+            return
+
+        # Verifica se já tem votação ativa
+        if guild_id in _active_votes and membro_id in _active_votes[guild_id]:
+            await interaction.response.send_message(
+                "⏳ Já existe uma votação ativa para esse membro!", ephemeral=True
+            )
+            return
+
+        direcao_ch = guild.get_channel(DIRECAO_CHANNEL_ID)
+        if direcao_ch is None:
+            await interaction.response.send_message(
+                "❌ Canal da direção não encontrado!", ephemeral=True
+            )
+            return
+
+        embed_dir = discord.Embed(
+            title="🗳️ Votação — Solicitação de Revogação de Ban",
+            description=(
+                f"**{interaction.user.mention}** solicitou a revogação do banimento de "
+                f"**{membro_nome}** (`{membro_id}`).\n\n"
+                f"Os membros da **direção** devem votar abaixo.\n"
+                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
+            ),
+            color=0xffaa00,
+            timestamp=datetime.utcnow()
+        )
+        embed_dir.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+
+        vote_view = VotacaoBanView(guild, membro_id, membro_nome)
+        msg       = await direcao_ch.send(embed=embed_dir, view=vote_view)
+        vote_view.message = msg
+
+        if guild_id not in _active_votes:
+            _active_votes[guild_id] = {}
+        _active_votes[guild_id][membro_id] = vote_view
+
+        # Desabilita o botão Revogar na mensagem original
+        button.label    = "⏳ Votação Iniciada"
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            "✅ Votação de revogação iniciada no canal da direção!! 🦇",
+            ephemeral=True
+        )
+
+    @discord.ui.button(
+        label="Pronto",
+        style=discord.ButtonStyle.primary,
+        custom_id="banir_pronto"
+    )
+    async def pronto(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.ban_members:
+            await interaction.response.send_message("❌ Sem permissão!", ephemeral=True)
+            return
+        for item in self.children:
+            item.disabled = True  # type: ignore
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send("✅ Ação concluída! 🦇", ephemeral=True)
+
+
+@bot.command(name="banir", aliases=["ban"])
+@commands.has_permissions(ban_members=True)
+async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: str = "Sem motivo informado."):
+    """Bana um membro e posta painel com opção de revogar. Uso: !banir @membro [motivo]"""
+    if membro.id == ctx.author.id:
+        await ctx.send("❌ Você não pode banir você mesmo! 🥺🦇", delete_after=8)
+        return
+    if membro.top_role >= ctx.author.top_role and ctx.author.id != DONO_ID:
+        await ctx.send("❌ Você não pode banir alguém com cargo igual ou superior ao seu! 🦇", delete_after=8)
+        return
+
+    guild = ctx.guild
+    nome  = membro.display_name
+    uid   = membro.id
+
+    # Tenta avisar o banido por DM
+    try:
+        embed_dm = discord.Embed(
+            title="🚨 Você foi banido(a)!",
+            description=(
+                f"Você foi banido(a) do servidor **{guild.name}**.\n\n"
+                f"**📋 Motivo:** {motivo}\n\n"
+                f"Se quiser apelar, envie uma mensagem diretamente para este bot explicando o motivo."
+            ),
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        )
+        embed_dm.set_footer(text="🦇 Monstrinho • Sistema de Moderação")
+        await membro.send(embed=embed_dm)
+    except Exception:
+        pass
+
+    # Aplica o ban
+    try:
+        await guild.ban(membro, reason=f"{motivo} — Banido por {ctx.author}", delete_message_days=0)
+    except discord.Forbidden:
+        await ctx.send("❌ Não tenho permissão para banir esse membro! 😢🦇", delete_after=8)
+        return
+
+    # Embed de confirmação no canal atual
+    embed_conf = discord.Embed(
+        title="🔨 Membro Banido",
+        color=0xff4444,
+        timestamp=datetime.utcnow()
+    )
+    embed_conf.add_field(name="👤 Membro",    value=f"**{nome}** (`{uid}`)",  inline=True)
+    embed_conf.add_field(name="🛡️ Banido por", value=ctx.author.mention,       inline=True)
+    embed_conf.add_field(name="📋 Motivo",     value=motivo,                    inline=False)
+    embed_conf.set_footer(
+        text="🦇 Monstrinho Moderação • Use os botões abaixo para gerenciar",
+        icon_url=AVATAR_MONSTRINHO
+    )
+
+    view = BanirMembroView()
+    await ctx.send(embed=embed_conf, view=view)
+
+    # Log no canal de advertências
+    canal_adv = discord.utils.get(guild.text_channels, name=CANAL_ADVERTENCIAS)
+    if canal_adv:
+        embed_log = discord.Embed(
+            title="🔨 BAN APLICADO",
+            color=0xCC0000,
+            timestamp=datetime.utcnow()
+        )
+        embed_log.set_author(name=f"{nome}  •  ID: {uid}", icon_url=AVATAR_MONSTRINHO)
+        embed_log.add_field(name="👤 Membro",     value=f"**{nome}** (`{uid}`)", inline=True)
+        embed_log.add_field(name="🛡️ Staff",      value=ctx.author.mention,       inline=True)
+        embed_log.add_field(name="📋 Motivo",      value=motivo,                   inline=False)
+        embed_log.set_footer(text="🐲 Monstrinho Moderação")
+        await canal_adv.send(embed=embed_log)
+
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+
+@cmd_banir.error
+async def cmd_banir_error(ctx: commands.Context, error: Exception):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Apenas staff com permissão de ban pode usar esse comando! 🦇", delete_after=8)
+    elif isinstance(error, commands.MemberNotFound):
+        await ctx.send("❌ Membro não encontrado! Menciona ele ou usa o ID. 🦇", delete_after=8)
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❌ Uso correto: `!banir @membro [motivo]` 🦇", delete_after=8)
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║        MONSTRINHO BAN APPEAL — Sistema de Votação v1.0          ║
 # ║   Votação da direção pra desbanir membros • Estilo Monstrinho   ║
 # ╚══════════════════════════════════════════════════════════════════╝
@@ -4927,6 +5130,7 @@ async def _main():
         await bot.add_cog(MonstrinhoCog(bot))
         await bot.add_cog(VoiceMasterCog(bot))
         await bot.add_cog(BanAppealCog(bot))
+        bot.add_view(BanirMembroView())          # intercepta botões existentes no Discord
         bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
