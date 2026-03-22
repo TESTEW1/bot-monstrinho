@@ -3737,6 +3737,353 @@ async def _setup_linha_indireta():
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║        MONSTRINHO BAN APPEAL — Sistema de Votação v1.0          ║
+# ║   Votação da direção pra desbanir membros • Estilo Monstrinho   ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
+BOT_EXCLUIDO_ID     = 1304927837341618338   # ID do bot que NÃO vota
+VOTE_TIMEOUT_HOURS  = 48                    # Horas até a votação expirar automaticamente
+
+# Cargos que têm direito de voto no ban appeal
+CARGOS_VOTANTES_IDS = {
+    1304658653839888438,
+    1304658653839888436,
+    1304658653839888439,
+    1305223009619152957,
+    1387928444418916543,
+}
+
+# active_votes: {guild_id: {user_id: VotacaoBanView}}
+_active_votes: dict[int, dict[int, "VotacaoBanView"]] = {}
+
+
+def _get_direcao_members(guild: discord.Guild) -> list[discord.Member]:
+    """Retorna todos os membros com cargo de votação (sem bots e sem o bot excluído)."""
+    result = []
+    for member in guild.members:
+        if member.bot or member.id == BOT_EXCLUIDO_ID:
+            continue
+        if any(role.id in CARGOS_VOTANTES_IDS for role in member.roles):
+            result.append(member)
+    return result
+
+
+class VotacaoBanView(discord.ui.View):
+    """View de votação para desbanir um membro."""
+
+    def __init__(self, guild: discord.Guild, user_id: int, user_name: str):
+        super().__init__(timeout=VOTE_TIMEOUT_HOURS * 3600)
+        self.guild     = guild
+        self.user_id   = user_id
+        self.user_name = user_name
+        self.votos_sim: set[int] = set()
+        self.votos_nao: set[int] = set()
+        self.encerrado = False
+        self.message: discord.Message | None = None
+
+    def _elegivel(self, member: discord.Member) -> bool:
+        if member.bot or member.id == BOT_EXCLUIDO_ID:
+            return False
+        return any(role.id in CARGOS_VOTANTES_IDS for role in member.roles)
+
+    def _build_embed(self, encerrado: bool = False) -> discord.Embed:
+        membros_dir = _get_direcao_members(self.guild)
+        total    = len(membros_dir)
+        sim      = len(self.votos_sim)
+        nao      = len(self.votos_nao)
+        pendente = max(0, total - sim - nao)
+
+        if encerrado:
+            aprovado = sim > nao
+            cor   = 0x00cc66 if aprovado else 0xff4444
+            title = "🗳️ Votação Encerrada"
+            resultado = (
+                "✅ **APROVADO — Usuário será desbanido!**"
+                if aprovado else
+                "❌ **NEGADO — Ban mantido.**"
+            )
+        else:
+            cor   = 0xffaa00
+            title = "🗳️ Votação — Pedido de Retorno"
+            resultado = "⏳ Em andamento..."
+
+        embed = discord.Embed(title=title, color=cor, timestamp=datetime.utcnow())
+        embed.add_field(
+            name="👤 Usuário",
+            value=f"**{self.user_name}** (`{self.user_id}`)",
+            inline=False
+        )
+        embed.add_field(name="✅ Aprovar", value=f"`{sim}`",      inline=True)
+        embed.add_field(name="❌ Manter",  value=f"`{nao}`",      inline=True)
+        embed.add_field(name="⏳ Faltam",  value=f"`{pendente}`", inline=True)
+        if encerrado:
+            embed.add_field(name="📊 Resultado", value=resultado, inline=False)
+        else:
+            embed.add_field(
+                name="ℹ️ Info",
+                value=(
+                    f"Todos os membros da direção devem votar.\n"
+                    f"A votação encerra em **{VOTE_TIMEOUT_HOURS}h** ou quando a maioria for atingida."
+                ),
+                inline=False
+            )
+        embed.set_footer(text="🦇 Monstrinho • Sistema de Votação de Ban Appeal")
+        return embed
+
+    @discord.ui.button(label="✅ Aprovar Retorno", style=discord.ButtonStyle.success, emoji="✅")
+    async def vote_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self._elegivel(interaction.user):
+            await interaction.response.send_message(
+                "❌ Apenas membros da direção podem votar!", ephemeral=True
+            )
+            return
+        if self.encerrado:
+            await interaction.response.send_message("❌ Essa votação já foi encerrada!", ephemeral=True)
+            return
+        if interaction.user.id in self.votos_sim:
+            await interaction.response.send_message("Você já votou a favor! 😊", ephemeral=True)
+            return
+        self.votos_nao.discard(interaction.user.id)
+        self.votos_sim.add(interaction.user.id)
+        await interaction.response.send_message(
+            "✅ Voto registrado: **Aprovar Retorno** 🦇", ephemeral=True
+        )
+        if self.message:
+            await self.message.edit(embed=self._build_embed())
+        await self._verificar_resultado()
+
+    @discord.ui.button(label="❌ Manter Ban", style=discord.ButtonStyle.danger, emoji="❌")
+    async def vote_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self._elegivel(interaction.user):
+            await interaction.response.send_message(
+                "❌ Apenas membros da direção podem votar!", ephemeral=True
+            )
+            return
+        if self.encerrado:
+            await interaction.response.send_message("❌ Essa votação já foi encerrada!", ephemeral=True)
+            return
+        if interaction.user.id in self.votos_nao:
+            await interaction.response.send_message("Você já votou contra! 😔", ephemeral=True)
+            return
+        self.votos_sim.discard(interaction.user.id)
+        self.votos_nao.add(interaction.user.id)
+        await interaction.response.send_message(
+            "❌ Voto registrado: **Manter Ban** 🦇", ephemeral=True
+        )
+        if self.message:
+            await self.message.edit(embed=self._build_embed())
+        await self._verificar_resultado()
+
+    async def _verificar_resultado(self):
+        membros = _get_direcao_members(self.guild)
+        total   = len(membros)
+        if total == 0:
+            return
+        sim = len(self.votos_sim)
+        nao = len(self.votos_nao)
+        # Encerra se todos votaram OU maioria absoluta atingida
+        if sim + nao >= total or sim > total // 2 or nao > total // 2:
+            await self._encerrar()
+
+    async def _encerrar(self):
+        if self.encerrado:
+            return
+        self.encerrado = True
+        self.stop()
+
+        # Limpa do registro ativo
+        guild_votes = _active_votes.get(self.guild.id, {})
+        guild_votes.pop(self.user_id, None)
+
+        sim      = len(self.votos_sim)
+        nao      = len(self.votos_nao)
+        aprovado = sim > nao
+
+        # Desabilita botões
+        for item in self.children:
+            item.disabled = True  # type: ignore
+
+        if self.message:
+            await self.message.edit(embed=self._build_embed(encerrado=True), view=self)
+
+            if aprovado:
+                try:
+                    await self.guild.unban(
+                        discord.Object(id=self.user_id),
+                        reason="✅ Votação da direção aprovada — Monstrinho Ban Appeal"
+                    )
+                    await self.message.channel.send(
+                        f"🎉 **{self.user_name}** (`{self.user_id}`) foi desbanido(a) com sucesso!! "
+                        f"Bem-vindo(a) de volta!! 🦇"
+                    )
+                except discord.Forbidden:
+                    await self.message.channel.send(
+                        "❌ Votação aprovada, mas não consegui desbanir — sem permissão de banimento!! 😢🦇"
+                    )
+                except discord.NotFound:
+                    await self.message.channel.send(
+                        f"⚠️ **{self.user_name}** não estava mais banido(a)."
+                    )
+            else:
+                await self.message.channel.send(
+                    f"🔒 Votação encerrada: ban de **{self.user_name}** (`{self.user_id}`) mantido pela direção. 🦇"
+                )
+
+    async def on_timeout(self):
+        await self._encerrar()
+
+
+class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
+    """Sistema de votação para ban appeal via DM."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Escuta DMs de usuários banidos que querem apelar."""
+        # Ignora mensagens em servidores, bots e o próprio bot
+        if message.guild or message.author.bot:
+            return
+
+        content = message.content.strip()
+
+        # Procura em qual servidor o usuário está banido
+        guild_encontrado: discord.Guild | None = None
+        for guild in self.bot.guilds:
+            try:
+                await guild.fetch_ban(message.author)
+                guild_encontrado = guild
+                break
+            except discord.NotFound:
+                continue
+            except discord.Forbidden:
+                continue
+            except Exception:
+                continue
+
+        if guild_encontrado is None:
+            await message.channel.send(
+                "❌ Você não está banido de nenhum servidor gerenciado pelo Monstrinho! 🦇\n"
+                "Se acha que é um erro, entre em contato com a administração."
+            )
+            return
+
+        guild_id = guild_encontrado.id
+        user_id  = message.author.id
+
+        # Verifica se já tem votação ativa pra esse usuário
+        if guild_id in _active_votes and user_id in _active_votes[guild_id]:
+            await message.channel.send(
+                "⏳ **Já existe uma votação ativa para você!**\n"
+                "Aguarde o resultado antes de enviar outro pedido. 🦇"
+            )
+            return
+
+        direcao_ch = guild_encontrado.get_channel(DIRECAO_CHANNEL_ID)
+        if direcao_ch is None:
+            await message.channel.send(
+                "❌ Não consegui encontrar o canal da direção. Tente mais tarde. 🦇"
+            )
+            return
+
+        motivo = content if content else "Sem motivo informado."
+
+        embed_direcao = discord.Embed(
+            title="🗳️ Novo Pedido de Retorno — Ban Appeal",
+            description=(
+                f"O usuário **{message.author.name}** (ID: `{user_id}`) está banido e quer voltar!!\n\n"
+                f"**📝 Mensagem enviada:**\n> {motivo[:500]}\n\n"
+                f"Os membros da **direção** devem votar abaixo.\n"
+                f"⏱️ A votação dura **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
+            ),
+            color=0xffaa00,
+            timestamp=datetime.utcnow()
+        )
+        embed_direcao.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+        try:
+            embed_direcao.set_thumbnail(url=message.author.display_avatar.url)
+        except Exception:
+            pass
+
+        view = VotacaoBanView(guild_encontrado, user_id, message.author.name)
+        msg  = await direcao_ch.send(embed=embed_direcao, view=view)
+        view.message = msg
+
+        if guild_id not in _active_votes:
+            _active_votes[guild_id] = {}
+        _active_votes[guild_id][user_id] = view
+
+        await message.channel.send(
+            "✅ **Seu pedido foi enviado para votação da direção!!** 🦇\n"
+            f"Aguarde o resultado — a votação dura até **{VOTE_TIMEOUT_HOURS} horas**.\n\n"
+            "💡 *Dica: inclua uma mensagem explicando por que quer voltar.*"
+        )
+
+    @commands.command(name="votobanner", aliases=["apelar", "votoban"])
+    @commands.has_permissions(administrator=True)
+    async def votobanner(self, ctx: commands.Context, user_id: int, *, motivo: str = "Pedido de retorno."):
+        """Inicia manualmente uma votação de ban appeal. Uso: !votobanner <user_id> [motivo]"""
+        guild    = ctx.guild
+        guild_id = guild.id
+
+        if guild_id in _active_votes and user_id in _active_votes[guild_id]:
+            await ctx.send("⏳ Já existe uma votação ativa para esse usuário!", delete_after=10)
+            return
+
+        direcao_ch = guild.get_channel(DIRECAO_CHANNEL_ID)
+        if direcao_ch is None:
+            await ctx.send("❌ Canal da direção não encontrado!", delete_after=10)
+            return
+
+        # Verifica se o usuário está de fato banido
+        user_name = str(user_id)
+        try:
+            ban_entry = await guild.fetch_ban(discord.Object(id=user_id))
+            user_name = ban_entry.user.name
+        except discord.NotFound:
+            await ctx.send("❌ Esse usuário não está banido no servidor!", delete_after=10)
+            return
+        except discord.Forbidden:
+            await ctx.send("❌ Sem permissão para verificar bans!", delete_after=10)
+            return
+
+        embed_dir = discord.Embed(
+            title="🗳️ Votação — Ban Appeal (Manual)",
+            description=(
+                f"Votação iniciada por {ctx.author.mention} para desbanir **{user_name}** (`{user_id}`).\n\n"
+                f"**📝 Motivo:**\n> {motivo[:500]}\n\n"
+                f"Os membros da **direção** devem votar abaixo.\n"
+                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
+            ),
+            color=0xffaa00,
+            timestamp=datetime.utcnow()
+        )
+        embed_dir.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+
+        view = VotacaoBanView(guild, user_id, user_name)
+        msg  = await direcao_ch.send(embed=embed_dir, view=view)
+        view.message = msg
+
+        if guild_id not in _active_votes:
+            _active_votes[guild_id] = {}
+        _active_votes[guild_id][user_id] = view
+
+        await ctx.send(
+            f"✅ Votação iniciada para **{user_name}** no canal da direção!! 🦇",
+            delete_after=10
+        )
+
+    @votobanner.error
+    async def votobanner_error(self, ctx: commands.Context, error: Exception):
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("❌ Apenas admins podem iniciar votações manualmente!", delete_after=8)
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send("❌ Uso: `!votobanner <user_id> [motivo]`", delete_after=8)
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║         MONSTRINHO VOICEMASTER — Calls Fofas v1.0               ║
 # ║   Sistema completo de calls temporárias • Estilo Monstrinho     ║
 # ╚══════════════════════════════════════════════════════════════════╝
@@ -4125,26 +4472,34 @@ class VMPainelView(discord.ui.View):
         info = self.cog.vm_channels[ch.id]
         everyone = interaction.guild.default_role
         if info.get("hidden"):
-            # Mostrar de novo — remove restrição do everyone e garante que membros dentro continuam vendo
+            # ── Revelar: remove só o view_channel do everyone, preserva connect (lock) ──
             ow = ch.overwrites_for(everyone)
             ow.view_channel = None
-            await ch.set_permissions(everyone, overwrite=ow)
-            # Garante que quem tá dentro ainda vê
+            if ow.is_empty():
+                await ch.set_permissions(everyone, overwrite=None)
+            else:
+                await ch.set_permissions(everyone, overwrite=ow)
+            # Remove o override de view_channel dos membros que estavam dentro
             for membro in ch.members:
                 ow_m = ch.overwrites_for(membro)
                 ow_m.view_channel = None
-                await ch.set_permissions(membro, overwrite=ow_m)
+                ow_m.connect      = None
+                if ow_m.is_empty():
+                    await ch.set_permissions(membro, overwrite=None)
+                else:
+                    await ch.set_permissions(membro, overwrite=ow_m)
             info["hidden"] = False
             await interaction.response.send_message(embed=_vm_embed_ok("👁️ Visível!!", _vm_msg("visivel")), ephemeral=True)
         else:
-            # Ocultar — esconde do everyone mas mantém quem já está dentro
+            # ── Ocultar: esconde do everyone, garante view+connect pra quem já está dentro ──
             ow = ch.overwrites_for(everyone)
             ow.view_channel = False
             await ch.set_permissions(everyone, overwrite=ow)
-            # Mantém membros que já estão na call podendo ver
+            # Explicitamente view_channel=True e connect=True pra cada membro dentro
             for membro in ch.members:
                 ow_m = ch.overwrites_for(membro)
                 ow_m.view_channel = True
+                ow_m.connect      = True
                 await ch.set_permissions(membro, overwrite=ow_m)
             info["hidden"] = True
             await interaction.response.send_message(embed=_vm_embed_ok("👻 Oculta!!", _vm_msg("invisivel")), ephemeral=True)
@@ -4571,6 +4926,7 @@ async def _main():
     async with bot:
         await bot.add_cog(MonstrinhoCog(bot))
         await bot.add_cog(VoiceMasterCog(bot))
+        await bot.add_cog(BanAppealCog(bot))
         bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
