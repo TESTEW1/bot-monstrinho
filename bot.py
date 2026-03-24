@@ -1010,13 +1010,13 @@ PALAVRAS_PROIBIDAS_EXATAS = [
     # palavrões isolados (serão verificados com \b word boundary)
     "porra", "caralho", "merda", "bosta", "viado", "bicha", "piranha",
     "arrombado", "imbecil", "otário", "otario", "retardado", "nojento",
-    "fdp", "vsf", "krl", "pqp", "prr", "tmnc", "buceta", "carai", "karalho",
+    "fdp", "vsf", "krl", "prr", "tmnc", "buceta", "carai", "karalho",
 ]
 
 FRASES_PROIBIDAS = [
     # Frases completas — não há falso positivo, contexto já é claro
     "vai se fuder", "vai se foder", "vai tomar no cu", "tomar no cu",
-    "filho da puta", "filha da puta", "se mata", "se fode", "vai tomar",
+    "filho da puta", "filha da puta", "se mata", "se fode",
     "sua puta", "sua vadia", "puta que pariu", "puta merda",
     "vai a merda", "vai pra merda", "me fode", "me foder",
     "idiota mesmo", "idiota do", "burro demais", "burra demais",
