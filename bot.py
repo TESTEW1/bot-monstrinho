@@ -5138,6 +5138,111 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
 # FIM DO VOICEMASTER
 # ══════════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════════
+# 🧹 COMANDO — LIMPAR CANAL COMPLETO
+# ══════════════════════════════════════════════════════════════════
+
+@bot.command(name="ativarlimpezacanal", aliases=["limparchat", "clearchat", "purgecanal"])
+@commands.has_permissions(manage_messages=True)
+async def ativar_limpeza_canal(ctx: commands.Context):
+    """Apaga TODAS as mensagens do canal onde o comando foi executado."""
+
+    canal = ctx.channel
+
+    # ── Confirmação antes de limpar ──────────────────────────────
+    embed_confirm = discord.Embed(
+        title="🧹 Limpar Canal — Confirmação",
+        description=(
+            f"Você tem certeza que quer apagar **TODAS** as mensagens de {canal.mention}??\n\n"
+            "⚠️ **Essa ação não pode ser desfeita!!** 🦇\n\n"
+            "Responda com `sim` nos próximos **15 segundos** pra confirmar!!"
+        ),
+        color=0xffaa00,
+        timestamp=datetime.utcnow()
+    )
+    embed_confirm.set_footer(text="🦇 Monstrinho Security • Limpeza de Canal")
+    await ctx.send(embed=embed_confirm)
+
+    def check(m):
+        return m.author == ctx.author and m.channel == canal and m.content.lower() in ("sim", "não", "nao", "cancelar")
+
+    try:
+        resposta = await bot.wait_for("message", timeout=15.0, check=check)
+    except asyncio.TimeoutError:
+        await ctx.send(embed=discord.Embed(
+            title="⏰ Tempo esgotado!!",
+            description="Limpeza cancelada por falta de confirmação!! 🦇",
+            color=0x888888,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+        return
+
+    if resposta.content.lower() not in ("sim",):
+        await ctx.send(embed=discord.Embed(
+            title="❌ Limpeza Cancelada!!",
+            description="Operação cancelada!! Nenhuma mensagem foi apagada!! 🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+        return
+
+    # ── Executar a limpeza ────────────────────────────────────────
+    await ctx.send(embed=discord.Embed(
+        title="⏳ Limpando canal...",
+        description="Aguarda um segundo, tô apagando tudo!! 🧹🦇",
+        color=0xffaa00,
+        timestamp=datetime.utcnow()
+    ))
+
+    try:
+        deletadas = await canal.purge(limit=None, bulk=True)
+        total = len(deletadas)
+
+        embed_ok = discord.Embed(
+            title="✅ Canal Limpo!!",
+            description=(
+                f"🧹 **{total} mensagens** foram apagadas de {canal.mention}!!\n\n"
+                f"👤 Executado por: {ctx.author.mention}\n"
+                f"📅 Horário (UTC): `{datetime.utcnow().strftime('%d/%m/%Y às %H:%M:%S')}`"
+            ),
+            color=0x00ff99,
+            timestamp=datetime.utcnow()
+        )
+        embed_ok.set_footer(text="🦇 Monstrinho Security • Limpeza Concluída")
+        await canal.send(embed=embed_ok, delete_after=10)
+
+    except discord.Forbidden:
+        await ctx.send(embed=discord.Embed(
+            title="❌ Sem Permissão!!",
+            description="Não tenho permissão pra apagar mensagens nesse canal!! 😢🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=10)
+
+    except discord.HTTPException as e:
+        await ctx.send(embed=discord.Embed(
+            title="⚠️ Erro ao Limpar!!",
+            description=f"Ocorreu um erro durante a limpeza!!\n`{e}`\n\nTenta de novo!! 🦇",
+            color=0xff8800,
+            timestamp=datetime.utcnow()
+        ), delete_after=10)
+
+
+@ativar_limpeza_canal.error
+async def limpeza_canal_error(ctx: commands.Context, error: Exception):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(embed=discord.Embed(
+            title="🚫 Sem Permissão!!",
+            description="Você precisa da permissão **Gerenciar Mensagens** pra usar esse comando!! 🥺🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FIM DA LIMPEZA DE CANAL
+# ══════════════════════════════════════════════════════════════════
+
 async def _main():
     async with bot:
         await bot.add_cog(MonstrinhoCog(bot))
