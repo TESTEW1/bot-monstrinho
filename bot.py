@@ -694,6 +694,10 @@ CARGOS_IMUNES_NOMES = [
     "Moderador. 🦇"
 ]
 
+CARGOS_IMUNES_IDS = [
+    1467349939922141297,  # LDT — Líder de Torcida
+]
+
 
 # ============== DADOS =================
 
@@ -2127,9 +2131,11 @@ class AprovarMembroView(discord.ui.View):
         canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
         cargo_anjo = discord.utils.get(guild.roles, name=CARGO_ANJO)
         cargo_recrutador = discord.utils.get(guild.roles, name=CARGO_RECRUTADOR)
+        cargo_ldt = discord.utils.get(guild.roles, id=1467349939922141297)
         mencoes = []
         if cargo_anjo: mencoes.append(cargo_anjo.mention)
         if cargo_recrutador: mencoes.append(cargo_recrutador.mention)
+        if cargo_ldt: mencoes.append(cargo_ldt.mention)
         if canal_geral:
             canal_rpg = discord.utils.get(guild.text_channels, name="🌎・mundo-csi")
             canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -2179,7 +2185,7 @@ class FecharTicketView(discord.ui.View):
     async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.channel.name.startswith("👼┃anjos"):
             cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
-            eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
+            eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in interaction.user.roles)
             if (cargo_anjo not in interaction.user.roles) and not eh_staff:
                 return await interaction.response.send_message("❌ Apenas os Anjos ou a Staff podem fechar este canal de acolhimento! 🪽", ephemeral=True)
         
@@ -2195,7 +2201,7 @@ class ReivindicarAnjoView(discord.ui.View):
     @discord.ui.button(label="🤝 Assumir Chamado", style=discord.ButtonStyle.success, custom_id="reivindicar_anjo")
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
         cargo_anjo = discord.utils.get(interaction.user.guild.roles, name=CARGO_ANJO)
-        eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in interaction.user.roles)
+        eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in interaction.user.roles)
         
         if cargo_anjo not in interaction.user.roles and not eh_staff:
             return await interaction.response.send_message("❌ Apenas um Anjo ou Staff pode fazer isso! 🪽", ephemeral=True)
@@ -2645,7 +2651,7 @@ async def bauadm(ctx):
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
-    eh_staff = any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles) or ctx.author.id == DONO_ID
+    eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in ctx.author.roles) or ctx.author.id == DONO_ID
     if not eh_staff:
         return await ctx.send("❌ Você não tem permissão para usar esse comando! 🐲😤")
     try:
@@ -2667,7 +2673,7 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
 @bot.command(name="resetticket")
 async def reset_ticket(ctx):
     """Reseta o canal de tickets com o menu atualizado."""
-    eh_staff = ctx.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in ctx.author.roles)
+    eh_staff = ctx.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in ctx.author.roles)
     if not eh_staff:
         return await ctx.send("❌ Apenas a staff pode usar esse comando!", delete_after=5)
     
@@ -3330,7 +3336,7 @@ async def on_message(message):
 
     # --- PALAVRAS PROIBIDAS ---
     texto = message.content.lower()
-    eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES for role in message.author.roles)
+    eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in message.author.roles)
     if not eh_imune and message.channel.name != CANAL_DESABAFOS:
         palavra_encontrada = contem_palavra_proibida(texto)
         if palavra_encontrada:
