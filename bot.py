@@ -2706,31 +2706,48 @@ async def reset_ticket(ctx):
 async def auto_traduzir_mensagem(message: discord.Message):
     """Detecta idioma da mensagem; se não for PT, traduz e envia embed temporário."""
     if not TRADUCAO_DISPONIVEL:
+        print("[TRANSLATE] ❌ Bibliotecas não instaladas (deep-translator / langdetect)")
         return
     if message.author.bot:
         return
+
     tem_cargo = any(role.id == CARGO_TRANSLATE_ID for role in message.author.roles)
     if not tem_cargo:
         return
+
     texto = message.content.strip()
-    if not texto or len(texto) < 3:
+    if not texto or len(texto) < 2:
         return
+
+    print(f"[TRANSLATE] 🔍 Verificando mensagem de {message.author}: '{texto[:60]}'")
+
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         idioma = await loop.run_in_executor(None, detectar_idioma, texto)
-    except Exception:
+        print(f"[TRANSLATE] 🌍 Idioma detectado: {idioma}")
+    except Exception as e:
+        print(f"[TRANSLATE] ❌ Erro ao detectar idioma: {e}")
         return
-    if idioma == "pt":
+
+    if idioma in ("pt",):
+        print("[TRANSLATE] ✅ Já é português, sem tradução.")
         return
+
     try:
+        loop = asyncio.get_running_loop()
         traduzido = await loop.run_in_executor(
             None,
             lambda: GoogleTranslator(source="auto", target="pt").translate(texto)
         )
-    except Exception:
+        print(f"[TRANSLATE] ✅ Traduzido: '{traduzido[:60]}'")
+    except Exception as e:
+        print(f"[TRANSLATE] ❌ Erro ao traduzir: {e}")
         return
+
     if not traduzido or traduzido.strip().lower() == texto.lower():
+        print("[TRANSLATE] ⚠️ Tradução igual ao original, ignorando.")
         return
+
     embed = discord.Embed(
         description=f"🌐 **Tradução automática** de {message.author.mention}:\n\n{traduzido}",
         color=0x5865F2,
