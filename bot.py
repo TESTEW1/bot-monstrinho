@@ -5243,6 +5243,175 @@ async def limpeza_canal_error(ctx: commands.Context, error: Exception):
 # FIM DA LIMPEZA DE CANAL
 # ══════════════════════════════════════════════════════════════════
 
+
+# ══════════════════════════════════════════════════════════════════
+# 🔄 COMANDO — CLONAR / RECRIAR CANAL (NUKE + CLONE)
+# ══════════════════════════════════════════════════════════════════
+
+@bot.command(name="clonarcanal", aliases=["nukechannel", "recriarcanal", "resetcanal"])
+@commands.has_permissions(manage_channels=True)
+async def clonar_canal(ctx: commands.Context):
+    """
+    Apaga o canal atual e recria uma cópia EXATA no mesmo lugar.
+    Preserva: nome, categoria, posição, tópico, slowmode, NSFW e permissões.
+    """
+
+    canal = ctx.channel
+
+    # Garante que é um canal de texto
+    if not isinstance(canal, discord.TextChannel):
+        await ctx.send(embed=discord.Embed(
+            title="❌ Canal Incompatível!!",
+            description="Esse comando só funciona em canais de texto!! 🥺🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+        return
+
+    # ── Confirmação ──────────────────────────────────────────────
+    embed_confirm = discord.Embed(
+        title="🔄 Recriar Canal — Confirmação",
+        description=(
+            f"Você tem certeza que quer **apagar e recriar** {canal.mention}??\n\n"
+            "🧹 Todas as mensagens serão **permanentemente apagadas**!!\n"
+            "✅ O canal será recriado **exatamente igual** no mesmo lugar!!\n\n"
+            "⚠️ **Essa ação não pode ser desfeita!!** 🦇\n\n"
+            "Responda com `sim` nos próximos **20 segundos** pra confirmar!!"
+        ),
+        color=0xffaa00,
+        timestamp=datetime.utcnow()
+    )
+    embed_confirm.set_footer(text="🦇 Monstrinho Security • Recriar Canal")
+    msg_confirm = await ctx.send(embed=embed_confirm)
+
+    def check(m):
+        return (
+            m.author == ctx.author
+            and m.channel == canal
+            and m.content.lower() in ("sim", "não", "nao", "cancelar")
+        )
+
+    try:
+        resposta = await bot.wait_for("message", timeout=20.0, check=check)
+    except asyncio.TimeoutError:
+        await msg_confirm.delete()
+        await ctx.send(embed=discord.Embed(
+            title="⏰ Tempo esgotado!!",
+            description="Operação cancelada por falta de confirmação!! 🦇",
+            color=0x888888,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+        return
+
+    if resposta.content.lower() not in ("sim",):
+        await msg_confirm.delete()
+        await ctx.send(embed=discord.Embed(
+            title="❌ Operação Cancelada!!",
+            description="O canal **não** foi modificado!! 🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+        return
+
+    # ── Salvar todas as configurações do canal ───────────────────
+    nome         = canal.name
+    topico       = canal.topic
+    slowmode     = canal.slowmode_delay
+    nsfw         = canal.is_nsfw()
+    categoria    = canal.category
+    posicao      = canal.position
+    overwrites   = canal.overwrites   # todas as permissões de cargos/membros
+    guild        = canal.guild
+    executador   = ctx.author
+
+    # Avisa que vai começar
+    await ctx.send(embed=discord.Embed(
+        title="⏳ Recriando canal...",
+        description="Salvei as configurações, vou apagar e recriar agora!! 🔄🦇",
+        color=0xffaa00,
+        timestamp=datetime.utcnow()
+    ))
+
+    await asyncio.sleep(1.5)  # pequena pausa pra mensagem ser vista
+
+    try:
+        # ── 1. Apagar o canal original ───────────────────────────
+        await canal.delete(reason=f"Monstrinho ClonarCanal — executado por {executador}")
+
+        # ── 2. Recriar o canal com as configs salvas ─────────────
+        novo_canal = await guild.create_text_channel(
+            name         = nome,
+            topic        = topico,
+            slowmode_delay = slowmode,
+            nsfw         = nsfw,
+            category     = categoria,
+            overwrites   = overwrites,
+            reason       = f"Monstrinho ClonarCanal — recriado por {executador}"
+        )
+
+        # ── 3. Ajustar a posição exata ───────────────────────────
+        await novo_canal.edit(position=posicao)
+
+        # ── 4. Enviar confirmação no novo canal ──────────────────
+        embed_ok = discord.Embed(
+            title="✅ Canal Recriado com Sucesso!!",
+            description=(
+                f"🔄 O canal foi **apagado e recriado** com a configuração original!!\n\n"
+                f"📛 **Nome:** `{nome}`\n"
+                f"📁 **Categoria:** `{categoria.name if categoria else 'Sem categoria'}`\n"
+                f"📍 **Posição:** `{posicao}`\n"
+                f"🐢 **Slowmode:** `{slowmode}s`\n"
+                f"🔞 **NSFW:** `{'Sim' if nsfw else 'Não'}`\n"
+                f"🔒 **Permissões:** `{len(overwrites)} cargo(s)/membro(s) copiado(s)`\n\n"
+                f"👤 Executado por: {executador.mention}\n"
+                f"📅 Horário (UTC): `{datetime.utcnow().strftime('%d/%m/%Y às %H:%M:%S')}`"
+            ),
+            color=0x00ff99,
+            timestamp=datetime.utcnow()
+        )
+        embed_ok.set_footer(text="🦇 Monstrinho Security • Canal Recriado")
+        await novo_canal.send(embed=embed_ok)
+
+    except discord.Forbidden:
+        # Se falhar, tenta mandar no log
+        log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+        target = log_ch or guild.system_channel
+        if target:
+            await target.send(embed=discord.Embed(
+                title="❌ Erro ao Recriar Canal!!",
+                description=f"Não tenho permissão pra apagar/criar canais!! 😢🦇\nCanal original: `{nome}`",
+                color=0xff4444,
+                timestamp=datetime.utcnow()
+            ))
+
+    except discord.HTTPException as e:
+        log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+        target = log_ch or guild.system_channel
+        if target:
+            await target.send(embed=discord.Embed(
+                title="⚠️ Erro HTTP ao Recriar Canal!!",
+                description=f"Ocorreu um erro inesperado!!\n`{e}`\n\nTenta de novo!! 🦇",
+                color=0xff8800,
+                timestamp=datetime.utcnow()
+            ))
+
+
+@clonar_canal.error
+async def clonar_canal_error(ctx: commands.Context, error: Exception):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(embed=discord.Embed(
+            title="🚫 Sem Permissão!!",
+            description="Você precisa da permissão **Gerenciar Canais** pra usar esse comando!! 🥺🦇",
+            color=0xff4444,
+            timestamp=datetime.utcnow()
+        ), delete_after=8)
+
+
+# ══════════════════════════════════════════════════════════════════
+# FIM DO CLONAR CANAL
+# ══════════════════════════════════════════════════════════════════
+
+
 async def _main():
     async with bot:
         await bot.add_cog(MonstrinhoCog(bot))
