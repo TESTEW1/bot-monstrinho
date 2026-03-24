@@ -7,7 +7,12 @@ import re
 from datetime import timedelta
 from datetime import datetime
 from collections import defaultdict, deque
-
+try:
+    from deep_translator import GoogleTranslator
+    from langdetect import detect as detectar_idioma
+    TRADUCAO_DISPONIVEL = True
+except ImportError:
+    TRADUCAO_DISPONIVEL = False
 # ================= INTENTS =================
 # ============== BOT SETUP =================
 
@@ -698,6 +703,7 @@ CARGOS_IMUNES_IDS = [
     1467349939922141297,  # LDT — Líder de Torcida
 ]
 
+CARGO_TRANSLATE_ID = 1486130807117582416  # Translate — auto-tradução para PT
 
 # ============== DADOS =================
 
@@ -2202,7 +2208,7 @@ class ReivindicarAnjoView(discord.ui.View):
     async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
         cargo_anjo = discord.utils.get(interaction.user.guild.roles, name=CARGO_ANJO)
         eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in interaction.user.roles)
-        
+
         if cargo_anjo not in interaction.user.roles and not eh_staff:
             return await interaction.response.send_message("❌ Apenas um Anjo ou Staff pode fazer isso! 🪽", ephemeral=True)
 
@@ -2690,12 +2696,63 @@ async def reset_ticket(ctx):
     await canal_tkt.send(embed=embed_banner)
     await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🐲", delete_after=5)
 
+# ══════════════════════════════════════════════════════════════════
+# 🌐 AUTO-TRADUÇÃO — Cargo Translate
+# Quem tiver o cargo CARGO_TRANSLATE_ID e falar em outro idioma
+# recebe uma tradução automática que some após 60 segundos.
+# Dependências: pip install deep-translator langdetect
+# ══════════════════════════════════════════════════════════════════
+
+async def auto_traduzir_mensagem(message: discord.Message):
+    """Detecta idioma da mensagem; se não for PT, traduz e envia embed temporário."""
+    if not TRADUCAO_DISPONIVEL:
+        return
+    if message.author.bot:
+        return
+    tem_cargo = any(role.id == CARGO_TRANSLATE_ID for role in message.author.roles)
+    if not tem_cargo:
+        return
+    texto = message.content.strip()
+    if not texto or len(texto) < 3:
+        return
+    try:
+        loop = asyncio.get_event_loop()
+        idioma = await loop.run_in_executor(None, detectar_idioma, texto)
+    except Exception:
+        return
+    if idioma == "pt":
+        return
+    try:
+        traduzido = await loop.run_in_executor(
+            None,
+            lambda: GoogleTranslator(source="auto", target="pt").translate(texto)
+        )
+    except Exception:
+        return
+    if not traduzido or traduzido.strip().lower() == texto.lower():
+        return
+    embed = discord.Embed(
+        description=f"🌐 **Tradução automática** de {message.author.mention}:\n\n{traduzido}",
+        color=0x5865F2,
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text="🦇 Monstrinho Translate • Esta mensagem some em 1 minuto")
+    msg_traduzida = await message.channel.send(embed=embed)
+    await asyncio.sleep(60)
+    try:
+        await msg_traduzida.delete()
+    except Exception:
+        pass
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
 
     # --- VERIFICAÇÃO DE PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) ---
     await verificar_palavras_alerta(message)
+
+    # --- AUTO-TRADUÇÃO (cargo Translate) ---
+    asyncio.create_task(auto_traduzir_mensagem(message))
 
     # --- LÓGICA EVENTO SILENCIOSO (agora no canal games) ---
     global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
