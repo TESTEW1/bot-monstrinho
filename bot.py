@@ -1240,7 +1240,7 @@ async def enviar_prologo_games(guild):
     )
     embed2.add_field(
         name="🧠 Pergunta Relâmpago",
-        value="O Vampy faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
+        value="A Vampy faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
         inline=False
     )
     embed2.add_field(
@@ -1294,7 +1294,7 @@ async def enviar_prologo_games(guild):
     )
     embed3.add_field(
         name="🤫 Evento Silencioso",
-        value="O Vampy escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🦇",
+        value="A Vampy escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🦇",
         inline=False
     )
     embed3.add_field(
@@ -1343,7 +1343,7 @@ async def enviar_prologo_games(guild):
             "Os **Vampy-Coins** são a moeda do servidor! Você ganha participando dos jogos e pode usar na **loja** para resgatar prêmios incríveis! 🛍️🦇\n\n"
             "🏆 Confira o ranking no canal de ranking e veja quem é o mais ricão do servidor!\n\n"
             "**Os jogos aparecem automaticamente a cada ~40 minutos, tá?** Fica de olho aqui! 👀💚\n\n"
-            "*O Vampy ama cada um de vocês... agora bora jogar!* 🦇💚✨"
+            "*A Vampy ama cada um de vocês... agora bora jogar!* 🦇💚✨"
         ),
         color=0xFFD700
     )
@@ -1552,7 +1552,7 @@ async def disparar_detetive(guild):
         inline=False
     )
     embed.set_image(url=GIF_DETETIVE)
-    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! O Vampy acredita em você! 🦇🔍")
+    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! A Vampy acredita em você! 🦇🔍")
     
     await canal_games.send(embed=embed)
 
@@ -1609,7 +1609,7 @@ async def disparar_blackjack(guild):
     embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "🃏 BLACKJACK — O DEALER ESTÁ NA MESA! 🃏"
     embed.description = (
-        "O Vampy virou dealer e está distribuindo cartas! 🦇🎴\n\n"
+        "A Vampy virou dealer e está distribuindo cartas! 🦇🎴\n\n"
         "Digite **BLACKJACK** para entrar e receber suas 2 cartas!\n"
         "Depois escolha:\n"
         "> 🃏 **HIT** — pedir mais uma carta\n"
@@ -1665,7 +1665,7 @@ async def disparar_campominado(guild):
     embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "💣 CAMPO MINADO — CUIDADO COM AS BOMBAS! 💥"
     embed.description = (
-        "O Vampy escondeu cofres e minas num campo 3×3! 🦇💰\n\n"
+        "A Vampy escondeu cofres e minas num campo 3×3! 🦇💰\n\n"
         "**Escolha uma casa digitando um número de 1 a 9:**\n\n"
         "```\n"
         "┌───┬───┬───┐\n"
@@ -1823,7 +1823,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
             "❌  Derrota  →  -50 coins\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "```\n"
-            "O Vampy vai jogar ao mesmo tempo que você! 🦇"
+            "A Vampy vai jogar ao mesmo tempo que você! 🦇"
         )
         embed.set_image(url=GIF_PPT)
 
@@ -1891,7 +1891,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         palavra_shuffled = "".join(lista_letras)
         embed.title = "🔤 PALAVRA EMBARALHADA — DESEMBARALHE!"
         embed.description = (
-            f"O Vampy embaralhou as letras de uma palavra! 🔡\n\n"
+            f"A Vampy embaralhou as letras de uma palavra! 🔡\n\n"
             f"**Letras embaralhadas:**\n"
             f"# `{palavra_shuffled}`\n\n"
             f"💡 *Dica: tem {len(palavra)} letras!*\n\n"
@@ -1946,7 +1946,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         
         embed.title = "🤫 EVENTO SILENCIOSO ATIVADO! SHHH..."
         embed.description = (
-            "O Vampy escolheu um **número secreto de mensagens**! 🤫\n\n"
+            "A Vampy escolheu um **número secreto de mensagens**! 🤫\n\n"
             "Continue conversando normalmente — alguém vai ter sorte!\n\n"
             "```\n"
             "💰  Prêmio: 600 coins\n"
@@ -1968,7 +1968,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     if not jogo_em_andamento["venceu"]:
         jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
-        await canal_games.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Vampy queria muito te dar um prêmio! 🦇💔")
+        await canal_games.send("🥺 Ahhh poxa, ninguém acertou a tempo... A Vampy queria muito te dar um prêmio! 🦇💔")
 
 # ============== LOOP DO JOGO =================
 
@@ -2148,13 +2148,13 @@ class AprovarMembroView(discord.ui.View):
             rpg_mention = canal_rpg.mention if canal_rpg else "#🌎・mundo-csi"
             games_mention = canal_games.mention if canal_games else "#🎲・vampy-games"
             msg_boas_vindas = (
-                f"✨💚 tum tum tum… o Vampy apareceu! 💚✨\n\n"
+                f"✨💚 tum tum tum… a Vampy apareceu! 💚✨\n\n"
                 f"Atençãooo!! Temos alguém novo chegando no nosso cantinho 👀✨\n\n"
-                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 O Vampy já abriu espaço, ajeitou tudo por aqui e tá prontinho pra te acompanhar nessa nova fase.\n\n"
+                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 A Vampy já abriu espaço, ajeitou tudo por aqui e tá prontinha pra te acompanhar nessa nova fase.\n\n"
                 f"🦇 {' 🦇 '.join(mencoes)}\n\n"
                 f"Venham dar aquele abraço de boas-vindas que só a gente sabe dar 💚\n"
                 f"Aqui você não entrou só em um servidor… Entrou em um lar.\n\n"
-                f"O Vampy foi criado pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
+                f"A Vampy foi criada pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
                 f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n\n"
                 f"🌎 Curte RPG? Dá uma espiadinha no {rpg_mention} e entra na aventura!\n"
                 f"🎲 Gosta de joguinhos? Te espero no {games_mention} pra gente se divertir!\n\n"
@@ -2406,7 +2406,7 @@ async def on_member_remove(member):
     try:
         mensagem_despedida = (
             f"**Ah não... minhas asinhas até murcharam agora...** 😭🦇💔\n\n"
-            f"Poxa, {member.name}, o Vampy ficou muito, muito triste em ver você partindo da nossa família CSI. "
+            f"Poxa, {member.name}, a Vampy ficou muito, muito triste em ver você partindo da nossa família CSI. "
             f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
             f"**Até logo, neném... vou sentir saudades!** 🦇💚👋"
         )
@@ -2424,19 +2424,19 @@ async def on_member_update(before, after):
             (
                 f"✨🎂 ESPERA, ESPERA, ESPERA!! 🎂✨\n\n"
                 f"Hoje é o dia mais especial do ano pra {after.mention}!! 🥳💚\n\n"
-                f"O Vampy colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🦇🎉\n"
+                f"A Vampy colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🦇🎉\n"
                 f"Que esse dia seja tão lindo quanto você, cheio de amor, risada e tudo de bom que você merece!\n\n"
                 f"**Feliz Aniversário, neném!! 🎂💚✨**"
             ),
             (
                 f"🎉💚 TUM TUM TUM… adivinha quem faz aniversário HOJE?! 💚🎉\n\n"
-                f"{after.mention}, o Vampy não ia deixar esse dia passar em branco não!! 🥺🦇\n\n"
+                f"{after.mention}, a Vampy não ia deixar esse dia passar em branco não!! 🥺🦇\n\n"
                 f"Vim aqui do fundo do coração te desejar um dia incrível, repleto de alegria, de pessoas que você ama e de muito, muito carinho!\n"
                 f"Você merece tudo de melhor que esse mundo tem a oferecer! 🌟\n\n"
                 f"**Parabéns pra você!! 🎂💚🎊**"
             ),
             (
-                f"🦇💕 OI OI OI!! O Vampy ficou sabendo de um segredinho… 👀🎂\n\n"
+                f"🦇💕 OI OI OI!! A Vampy ficou sabendo de um segredinho… 👀🎂\n\n"
                 f"Hoje é o aniversário da nossa querida {after.mention}!! 🥳✨\n\n"
                 f"Que a vida te presenteie com dias leves, sorrisos verdadeiros e muita coisa boa chegando por aí!\n"
                 f"Aqui na nossa família a gente torce muito por você, saiba disso! 💚🫶\n\n"
@@ -3029,7 +3029,7 @@ async def on_message(message):
                     ganhou, premio = True, 150
                 else:
                     pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
-                    await message.reply("🥺 Errou a palavra! O Vampy ficou triste e você perdeu **25 coins**! 🦇💔")
+                    await message.reply("🥺 Errou a palavra! A Vampy ficou triste e você perdeu **25 coins**! 🦇💔")
                     await atualizar_ranking(message.guild) 
                     return
 
@@ -3293,9 +3293,9 @@ async def on_message(message):
                                 if pontuacao_vampy.get(user_id, 0) >= 100:
                                     pontuacao_vampy[user_id] -= 100
                                     pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + 100
-                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! O Vampy amou sua bondade! 🦇✨")
+                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! A Vampy amou sua bondade! 🦇✨")
                                 else:
-                                    await message.reply("❌ Você não tem coins suficientes para doar! O Vampy ficou confuso. 🦇")
+                                    await message.reply("❌ Você não tem coins suficientes para doar! A Vampy ficou confuso. 🦇")
                             except asyncio.TimeoutError:
                                 await message.reply("⏰ Tempo de doação acabou!")
                         await atualizar_ranking(message.guild)
@@ -3382,7 +3382,7 @@ async def on_message(message):
                                     premio_atual *= 2
                                     await message.reply(f"✅ **CONSEGUIU!** Agora você tem **{premio_atual}** coins!")
                                 else:
-                                    await message.reply(f"💥 **PERDEU TUDO!** O Vampy engoliu suas moedas! 🦇💔")
+                                    await message.reply(f"💥 **PERDEU TUDO!** A Vampy engoliu suas moedas! 🦇💔")
                                     premio_atual = 0
                                     continuar = False
                             else:
@@ -4034,7 +4034,7 @@ async def cmd_banir_error(ctx: commands.Context, error: Exception):
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║        VAMPY BAN APPEAL — Sistema de Votação v1.0          ║
-# ║   Votação da direção pra desbanir membros • Estilo Vampy   ║
+# ║   Votação da direção pra desbanir membros • Estila Vampy   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
@@ -4261,7 +4261,7 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
 
         if guild_encontrado is None:
             await message.channel.send(
-                "❌ Você não está banido de nenhum servidor gerenciado pelo Vampy! 🦇\n"
+                "❌ Você não está banido de nenhum servidor gerenciado pela Vampy! 🦇\n"
                 "Se acha que é um erro, entre em contato com a administração."
             )
             return
@@ -4381,7 +4381,7 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║         VAMPY VOICEMASTER — Calls Fofas v1.0               ║
-# ║   Sistema completo de calls temporárias • Estilo Vampy     ║
+# ║   Sistema completo de calls temporárias • Estila Vampy     ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -4400,7 +4400,7 @@ VM_CATEGORY_ID       = 1304658655026741260    # ID da categoria onde o lobby e a
 
 _VM_MSGS = {
     "sem_call":            "Você não tem uma call ativa ainda, {user}!! Entra no 🎙️ Criar Call pra começar!! 🦇",
-    "renomeada":           "Prontinho!! Renomeei sua call pra **{nome}**!! Ficou lindo!! ✨🦇",
+    "renomeada":           "Prontinha!! Renomeei sua call pra **{nome}**!! Ficou lindo!! ✨🦇",
     "limite_set":          "Ok!! Agora sua call aceita até **{limite}** pessoas!! 🎯🦇",
     "limite_removido":     "Removido!! Qualquer quantidade de pessoas pode entrar agora!! 🥳🦇",
     "trancada":            "Call trancada!! Só quem você convidar pode entrar agora!! 🔒🦇",
@@ -4849,7 +4849,7 @@ class VMPainelView(discord.ui.View):
         ch = user.voice.channel
         info = self.cog.vm_channels.get(ch.id)
         if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Vampy!! 🤔🦇"), ephemeral=True)
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pela Vampy!! 🤔🦇"), ephemeral=True)
             return
         dono = interaction.guild.get_member(info["owner"])
         banidos = ", ".join(f"<@{uid}>" for uid in info.get("banned", [])) or "Ninguém"
@@ -4879,7 +4879,7 @@ class VMPainelView(discord.ui.View):
         ch = user.voice.channel
         info = self.cog.vm_channels.get(ch.id)
         if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Vampy!! 🤔🦇"), ephemeral=True)
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pela Vampy!! 🤔🦇"), ephemeral=True)
             return
         if info["owner"] == user.id:
             await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("ja_dono")), ephemeral=True)
@@ -5020,7 +5020,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             # ── Enviar painel de controle no chat de texto da call ──
             try:
                 embed_call = discord.Embed(
-                    title="🎙️ Painel de Controle — Calls do Vampy",
+                    title="🎙️ Painel de Controle — Calls da Vampy",
                     description=(
                         f"Oi, {member.mention}!! Sua call foi criada!! 🥳🦇\n"
                         "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
@@ -5082,7 +5082,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
 
     async def _enviar_painel(self, channel: discord.TextChannel):
         embed = discord.Embed(
-            title="🎙️ Painel de Controle — Calls do Vampy",
+            title="🎙️ Painel de Controle — Calls da Vampy",
             description=(
                 "Gerencie sua call com os botinhos aqui embaixo!! 🦇\n"
                 "Você precisa ser **dono(a)** de uma call e estar **dentro dela** pra usar!! 💕\n\n"
@@ -5141,7 +5141,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             await self._enviar_painel(ctx.channel)
             embed = discord.Embed(
                 title="🎉 VoiceMaster Configurado!!",
-                description=f"Tudo prontinho!! 🥳🦇\n\n**Canal Lobby:** {lobby.mention}\n\nPeça pras pessoas entrarem em {lobby.mention} pra criar uma call!!",
+                description=f"Tudo prontinha!! 🥳🦇\n\n**Canal Lobby:** {lobby.mention}\n\nPeça pras pessoas entrarem em {lobby.mention} pra criar uma call!!",
                 color=_VM_COR_OK, timestamp=datetime.utcnow()
             )
             embed.set_footer(text="🦇 Vampy VoiceMaster")
