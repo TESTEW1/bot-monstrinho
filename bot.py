@@ -2771,6 +2771,36 @@ async def on_message(message):
     # --- AUTO-TRADUÇÃO (cargo Translate) ---
     asyncio.create_task(auto_traduzir_mensagem(message))
 
+    # --- APRESENTAÇÃO DA VAMPY QUANDO MARCADA ---
+    if bot.user in message.mentions and len(message.content.strip().split()) <= 3:
+        apresentacoes = [
+            "oi oi!! me chamou?? 🦇💚",
+            "aaaa me marcou!! tô aqui sim!! 🦇✨",
+            "oiê!! foi mal tava de cabeça pra baixo 🦇😭",
+            "ei ei!! a Vampy apareceu!! 💚🦇",
+        ]
+        embed = discord.Embed(
+            title="🦇 Oi, eu sou a Vampy!!",
+            description=(
+                f"Oii {message.author.mention}!! 💚✨\n\n"
+                f"Sou a **Vampy**, a morcega mascote desse servidor!! 🦇\n\n"
+                f"**O que eu faço por aqui?**\n"
+                f"🛡️ Cuido da segurança do servidor\n"
+                f"🎲 Organizo os joguinhos e eventos\n"
+                f"🌐 Traduzo mensagens em outros idiomas\n"
+                f"💚 Acolho todo mundo com carinho\n"
+                f"🎂 Celebro aniversários\n"
+                f"🎙️ Gerencio as calls de voz\n\n"
+                f"Qualquer dúvida é só me chamar!! Tô sempre de olho!! 🦇💜"
+            ),
+            color=0x7c3aed,
+            timestamp=datetime.utcnow()
+        )
+        embed.set_thumbnail(url=AVATAR_VAMPY)
+        embed.set_footer(text="🦇 Vampy • Morcega do servidor")
+        await message.reply(embed=embed, mention_author=False)
+        return
+
     # --- LÓGICA EVENTO SILENCIOSO (agora no canal games) ---
     global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
     if evento_silencioso_ativo and message.channel.name == CANAL_GAMES:
