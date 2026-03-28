@@ -24,7 +24,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║          MONSTRINHO SECURITY SYSTEM — GOD MODE v2.0             ║
+# ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
 # ║      Sistema completo de segurança integrado ao bot             ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
@@ -115,11 +115,11 @@ class SecurityDatabase:
         self.security_level  = "NORMAL"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🛡️  COG — MONSTRINHO SECURITY SYSTEM
+# 🛡️  COG — VAMPY SECURITY SYSTEM
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
-    """MONSTRINHO SECURITY SYSTEM — GOD MODE v2.0."""
+class VampyCog(commands.Cog, name="VampySecurity"):
+    """VAMPY SECURITY SYSTEM — GOD MODE v2.0."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -158,7 +158,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             return
         now = datetime.utcnow()
         self.db.log_alert(threat_type, details)
-        embed = discord.Embed(title=f"{'🔴' if critical else '🚨'} MONSTRINHO SECURITY ALERT", color=color, timestamp=now)
+        embed = discord.Embed(title=f"{'🔴' if critical else '🚨'} VAMPY SECURITY ALERT", color=color, timestamp=now)
         embed.add_field(name="⚠️ Tipo de Ameaça", value=f"`{threat_type}`",                           inline=False)
         embed.add_field(name="👤 Usuário",          value=str(user) if user else "Desconhecido",        inline=True)
         embed.add_field(name="🆔 ID",               value=str(user.id) if user else "—",                inline=True)
@@ -169,7 +169,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             embed.set_thumbnail(url=user.display_avatar.url)
         risk    = self.db.get_risk(user.id) if user else 0
         flagged = "⛔ SIM" if (user and self.db.is_flagged(user.id)) else "✅ Não"
-        embed.set_footer(text=f"MONSTRINHO SECURITY • Risco: {risk}pts | Suspeito: {flagged}",
+        embed.set_footer(text=f"VAMPY SECURITY • Risco: {risk}pts | Suspeito: {flagged}",
                          icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
         await ch.send(embed=embed)
 
@@ -190,7 +190,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
                 description=(
                     "```\n"
                     "╔══════════════════════════════════════╗\n"
-                    "║   MONSTRINHO SECURITY SYSTEM         ║\n"
+                    "║   VAMPY SECURITY SYSTEM         ║\n"
                     "║         — GOD MODE —                 ║\n"
                     "║       ⚡  v2.0  ONLINE  ⚡           ║\n"
                     "╚══════════════════════════════════════╝\n"
@@ -198,7 +198,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
                 ),
                 color=0x00ff99, timestamp=now
             )
-            boot.set_author(name="MONSTRINHO SECURITY • Sistema Iniciado",
+            boot.set_author(name="VAMPY SECURITY • Sistema Iniciado",
                             icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
             boot.add_field(name="🛡️ Módulos Ativos (14/14)", inline=False, value=(
                 "✅ Anti-Spam de Comandos\n✅ Detector de Raid\n✅ Auto Lockdown\n"
@@ -218,12 +218,12 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
                 f"**Nível:** `NORMAL` | **Servidor:** `{guild.name}`\n"
                 f"**Membros:** `{guild.member_count}` | **Iniciado:** `{now.strftime('%d/%m/%Y %H:%M UTC')}`"
             ))
-            boot.set_footer(text="MONSTRINHO SECURITY SYSTEM • Todos os sistemas operacionais.",
+            boot.set_footer(text="VAMPY SECURITY SYSTEM • Todos os sistemas operacionais.",
                             icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
             await ch.send(embed=boot)
 
             # Embed de Comandos
-            cmds = discord.Embed(title="📋 Comandos — MONSTRINHO SECURITY", color=0x5865F2, timestamp=now)
+            cmds = discord.Embed(title="📋 Comandos — VAMPY SECURITY", color=0x5865F2, timestamp=now)
             cmds.add_field(name="🔍 Status & Info", inline=False, value=(
                 "`!security status` — Painel completo\n"
                 "`!segurança status` — Alias PT\n"
@@ -239,7 +239,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
                 "`!security stats` — Estatísticas gerais"
             ))
             cmds.add_field(name="⚠️ Permissão", value="Todos os comandos exigem **Administrador**.", inline=False)
-            cmds.set_footer(text="MONSTRINHO SECURITY SYSTEM • GOD MODE v2.0")
+            cmds.set_footer(text="VAMPY SECURITY SYSTEM • GOD MODE v2.0")
             await ch.send(embed=cmds)
 
     # ── 1️⃣ Anti-Spam de Comandos ─────────────────
@@ -417,7 +417,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             ch = await self.get_log_channel(guild)
             if ch:
                 embed = discord.Embed(title="🔧 Ação Administrativa", description=details, color=0x5865F2, timestamp=datetime.utcnow())
-                embed.set_footer(text=f"MONSTRINHO SECURITY • Ações na janela: {len(dq)}/{ADMIN_ACTION_LIMIT}")
+                embed.set_footer(text=f"VAMPY SECURITY • Ações na janela: {len(dq)}/{ADMIN_ACTION_LIMIT}")
                 await ch.send(embed=embed)
 
     # ── 6️⃣ Bot Suspeito ──────────────────────────
@@ -490,7 +490,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
                     color=0xff6600, timestamp=datetime.utcnow())
                 embed.add_field(name="Comando", value=f"`{ctx.command}`", inline=True)
                 embed.add_field(name="Usuário",  value=str(ctx.author),   inline=True)
-                embed.set_footer(text="MONSTRINHO SECURITY • Monitor de Erros")
+                embed.set_footer(text="VAMPY SECURITY • Monitor de Erros")
                 await ch.send(embed=embed)
 
     # ── 🧹 Limpeza periódica ──────────────────────
@@ -519,7 +519,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
     async def security_status(self, ctx):
         db = self.db
         le = {"NORMAL":"🟢","ALERTA":"🟡","LOCKDOWN":"🔴","EMERGÊNCIA":"🆘"}.get(db.security_level,"⚪")
-        embed = discord.Embed(title="🛡️ MONSTRINHO SECURITY — Status", color=self._level_color(), timestamp=datetime.utcnow())
+        embed = discord.Embed(title="🛡️ VAMPY SECURITY — Status", color=self._level_color(), timestamp=datetime.utcnow())
         embed.add_field(name="🔒 Sistema", inline=True, value=(
             f"**Nível:** {le} `{db.security_level}`\n"
             f"**Lockdown:** {'⛔ ATIVO' if db.lockdown_active else '✅ Off'}\n"
@@ -529,7 +529,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
             f"🚪 Raid: `{db.raid_events}`\n🔗 Links: `{db.link_events}`\n🔧 Admin: `{db.admin_events}`"))
         embed.add_field(name="👤 Monitorados", inline=False, value=(
             f"⚠️ Com risco: `{len(db.risk_scores)}` | ⛔ Suspeitos: `{len(db.flagged_users)}` | 🕒 Cooldown: `{len(self._cmd_cooldowns)}`"))
-        embed.set_footer(text="MONSTRINHO SECURITY SYSTEM • GOD MODE v2.0")
+        embed.set_footer(text="VAMPY SECURITY SYSTEM • GOD MODE v2.0")
         await ctx.send(embed=embed)
 
     @security_group.command(name="reset")
@@ -576,7 +576,7 @@ class MonstrinhoCog(commands.Cog, name="MonStrinhoSecurity"):
         for i, a in enumerate(reversed(recent), 1):
             t = a["time"].strftime("%d/%m %H:%M")
             embed.add_field(name=f"#{i} [{t}] {a['type']}", value=a["details"][:100], inline=False)
-        embed.set_footer(text="MONSTRINHO SECURITY • Histórico")
+        embed.set_footer(text="VAMPY SECURITY • Histórico")
         await ctx.send(embed=embed)
 
     @security_group.command(name="stats")
@@ -631,7 +631,7 @@ TOKEN = os.getenv("TOKEN")
 DONO_ID = 769951556388257812
 
 CANAL_GERAL = "💭・chat-geral"
-CANAL_GAMES = "🎲・monstrinho-games"
+CANAL_GAMES = "🎲・vampy-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
 CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・ticket"
@@ -642,16 +642,16 @@ CANAL_DESABAFOS = "😮‍💨・desabafos"
 CANAL_CHAT_ANJO = "🪽・chat-anjo"
 CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
 CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
-CANAL_RANKING_MONSTRINHO = "🎰・ranking-monstrinho"
-CANAL_LOJA_INFO = "💾・loja-monstrinho"
+CANAL_RANKING_VAMPY = "🎰・ranking-vampy"
+CANAL_LOJA_INFO = "💾・loja-vampy"
 CANAL_DIRECAO = "👑・chat-direção"
 CANAL_ATENCAO = "⚠️・atenção"
 
 # GIFs e Imagens
 BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
 GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
-AVATAR_MONSTRINHO = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/monstrinho_avatar.png"
-GIF_ACERTO_MONSTRINHO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
+AVATAR_VAMPY = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/vampy_avatar.png"
+GIF_ACERTO_VAMPY = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
 
 # NOVOS GIFS JOGOS
 GIF_ADIVINHE_NUMERO = "https://pixmidia.com.br/wp-content/uploads/2020/08/alvo.gif"
@@ -710,7 +710,7 @@ CARGO_TRANSLATE_ID = 1486130807117582416  # Translate — auto-tradução para P
 tickets = {}
 avisos_usuarios = {}       # user_id -> avisos atuais (0–3)
 total_ciclos_usuario = {}  # user_id -> quantos ciclos completos de punição já levou
-pontuacao_monstrinho = {}
+pontuacao_vampy = {}
 jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
 
 # Lógica Evento Silencioso
@@ -978,7 +978,7 @@ LISTA_PERGUNTAS = [
 ("Quem é o herói da capa preta?", "batman")
 ]
 LISTA_PALAVRAS_RAPIDAS = [
-"ABACAXI","MONSTRINHO","BATMAN","CSI","DRAGAO","AVENTURA","ESTRELA",
+"ABACAXI","VAMPY","BATMAN","CSI","DRAGAO","AVENTURA","ESTRELA",
 "FOGUETE","TROVAO","RELAMPAGO","MISTÉRIO","CAVERNA","FANTASMA",
 "ZUMBI","ESQUELETO","CASTELO","PRINCESA","CAVALEIRO","ESPADA",
 "ESCUDO","MAGIA","FEITICO","POCAO","VULCAO","NEVASCA","TEMPESTADE",
@@ -998,7 +998,7 @@ LISTA_PALAVRAS_RAPIDAS = [
 "EPICO","LENDARIO","MISTICO","ARCANO","RITUAL","TOTEM"
 ]
 LISTA_EMOJIS_RAPIDOS = [
-"🐸","🐲","🐢","🦖","🐍","🦎","🍀",
+"🐸","🦇","🐢","🦖","🐍","🦎","🍀",
 "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷",
 "🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅",
 "🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
@@ -1081,9 +1081,9 @@ TABELA_CASTIGOS = [
 
 MSGS_AVISOS = [
     None,  # índice 0 não usado
-    "Vc falou algo ruim!! infelizmente tive que te dar um aviso. cuidado com o segundo!! 🥺🐲",
-    "Ai ai... **segundo aviso!!** Tá quase chegando no limite, toma muito cuidado com o terceiro, tá?? 😰🐲",
-    "**TERCEIRO AVISO!!** Você tá no limite mesmo... se repetir isso vai tomar um castigo! 😱🐲 Respira fundo e volta calmo(a)!",
+    "Vc falou algo ruim!! infelizmente tive que te dar um aviso. cuidado com o segundo!! 🥺🦇",
+    "Ai ai... **segundo aviso!!** Tá quase chegando no limite, toma muito cuidado com o terceiro, tá?? 😰🦇",
+    "**TERCEIRO AVISO!!** Você tá no limite mesmo... se repetir isso vai tomar um castigo! 😱🦇 Respira fundo e volta calmo(a)!",
 ]
 
 def obter_ciclo(user_id: int) -> int:
@@ -1164,7 +1164,7 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
     cor = cor_map.get(qtd_avisos, 0xFF0000)
 
     embed = discord.Embed(
-        title="🗑️ MENSAGEM APAGADA PELO MONSTRINHO",
+        title="🗑️ MENSAGEM APAGADA PELO VAMPY",
         color=cor,
         timestamp=datetime.now()
     )
@@ -1205,8 +1205,8 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
     )
 
     embed.set_footer(
-        text="🐲 Monstrinho Logs  •  Use os botões abaixo caso tenha sido engano",
-        icon_url=AVATAR_MONSTRINHO
+        text="🦇 Vampy Logs  •  Use os botões abaixo caso tenha sido engano",
+        icon_url=AVATAR_VAMPY
     )
 
     view = DesfazerAvisoView(membro_id)
@@ -1221,15 +1221,15 @@ async def enviar_prologo_games(guild):
         return
 
     embed = discord.Embed(
-        title="🐲💚 OI OI OI! O MONSTRINHO ACORDOU! 💚🐲",
+        title="🦇💚 OI OI OI! O VAMPY ACORDOU! 💚🦇",
         description=(
             "AAAAA gente, eu tô de volta e tô com saudaaaaade de vocês! 🥺✨\n\n"
             "Deixa eu te contar como funcionam os meus joguinhos antes da gente começar a se divertir, tá bom? 🎮🐉"
         ),
         color=0xADFF2F
     )
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed.set_image(url=GIF_ACERTO_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
+    embed.set_image(url=GIF_ACERTO_VAMPY)
     await canal_games.send(embed=embed)
 
     await asyncio.sleep(2)
@@ -1240,7 +1240,7 @@ async def enviar_prologo_games(guild):
     )
     embed2.add_field(
         name="🧠 Pergunta Relâmpago",
-        value="O Monstrinho faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
+        value="O Vampy faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
         inline=False
     )
     embed2.add_field(
@@ -1268,13 +1268,13 @@ async def enviar_prologo_games(guild):
         value="O primeiro que digitar a **palavra** ou mandar o **emoji** certo ganha **80 coins**! Velocidade é tudo! 💨",
         inline=False
     )
-    embed2.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed2.set_thumbnail(url=AVATAR_VAMPY)
     await canal_games.send(embed=embed2)
 
     await asyncio.sleep(2)
 
     embed3 = discord.Embed(
-        title="🌟 JOGOS ESPECIAIS DO MONSTRINHO 🌟",
+        title="🌟 JOGOS ESPECIAIS DO VAMPY 🌟",
         color=0x9B59B6
     )
     embed3.add_field(
@@ -1294,7 +1294,7 @@ async def enviar_prologo_games(guild):
     )
     embed3.add_field(
         name="🤫 Evento Silencioso",
-        value="O Monstrinho escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🐲",
+        value="O Vampy escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🦇",
         inline=False
     )
     embed3.add_field(
@@ -1332,7 +1332,7 @@ async def enviar_prologo_games(guild):
         value="Um dragão apareceu! Use **CHAMA** (35%/+350), **GELO** (50%/+200) ou **OURO** (75%/+80) — cada estratégia tem seu risco! 🔥",
         inline=False
     )
-    embed3.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed3.set_thumbnail(url=AVATAR_VAMPY)
     await canal_games.send(embed=embed3)
 
     await asyncio.sleep(2)
@@ -1340,36 +1340,36 @@ async def enviar_prologo_games(guild):
     embed4 = discord.Embed(
         title="💰 SISTEMA DE COINS 💰",
         description=(
-            "Os **Monstrinho-Coins** são a moeda do servidor! Você ganha participando dos jogos e pode usar na **loja** para resgatar prêmios incríveis! 🛍️🐲\n\n"
+            "Os **Vampy-Coins** são a moeda do servidor! Você ganha participando dos jogos e pode usar na **loja** para resgatar prêmios incríveis! 🛍️🦇\n\n"
             "🏆 Confira o ranking no canal de ranking e veja quem é o mais ricão do servidor!\n\n"
             "**Os jogos aparecem automaticamente a cada ~40 minutos, tá?** Fica de olho aqui! 👀💚\n\n"
-            "*O Monstrinho ama cada um de vocês... agora bora jogar!* 🐲💚✨"
+            "*O Vampy ama cada um de vocês... agora bora jogar!* 🦇💚✨"
         ),
         color=0xFFD700
     )
-    embed4.set_thumbnail(url=AVATAR_MONSTRINHO)
-    embed4.set_footer(text="Monstrinho-Games 🐲 | Boa sorte a todos! 💚")
+    embed4.set_thumbnail(url=AVATAR_VAMPY)
+    embed4.set_footer(text="Vampy-Games 🦇 | Boa sorte a todos! 💚")
     await canal_games.send(embed=embed4)
 
 async def atualizar_ranking(guild):
-    canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_MONSTRINHO)
+    canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_VAMPY)
     if not canal_rank: return
     
-    rank_ordenado = sorted(pontuacao_monstrinho.items(), key=lambda item: item[1], reverse=True)
+    rank_ordenado = sorted(pontuacao_vampy.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
-        title="🏆 RANKING MONSTRINHO-COINS 🏆",
-        description="Aqui estão os maiores gênios do nosso servidor! 🐲💚",
+        title="🏆 RANKING VAMPY-COINS 🏆",
+        description="Aqui estão os maiores gênios do nosso servidor! 🦇💚",
         color=0x00FF7F,
         timestamp=datetime.now()
     )
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     
     texto_rank = ""
     for i, (user_id, pontos) in enumerate(rank_ordenado[:15], 1):
         user = guild.get_member(user_id)
         nome = user.display_name if user else f"Usuário Desconhecido ({user_id})"
-        texto_rank += f"**{i}º** | {nome} — `{pontos} Coins` 🐲\n"
+        texto_rank += f"**{i}º** | {nome} — `{pontos} Coins` 🦇\n"
     
     embed.description += f"\n\n{texto_rank if texto_rank else 'Ninguém pontuou ainda... 🥺'}"
     embed.set_footer(text="CSI - Sistema de Jogos")
@@ -1403,7 +1403,7 @@ async def verificar_palavras_alerta(message):
                 embed.add_field(name="💬 Mensagem", value=f"```{message.content[:1000]}```", inline=False)
                 embed.add_field(name="🔑 Palavra-chave detectada", value=f"`{palavra}`", inline=False)
                 embed.set_thumbnail(url=message.author.display_avatar.url)
-                embed.set_footer(text="Sistema de Monitoramento de Bem-Estar 🐲", icon_url=AVATAR_MONSTRINHO)
+                embed.set_footer(text="Sistema de Monitoramento de Bem-Estar 🦇", icon_url=AVATAR_VAMPY)
                 
                 await canal_atencao.send(embed=embed)
             break
@@ -1418,10 +1418,10 @@ async def disparar_roleta(guild):
     jogo_em_andamento["resposta"] = "roleta"
 
     embed = discord.Embed(color=0xADFF2F)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "🎡 ROLETA DA SORTE COLETIVA! 🎰"
     embed.description = (
-        "A roleta está girando para **TODOS**! ✨🐲\n\n"
+        "A roleta está girando para **TODOS**! ✨🦇\n\n"
         "Digite **ROLETA** para girar a sua!\n\n"
         "```\n"
         "🏆  TABELA DE PRÊMIOS\n"
@@ -1436,7 +1436,7 @@ async def disparar_roleta(guild):
         "```"
     )
     embed.set_image(url=GIF_ROLETA_GIRANDO)
-    embed.set_footer(text="⏱️ Aberta por 5 minutos! Cada pessoa gira UMA vez. 🐲")
+    embed.set_footer(text="⏱️ Aberta por 5 minutos! Cada pessoa gira UMA vez. 🦇")
     
     await canal_games.send(embed=embed)
 
@@ -1444,7 +1444,7 @@ async def disparar_roleta(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("🎡 A roleta parou de girar! Tempo encerrado! 🐲🏁")
+    await canal_games.send("🎡 A roleta parou de girar! Tempo encerrado! 🦇🏁")
 
 async def disparar_tarot(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1456,10 +1456,10 @@ async def disparar_tarot(guild):
     jogo_em_andamento["resposta"] = "tarot"
 
     embed = discord.Embed(color=0x9B59B6)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "🔮 TIRAGEM DO DESTINO — TAROT MÍSTICO 🔮"
     embed.description = (
-        "As cartas ancestrais aguardam por **TODOS**! ✨🐲\n\n"
+        "As cartas ancestrais aguardam por **TODOS**! ✨🦇\n\n"
         "Digite **TAROT** para puxar sua carta do destino!\n\n"
         "```\n"
         "🎴  O que pode acontecer?\n"
@@ -1473,7 +1473,7 @@ async def disparar_tarot(guild):
         "> ⚠️ Cada pessoa só pode puxar **UMA carta**!"
     )
     embed.set_image(url=GIF_TAROT)
-    embed.set_footer(text="⏱️ 5 minutos para consultar o oráculo! As cartas não mentem... 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para consultar o oráculo! As cartas não mentem... 🦇")
     
     await canal_games.send(embed=embed)
 
@@ -1481,7 +1481,7 @@ async def disparar_tarot(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("🔮 As cartas se fecharam... o oráculo descansa até a próxima invocação! 🐲💫")
+    await canal_games.send("🔮 As cartas se fecharam... o oráculo descansa até a próxima invocação! 🦇💫")
 
 async def disparar_sobrevivamonstro(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1493,10 +1493,10 @@ async def disparar_sobrevivamonstro(guild):
     jogo_em_andamento["resposta"] = "sobrevivamonstro"
 
     embed = discord.Embed(color=0xFF4500)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "👹 SOBREVIVA AO MONSTRO — HORDA APOCALÍPTICA! ⚔️"
     embed.description = (
-        "Uma horda de monstros invadiu o chat! **TODOS** podem enfrentar! 🐲⚔️\n\n"
+        "Uma horda de monstros invadiu o chat! **TODOS** podem enfrentar! 🦇⚔️\n\n"
         "Escolha sua ação digitando:\n\n"
         "```\n"
         "⚔️  AÇÕES DISPONÍVEIS\n"
@@ -1513,7 +1513,7 @@ async def disparar_sobrevivamonstro(guild):
         "> ⚠️ Você só pode participar **UMA vez** por evento!"
     )
     embed.set_image(url=GIF_MONSTRO)
-    embed.set_footer(text="⏱️ 5 minutos para enfrentar seu monstro! Coragem, guerreiro! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para enfrentar seu monstro! Coragem, guerreiro! 🦇")
     
     await canal_games.send(embed=embed)
 
@@ -1521,7 +1521,7 @@ async def disparar_sobrevivamonstro(guild):
     
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("👹 Os monstros recuaram! A batalha chegou ao fim! 🐲🏁")
+    await canal_games.send("👹 Os monstros recuaram! A batalha chegou ao fim! 🦇🏁")
 
 async def disparar_detetive(guild):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1537,7 +1537,7 @@ async def disparar_detetive(guild):
 
     personagens_fmt = "\n".join([f"• {p}" for p in cenario["personagens"]])
     embed = discord.Embed(color=0x1E90FF)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = f"🕵️ CASO ABERTO: {cenario['caso'].upper()}"
     embed.add_field(name="👥 Suspeitos", value=personagens_fmt, inline=False)
     embed.add_field(name="📋 O que aconteceu", value=cenario["situacao"], inline=False)
@@ -1552,7 +1552,7 @@ async def disparar_detetive(guild):
         inline=False
     )
     embed.set_image(url=GIF_DETETIVE)
-    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! O Monstrinho acredita em você! 🐲🔍")
+    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! O Vampy acredita em você! 🦇🔍")
     
     await canal_games.send(embed=embed)
 
@@ -1563,7 +1563,7 @@ async def disparar_detetive(guild):
     if not jogo_em_andamento["venceu"]:
         jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
-        await canal_games.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! Caso encerrado. 🐲💔")
+        await canal_games.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! Caso encerrado. 🦇💔")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 🃏 NOVO JOGO: BLACKJACK (VINTE E UM)
@@ -1606,10 +1606,10 @@ async def disparar_blackjack(guild):
     jogo_em_andamento["dados_blackjack"] = {}   # user_id → {"mao": [...], "deck": [...]}
 
     embed = discord.Embed(color=0xC0392B)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "🃏 BLACKJACK — O DEALER ESTÁ NA MESA! 🃏"
     embed.description = (
-        "O Monstrinho virou dealer e está distribuindo cartas! 🐲🎴\n\n"
+        "O Vampy virou dealer e está distribuindo cartas! 🦇🎴\n\n"
         "Digite **BLACKJACK** para entrar e receber suas 2 cartas!\n"
         "Depois escolha:\n"
         "> 🃏 **HIT** — pedir mais uma carta\n"
@@ -1625,7 +1625,7 @@ async def disparar_blackjack(guild):
         "```"
     )
     embed.set_image(url=GIF_BLACKJACK)
-    embed.set_footer(text="⏱️ Mesa aberta por 5 minutos! Boa sorte! 🐲")
+    embed.set_footer(text="⏱️ Mesa aberta por 5 minutos! Boa sorte! 🦇")
 
     await canal_games.send(embed=embed)
     await asyncio.sleep(300)
@@ -1633,7 +1633,7 @@ async def disparar_blackjack(guild):
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
     jogo_em_andamento["dados_blackjack"] = {}
-    await canal_games.send("🃏 A mesa de Blackjack foi encerrada! Até a próxima rodada! 🐲🏁")
+    await canal_games.send("🃏 A mesa de Blackjack foi encerrada! Até a próxima rodada! 🦇🏁")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 💣 NOVO JOGO: CAMPO MINADO
@@ -1662,10 +1662,10 @@ async def disparar_campominado(guild):
     jogo_em_andamento["dados_campo"] = mapa_campo
 
     embed = discord.Embed(color=0x2ECC71)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "💣 CAMPO MINADO — CUIDADO COM AS BOMBAS! 💥"
     embed.description = (
-        "O Monstrinho escondeu cofres e minas num campo 3×3! 🐲💰\n\n"
+        "O Vampy escondeu cofres e minas num campo 3×3! 🦇💰\n\n"
         "**Escolha uma casa digitando um número de 1 a 9:**\n\n"
         "```\n"
         "┌───┬───┬───┐\n"
@@ -1681,7 +1681,7 @@ async def disparar_campominado(guild):
         "> ⚠️ Cada pessoa só pode escolher **UMA casa**!"
     )
     embed.set_image(url=GIF_MINAS)
-    embed.set_footer(text="⏱️ 5 minutos para fazer sua escolha! Confie no seu instinto! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para fazer sua escolha! Confie no seu instinto! 🦇")
 
     await canal_games.send(embed=embed)
     await asyncio.sleep(300)
@@ -1689,7 +1689,7 @@ async def disparar_campominado(guild):
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
     jogo_em_andamento["dados_campo"] = {}
-    await canal_games.send("💣 Campo desarmado! Evento encerrado! 🐲🏁")
+    await canal_games.send("💣 Campo desarmado! Evento encerrado! 🦇🏁")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 🐉 NOVO JOGO: DESAFIO DO DRAGÃO
@@ -1705,10 +1705,10 @@ async def disparar_dragao(guild):
     jogo_em_andamento["resposta"] = "dragao"
 
     embed = discord.Embed(color=0xFF6600)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
     embed.title = "🐉 DESAFIO DO DRAGÃO — ESCOLHA SUA ESTRATÉGIA! 🔥"
     embed.description = (
-        "Um dragão lendário apareceu no servidor! **TODOS** podem enfrentá-lo! 🐲⚔️\n\n"
+        "Um dragão lendário apareceu no servidor! **TODOS** podem enfrentá-lo! 🦇⚔️\n\n"
         "Escolha sua estratégia digitando:\n\n"
         "```\n"
         "🔥  ESTRATÉGIAS\n"
@@ -1729,14 +1729,14 @@ async def disparar_dragao(guild):
         "> ⚠️ Você só pode tentar **UMA vez** por evento!"
     )
     embed.set_image(url=GIF_DRAGAO)
-    embed.set_footer(text="⏱️ 5 minutos para enfrentar o dragão! Seja corajoso! 🐲")
+    embed.set_footer(text="⏱️ 5 minutos para enfrentar o dragão! Seja corajoso! 🦇")
 
     await canal_games.send(embed=embed)
     await asyncio.sleep(300)
 
     jogo_em_andamento["venceu"] = True
     jogo_em_andamento["resposta"] = None
-    await canal_games.send("🐉 O dragão voltou para sua caverna! Evento encerrado! 🐲🏁")
+    await canal_games.send("🐉 O dragão voltou para sua caverna! Evento encerrado! 🦇🏁")
 
 async def disparar_pergunta(guild, tipo_escolhido=None):
     canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
@@ -1778,13 +1778,13 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     jogo_em_andamento["participantes_tentaram"] = []
 
     embed = discord.Embed(color=0xADFF2F)
-    embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+    embed.set_thumbnail(url=AVATAR_VAMPY)
 
     if tipo_evento == "pergunta":
         pergunta, response_str = random.choice(LISTA_PERGUNTAS)
         jogo_em_andamento["pergunta"] = pergunta
         jogo_em_andamento["resposta"] = response_str.lower()
-        embed.title = "🐲 HORA DO JOGUINHO DO MONSTRINHO! 🐲"
+        embed.title = "🦇 HORA DO JOGUINHO DO VAMPY! 🦇"
         embed.description = (
             f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n"
             f"❓ **PERGUNTA:**\n> {pergunta}\n\n"
@@ -1823,7 +1823,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
             "❌  Derrota  →  -50 coins\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "```\n"
-            "O Monstrinho vai jogar ao mesmo tempo que você! 🐲"
+            "O Vampy vai jogar ao mesmo tempo que você! 🦇"
         )
         embed.set_image(url=GIF_PPT)
 
@@ -1891,7 +1891,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         palavra_shuffled = "".join(lista_letras)
         embed.title = "🔤 PALAVRA EMBARALHADA — DESEMBARALHE!"
         embed.description = (
-            f"O Monstrinho embaralhou as letras de uma palavra! 🔡\n\n"
+            f"O Vampy embaralhou as letras de uma palavra! 🔡\n\n"
             f"**Letras embaralhadas:**\n"
             f"# `{palavra_shuffled}`\n\n"
             f"💡 *Dica: tem {len(palavra)} letras!*\n\n"
@@ -1906,7 +1906,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["resposta"] = "caixa"
         embed.title = "📦 CAIXA MISTERIOSA — QUAL VOCÊ ESCOLHE?"
         embed.description = (
-            "Três caixas estão na sua frente... O que será que tem dentro? 🐲✨\n\n"
+            "Três caixas estão na sua frente... O que será que tem dentro? 🦇✨\n\n"
             "Digite o número da caixa: **1**, **2** ou **3**!\n\n"
             "```\n"
             "📦 Caixa 1    →  ???\n"
@@ -1926,7 +1926,7 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         jogo_em_andamento["resposta"] = "abrir"
         embed.title = "🏴‍☠️ O BAÚ PERDIDO APARECEU!"
         embed.description = (
-            "Um baú antigo e misterioso apareceu no chat! 🐲✨\n\n"
+            "Um baú antigo e misterioso apareceu no chat! 🦇✨\n\n"
             "Você vai arriscar? Digite **ABRIR** para descobrir!\n\n"
             "```\n"
             "🏆  Tesouro  →  +300 coins  (50%)\n"
@@ -1946,19 +1946,19 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
         
         embed.title = "🤫 EVENTO SILENCIOSO ATIVADO! SHHH..."
         embed.description = (
-            "O Monstrinho escolheu um **número secreto de mensagens**! 🤫\n\n"
+            "O Vampy escolheu um **número secreto de mensagens**! 🤫\n\n"
             "Continue conversando normalmente — alguém vai ter sorte!\n\n"
             "```\n"
             "💰  Prêmio: 600 coins\n"
             "📝  Dica: o número está entre 1 e 20\n"
             "```\n"
-            "> *Shhh... não conta pra ninguém!* 🐲"
+            "> *Shhh... não conta pra ninguém!* 🦇"
         )
         embed.set_image(url=GIF_SILENCIOSO)
         await canal_games.send(embed=embed)
         return
 
-    embed.set_footer(text="⏱️ Você tem 5 minutos! Responda aqui no monstrinho-games! 🐲")
+    embed.set_footer(text="⏱️ Você tem 5 minutos! Responda aqui no vampy-games! 🦇")
     await canal_games.send(embed=embed)
 
     for _ in range(300):
@@ -1968,12 +1968,12 @@ async def disparar_pergunta(guild, tipo_escolhido=None):
     if not jogo_em_andamento["venceu"]:
         jogo_em_andamento["pergunta"] = None
         jogo_em_andamento["resposta"] = None
-        await canal_games.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Monstrinho queria muito te dar um prêmio! 🐲💔")
+        await canal_games.send("🥺 Ahhh poxa, ninguém acertou a tempo... O Vampy queria muito te dar um prêmio! 🦇💔")
 
 # ============== LOOP DO JOGO =================
 
 @tasks.loop(minutes=40)
-async def loop_jogo_monstrinho():
+async def loop_jogo_vampy():
     espera_extra = random.randint(0, 300)
     await asyncio.sleep(espera_extra)
     
@@ -2007,21 +2007,21 @@ class LojaSelect(discord.ui.Select):
         user_id = interaction.user.id
         item = self.values[0]
         custo = PRECOS_LOJA[item]
-        saldo = pontuacao_monstrinho.get(user_id, 0)
+        saldo = pontuacao_vampy.get(user_id, 0)
 
         if saldo < custo:
             embed_erro = discord.Embed(
-                description=f"🥺 Oh, meu bem... você ainda não tem coins suficientes para esse prêmio! 🐲💔\n\nVocê tem: `{saldo} Coins` | Precisa de: `{custo} Coins`",
+                description=f"🥺 Oh, meu bem... você ainda não tem coins suficientes para esse prêmio! 🦇💔\n\nVocê tem: `{saldo} Coins` | Precisa de: `{custo} Coins`",
                 color=0xFF0000
             )
             return await interaction.response.send_message(embed=embed_erro, ephemeral=True)
 
-        pontuacao_monstrinho[user_id] -= custo
+        pontuacao_vampy[user_id] -= custo
         await atualizar_ranking(interaction.guild)
 
         embed_sucesso = discord.Embed(
-            title="🎁 RESGATE REALIZADO! 🐲💚",
-            description=f"AAAA que felicidade, {interaction.user.mention}! ✨\n\nVocê resgatou: **{item.replace('_', ' ').title()}**!\n\nAgora é só aguardar um pouquinho que a staff já foi avisada e vai cuidar de tudo para você! Seu saldo foi atualizado. 🐲💖",
+            title="🎁 RESGATE REALIZADO! 🦇💚",
+            description=f"AAAA que felicidade, {interaction.user.mention}! ✨\n\nVocê resgatou: **{item.replace('_', ' ').title()}**!\n\nAgora é só aguardar um pouquinho que a staff já foi avisada e vai cuidar de tudo para você! Seu saldo foi atualizado. 🦇💖",
             color=0x00FF7F
         )
         await interaction.response.send_message(embed=embed_sucesso, ephemeral=True)
@@ -2077,7 +2077,7 @@ class DesfazerAvisoView(discord.ui.View):
         if canal_geral:
             await canal_geral.send(
                 f"✅ {membro.mention} a staff revisou e percebeu que foi sem querer! "
-                f"Seus avisos foram zerados. Fica tranquilo(a)! 🐲💚"
+                f"Seus avisos foram zerados. Fica tranquilo(a)! 🦇💚"
             )
 
     @discord.ui.button(label="🔓 Remover Castigo/Timeout", style=discord.ButtonStyle.primary, custom_id="remover_castigo_v2")
@@ -2104,7 +2104,7 @@ class DesfazerAvisoView(discord.ui.View):
         if canal_geral:
             await canal_geral.send(
                 f"⚠️ {membro.mention} foi liberado(a) pela staff. "
-                f"Mas continue se comportando! 🐲💚"
+                f"Mas continue se comportando! 🦇💚"
             )
 
 # Manter alias para compatibilidade com on_ready
@@ -2117,7 +2117,7 @@ class AprovarMembroView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not interaction.user.guild_permissions.manage_roles:
-            await interaction.response.send_message("❌ Só a staff pode usar 😤🐲", ephemeral=True)
+            await interaction.response.send_message("❌ Só a staff pode usar 😤🦇", ephemeral=True)
             return False
         return True
 
@@ -2132,7 +2132,7 @@ class AprovarMembroView(discord.ui.View):
         cargos = [discord.utils.get(guild.roles, name=CARGO_MEMBRO_NOVO), discord.utils.get(guild.roles, name=CARGO_MEMBROS)]
         for c in cargos:
             if c: await membro.add_roles(c)
-        try: await membro.send("AAAA 😭🐲💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
+        try: await membro.send("AAAA 😭🦇💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
         except: pass
         canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
         cargo_anjo = discord.utils.get(guild.roles, name=CARGO_ANJO)
@@ -2146,30 +2146,30 @@ class AprovarMembroView(discord.ui.View):
             canal_rpg = discord.utils.get(guild.text_channels, name="🌎・mundo-csi")
             canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
             rpg_mention = canal_rpg.mention if canal_rpg else "#🌎・mundo-csi"
-            games_mention = canal_games.mention if canal_games else "#🎲・monstrinho-games"
+            games_mention = canal_games.mention if canal_games else "#🎲・vampy-games"
             msg_boas_vindas = (
-                f"✨💚 tum tum tum… o Monstrinho apareceu! 💚✨\n\n"
+                f"✨💚 tum tum tum… o Vampy apareceu! 💚✨\n\n"
                 f"Atençãooo!! Temos alguém novo chegando no nosso cantinho 👀✨\n\n"
-                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 O Monstrinho já abriu espaço, ajeitou tudo por aqui e tá prontinho pra te acompanhar nessa nova fase.\n\n"
+                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 O Vampy já abriu espaço, ajeitou tudo por aqui e tá prontinho pra te acompanhar nessa nova fase.\n\n"
                 f"🦇 {' 🦇 '.join(mencoes)}\n\n"
                 f"Venham dar aquele abraço de boas-vindas que só a gente sabe dar 💚\n"
                 f"Aqui você não entrou só em um servidor… Entrou em um lar.\n\n"
-                f"O Monstrinho foi criado pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
+                f"O Vampy foi criado pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
                 f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n\n"
                 f"🌎 Curte RPG? Dá uma espiadinha no {rpg_mention} e entra na aventura!\n"
                 f"🎲 Gosta de joguinhos? Te espero no {games_mention} pra gente se divertir!\n\n"
-                f"Com carinho, Monstrinho. 💚"
+                f"Com carinho, Vampy. 💚"
             )
             await canal_geral.send(msg_boas_vindas)
         await interaction.followup.send("✅ Liberado com sucesso!", ephemeral=True)
 
     @discord.ui.button(label="⏳ Aguardar", style=discord.ButtonStyle.secondary, custom_id="aguardar_membro")
     async def aguardar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🕒 Em análise 💚🐲", ephemeral=True)
+        await interaction.response.send_message("🕒 Em análise 💚🦇", ephemeral=True)
         guild = interaction.guild
         membro = guild.get_member(self.membro_id)
         if membro:
-            try: await membro.send("Oii neném 😭🐲💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
+            try: await membro.send("Oii neném 😭🦇💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
             except: pass
 
     @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger, custom_id="recusar_membro")
@@ -2195,7 +2195,7 @@ class FecharTicketView(discord.ui.View):
             if (cargo_anjo not in interaction.user.roles) and not eh_staff:
                 return await interaction.response.send_message("❌ Apenas os Anjos ou a Staff podem fechar este canal de acolhimento! 🪽", ephemeral=True)
         
-        await interaction.response.send_message("🔒 Fechando este ticket em 5 segundinhos... tchau tchau! 🐲💚", ephemeral=True)
+        await interaction.response.send_message("🔒 Fechando este ticket em 5 segundinhos... tchau tchau! 🦇💚", ephemeral=True)
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
@@ -2299,12 +2299,12 @@ class TicketSelect(discord.ui.Select):
             await canal.send(embed=embed_cat)
             
         elif tipo == "lider_torcida":
-            await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🐲", view=FecharTicketView())
+            await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🦇", view=FecharTicketView())
 
         elif tipo == "acesso_funcoes":
             embed_acesso = discord.Embed(
                 title="🔒 ACESSO A FUNÇÕES",
-                description=f"{user.mention}, qual função você está solicitando acesso? Explique para a staff! 💚🐲",
+                description=f"{user.mention}, qual função você está solicitando acesso? Explique para a staff! 💚🦇",
                 color=0xFFA500
             )
             await canal.send(embed=embed_acesso, view=FecharTicketView())
@@ -2312,7 +2312,7 @@ class TicketSelect(discord.ui.Select):
         elif tipo == "influencer":
             embed_influencer = discord.Embed(
                 title="🎤 INFLUENCER",
-                description=f"{user.mention}, nos conta sobre o seu perfil e por que você quer ser Influencer no servidor! 💚🐲",
+                description=f"{user.mention}, nos conta sobre o seu perfil e por que você quer ser Influencer no servidor! 💚🦇",
                 color=0xFF69B4
             )
             await canal.send(embed=embed_influencer, view=FecharTicketView())
@@ -2320,7 +2320,7 @@ class TicketSelect(discord.ui.Select):
         elif tipo == "cineasta":
             embed_cineasta = discord.Embed(
                 title="🎬 CINEASTA",
-                description=f"{user.mention}, nos conta sobre o seu trabalho audiovisual e por que você quer ser Cineasta no servidor! 💚🐲",
+                description=f"{user.mention}, nos conta sobre o seu trabalho audiovisual e por que você quer ser Cineasta no servidor! 💚🦇",
                 color=0x8B0000
             )
             await canal.send(embed=embed_cineasta, view=FecharTicketView())
@@ -2328,7 +2328,7 @@ class TicketSelect(discord.ui.Select):
         elif tipo == "sync":
             embed_sync = discord.Embed(
                 title="🎵 SYNC",
-                description=f"{user.mention}, nos conta sobre a sua proposta de Sync e como você pode contribuir! 💚🐲",
+                description=f"{user.mention}, nos conta sobre a sua proposta de Sync e como você pode contribuir! 💚🦇",
                 color=0x9B59B6
             )
             await canal.send(embed=embed_sync, view=FecharTicketView())
@@ -2336,7 +2336,7 @@ class TicketSelect(discord.ui.Select):
         else:
             await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
 
-        await interaction.response.send_message("✅ Ticket criado com sucesso! 💚🐲", ephemeral=True)
+        await interaction.response.send_message("✅ Ticket criado com sucesso! 💚🦇", ephemeral=True)
 
 class TicketView(discord.ui.View):
     def __init__(self):
@@ -2347,15 +2347,15 @@ class TicketView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    print(f"🐲 Ligado como {bot.user}")
+    print(f"🦇 Ligado como {bot.user}")
     bot.add_view(TicketView())
     bot.add_view(FecharTicketView())
     bot.add_view(DesfazerAvisoView(0))
     bot.add_view(LojaView())
     bot.add_view(BanirMembroView())   # intercepta "Revogar banimento" + "Pronto" existentes
     
-    if not loop_jogo_monstrinho.is_running():
-        loop_jogo_monstrinho.start()
+    if not loop_jogo_vampy.is_running():
+        loop_jogo_vampy.start()
 
     for guild in bot.guilds:
         # Prólogo fofo no canal de games
@@ -2366,7 +2366,7 @@ async def on_ready():
         if canal_tkt:
             try: await canal_tkt.purge(limit=5)
             except: pass
-            await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
+            await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🦇", view=TicketView())
             embed_banner = discord.Embed(color=0x2b2d31)
             embed_banner.set_image(url=BANNER_TICKET)
             await canal_tkt.send(embed=embed_banner)
@@ -2377,7 +2377,7 @@ async def on_ready():
             try: await canal_loja.purge(limit=10)
             except: pass
             embed_loja = discord.Embed(
-                title="🪙 Loja de Monstrinhos Coins do Servidor",
+                title="🪙 Loja de Vampys Coins do Servidor",
                 description=(
                     "🏷️ **Cargos**\n"
                     "• Cargo exclusivo por 7 dias — `10.000 coins`\n"
@@ -2391,8 +2391,8 @@ async def on_ready():
                 ),
                 color=0xFFD700
             )
-            embed_loja.set_thumbnail(url=AVATAR_MONSTRINHO)
-            embed_loja.set_footer(text="Escolha seu item no menu abaixo! 🐲💚")
+            embed_loja.set_thumbnail(url=AVATAR_VAMPY)
+            embed_loja.set_footer(text="Escolha seu item no menu abaixo! 🦇💚")
             await canal_loja.send(embed=embed_loja, view=LojaView())
 
 @bot.event
@@ -2405,10 +2405,10 @@ async def on_member_join(member):
 async def on_member_remove(member):
     try:
         mensagem_despedida = (
-            f"**Ah não... minhas asinhas até murcharam agora...** 😭🐲💔\n\n"
-            f"Poxa, {member.name}, o Monstrinho ficou muito, muito triste em ver você partindo da nossa família CSI. "
+            f"**Ah não... minhas asinhas até murcharam agora...** 😭🦇💔\n\n"
+            f"Poxa, {member.name}, o Vampy ficou muito, muito triste em ver você partindo da nossa família CSI. "
             f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
-            f"**Até logo, neném... vou sentir saudades!** 🐲💚👋"
+            f"**Até logo, neném... vou sentir saudades!** 🦇💚👋"
         )
         await member.send(mensagem_despedida)
     except: pass
@@ -2424,19 +2424,19 @@ async def on_member_update(before, after):
             (
                 f"✨🎂 ESPERA, ESPERA, ESPERA!! 🎂✨\n\n"
                 f"Hoje é o dia mais especial do ano pra {after.mention}!! 🥳💚\n\n"
-                f"O Monstrinho colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🐲🎉\n"
+                f"O Vampy colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🦇🎉\n"
                 f"Que esse dia seja tão lindo quanto você, cheio de amor, risada e tudo de bom que você merece!\n\n"
                 f"**Feliz Aniversário, neném!! 🎂💚✨**"
             ),
             (
                 f"🎉💚 TUM TUM TUM… adivinha quem faz aniversário HOJE?! 💚🎉\n\n"
-                f"{after.mention}, o Monstrinho não ia deixar esse dia passar em branco não!! 🥺🐲\n\n"
+                f"{after.mention}, o Vampy não ia deixar esse dia passar em branco não!! 🥺🦇\n\n"
                 f"Vim aqui do fundo do coração te desejar um dia incrível, repleto de alegria, de pessoas que você ama e de muito, muito carinho!\n"
                 f"Você merece tudo de melhor que esse mundo tem a oferecer! 🌟\n\n"
                 f"**Parabéns pra você!! 🎂💚🎊**"
             ),
             (
-                f"🐲💕 OI OI OI!! O Monstrinho ficou sabendo de um segredinho… 👀🎂\n\n"
+                f"🦇💕 OI OI OI!! O Vampy ficou sabendo de um segredinho… 👀🎂\n\n"
                 f"Hoje é o aniversário da nossa querida {after.mention}!! 🥳✨\n\n"
                 f"Que a vida te presenteie com dias leves, sorrisos verdadeiros e muita coisa boa chegando por aí!\n"
                 f"Aqui na nossa família a gente torce muito por você, saiba disso! 💚🫶\n\n"
@@ -2461,7 +2461,7 @@ async def on_message_delete(message):
 @bot.command()
 async def jogo(ctx):
     if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🐲")
+        return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🦇")
     canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
     if not canal_games:
         return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome exato.")
@@ -2544,7 +2544,7 @@ async def bauperdido(ctx):
 @bot.command()
 async def roleta(ctx):
     if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🐲")
+        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🦇")
     try: await ctx.message.delete()
     except: pass
     await disparar_roleta(ctx.guild)
@@ -2612,18 +2612,18 @@ async def cmd_dragao(ctx):
 @bot.command()
 async def resetar_ranking(ctx):
     if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode resetar o ranking! 🐲😤")
-    global pontuacao_monstrinho
-    pontuacao_monstrinho = {}
+        return await ctx.send("❌ Só meu papai pode resetar o ranking! 🦇😤")
+    global pontuacao_vampy
+    pontuacao_vampy = {}
     await atualizar_ranking(ctx.guild)
-    await ctx.send("✅ **O Ranking de Monstrinho-Coins foi resetado com sucesso!** 🐲✨ Todos voltam ao zero!")
+    await ctx.send("✅ **O Ranking de Vampy-Coins foi resetado com sucesso!** 🦇✨ Todos voltam ao zero!")
 
 @bot.command()
 async def bauadm(ctx):
     if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode abrir o Baú do ADM! 🐲💎")
+        return await ctx.send("❌ Só meu papai pode abrir o Baú do ADM! 🦇💎")
     
-    await ctx.send("💰 **BAÚ DO ADM!** 💰\n\nMeu papai, para quem você quer abrir o baú? Mencione (@) a pessoa sortuda agora! 🐲✨")
+    await ctx.send("💰 **BAÚ DO ADM!** 💰\n\nMeu papai, para quem você quer abrir o baú? Mencione (@) a pessoa sortuda agora! 🦇✨")
     
     def check_user(m):
         return m.author == ctx.author and m.channel == ctx.channel and len(m.mentions) > 0
@@ -2632,7 +2632,7 @@ async def bauadm(ctx):
         msg_user = await bot.wait_for("message", check=check_user, timeout=30)
         alvo = msg_user.mentions[0]
         
-        await ctx.send(f"💎 Entendido! E quantos **Monstrinho-Coins** você quer dar para o(a) {alvo.mention}? 🐲💰")
+        await ctx.send(f"💎 Entendido! E quantos **Vampy-Coins** você quer dar para o(a) {alvo.mention}? 🦇💰")
         
         def check_quant(m):
             return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
@@ -2640,11 +2640,11 @@ async def bauadm(ctx):
         msg_quant = await bot.wait_for("message", check=check_quant, timeout=30)
         quantidade = int(msg_quant.content)
         
-        pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + quantidade
+        pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + quantidade
         
         embed = discord.Embed(
             title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Monstrinho-Coins** diretamente do tesouro real! 🐲💚✨",
+            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Vampy-Coins** diretamente do tesouro real! 🦇💚✨",
             color=0xFFD700
         )
         embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
@@ -2653,13 +2653,13 @@ async def bauadm(ctx):
         await atualizar_ranking(ctx.guild)
         
     except asyncio.TimeoutError:
-        await ctx.send("⏰ O tempo acabou e o baú se fechou! 🐲")
+        await ctx.send("⏰ O tempo acabou e o baú se fechou! 🦇")
 
 @bot.command(name="removercastigo")
 async def remover_castigo_manual(ctx, membro: discord.Member):
     eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in ctx.author.roles) or ctx.author.id == DONO_ID
     if not eh_staff:
-        return await ctx.send("❌ Você não tem permissão para usar esse comando! 🐲😤")
+        return await ctx.send("❌ Você não tem permissão para usar esse comando! 🦇😤")
     try:
         await membro.timeout(None)
         avisos_usuarios[membro.id] = 0
@@ -2667,11 +2667,11 @@ async def remover_castigo_manual(ctx, membro: discord.Member):
         await remover_cargos_advertencia(membro)
         embed = discord.Embed(
             title="🔓 CASTIGO REMOVIDO MANUALMENTE",
-            description=f"O membro {membro.mention} teve seus avisos resetados e o castigo removido por {ctx.author.mention}. 🐲💚",
+            description=f"O membro {membro.mention} teve seus avisos resetados e o castigo removido por {ctx.author.mention}. 🦇💚",
             color=0x00FF7F,
             timestamp=datetime.now()
         )
-        embed.set_thumbnail(url=AVATAR_MONSTRINHO)
+        embed.set_thumbnail(url=AVATAR_VAMPY)
         await ctx.send(embed=embed)
     except Exception as e:
         await ctx.send(f"❌ Ocorreu um erro ao tentar remover o castigo: {e}")
@@ -2690,11 +2690,11 @@ async def reset_ticket(ctx):
     try: await canal_tkt.purge(limit=10)
     except: pass
     
-    await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🐲", view=TicketView())
+    await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🦇", view=TicketView())
     embed_banner = discord.Embed(color=0x2b2d31)
     embed_banner.set_image(url=BANNER_TICKET)
     await canal_tkt.send(embed=embed_banner)
-    await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🐲", delete_after=5)
+    await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🦇", delete_after=5)
 
 # ══════════════════════════════════════════════════════════════════
 # 🌐 AUTO-TRADUÇÃO — Cargo Translate
@@ -2753,7 +2753,7 @@ async def auto_traduzir_mensagem(message: discord.Message):
         color=0x5865F2,
         timestamp=datetime.utcnow()
     )
-    embed.set_footer(text="🦇 Monstrinho Translate • Esta mensagem some em 1 minuto")
+    embed.set_footer(text="🦇 Vampy Translate • Esta mensagem some em 1 minuto")
     msg_traduzida = await message.channel.send(embed=embed)
     await asyncio.sleep(60)
     try:
@@ -2777,14 +2777,14 @@ async def on_message(message):
         contador_mensagens_silencioso += 1
         if contador_mensagens_silencioso >= meta_mensagens_silencioso:
             user_id = message.author.id
-            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 600
+            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 600
             
             embed_silencioso = discord.Embed(
-                title="🐲 SORTE NO SILÊNCIO! 🐲",
-                description=f"Surpresa! {message.author.mention}, você enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **600 Monstrinho-Coins**! 💎✨",
+                title="🦇 SORTE NO SILÊNCIO! 🦇",
+                description=f"Surpresa! {message.author.mention}, você enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **600 Vampy-Coins**! 💎✨",
                 color=0xFFD700
             )
-            embed_silencioso.set_thumbnail(url=AVATAR_MONSTRINHO)
+            embed_silencioso.set_thumbnail(url=AVATAR_VAMPY)
             await message.channel.send(embed=embed_silencioso)
             
             evento_silencioso_ativo = False
@@ -2833,18 +2833,18 @@ async def on_message(message):
                 if msg_content == jogo_em_andamento["resposta"]:
                     jogo_em_andamento["venceu"] = True
                     jogo_em_andamento["resposta"] = None
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 300
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 300
                     
                     embed_vitoria = discord.Embed(
                         title="🕵️ CASO RESOLVIDO! 🎉",
-                        description=f"Parabéns, detetive {message.author.mention}! 🔍✨\n\nVocê descobriu o culpado e ganhou **300 Monstrinho-Coins**! 🐲💚",
+                        description=f"Parabéns, detetive {message.author.mention}! 🔍✨\n\nVocê descobriu o culpado e ganhou **300 Vampy-Coins**! 🦇💚",
                         color=0x00FF7F
                     )
                     embed_vitoria.set_image(url=GIF_VITORIA)
                     await message.reply(embed=embed_vitoria)
                     await atualizar_ranking(message.guild)
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
                     await message.reply("❌ Não foi esse! Você perdeu **100 Coins**! Continue investigando... 🔍💔")
                     await atualizar_ranking(message.guild)
                 return
@@ -2857,7 +2857,7 @@ async def on_message(message):
                     description=f"**{carta['nome']}**\n\n*{carta['mensagem']}*",
                     color=0x9B59B6
                 )
-                embed_carta.set_thumbnail(url=AVATAR_MONSTRINHO)
+                embed_carta.set_thumbnail(url=AVATAR_VAMPY)
                 
                 if carta["tipo"] == "escolha_doar":
                     await message.reply(embed=embed_carta)
@@ -2877,9 +2877,9 @@ async def on_message(message):
                             try:
                                 msg_alvo = await bot.wait_for("message", check=check_mencao, timeout=30)
                                 alvo = msg_alvo.mentions[0]
-                                if pontuacao_monstrinho.get(user_id, 0) >= 100:
-                                    pontuacao_monstrinho[user_id] -= 100
-                                    pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 100
+                                if pontuacao_vampy.get(user_id, 0) >= 100:
+                                    pontuacao_vampy[user_id] -= 100
+                                    pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + 100
                                     embed_final = discord.Embed(
                                         title="💖 BONDADE RECOMPENSADA",
                                         description=f"{message.author.mention} doou 100 coins para {alvo.mention}!\n\nAs cartas sorriem para o generoso! 🔮✨",
@@ -2891,7 +2891,7 @@ async def on_message(message):
                             except asyncio.TimeoutError:
                                 await message.channel.send("⏰ Tempo esgotado!")
                         else:
-                            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 200
+                            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 200
                             embed_final = discord.Embed(
                                 title="💰 GANÂNCIA PREMIADA",
                                 description=f"{message.author.mention} escolheu o caminho da ambição e ganhou **200 Coins**! 🔮",
@@ -2916,7 +2916,7 @@ async def on_message(message):
                         if resposta.content.lower() == "arriscar":
                             if random.random() < 0.7:
                                 perda = random.randint(100, 250)
-                                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - perda
+                                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - perda
                                 embed_risco = discord.Embed(
                                     title="💀 A GANÂNCIA TEM SEU PREÇO!",
                                     description=f"{message.author.mention}, as cartas se voltaram contra você!\n\nVocê perdeu **{perda} Coins**! 🔮💔",
@@ -2925,7 +2925,7 @@ async def on_message(message):
                                 embed_risco.set_image(url=GIF_DERROTA)
                             else:
                                 ganho = random.randint(200, 400)
-                                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + ganho
+                                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + ganho
                                 embed_risco = discord.Embed(
                                     title="✨ A CORAGEM FOI RECOMPENSADA!",
                                     description=f"{message.author.mention}, os deuses da sorte te favorecem!\n\nVocê ganhou **{ganho} Coins**! 🔮✨",
@@ -2941,7 +2941,7 @@ async def on_message(message):
                     return
                 
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + carta["coins"]
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + carta["coins"]
                     
                     if carta["coins"] > 0:
                         embed_carta.set_image(url=GIF_VITORIA)
@@ -2959,18 +2959,18 @@ async def on_message(message):
             elif tipo == "sobrevivamonstro":
                 if msg_content == "escudo":
                     if random.random() < 0.5:
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 150
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 150
                         embed_resultado = discord.Embed(
                             title="🛡️ DEFESA BEM SUCEDIDA!",
-                            description=f"{message.author.mention} conseguiu se proteger do monstro com o escudo! 🐲✨\n\nVocê ganhou **150 Coins**!",
+                            description=f"{message.author.mention} conseguiu se proteger do monstro com o escudo! 🦇✨\n\nVocê ganhou **150 Coins**!",
                             color=0x00FF7F
                         )
                         embed_resultado.set_image(url=GIF_VITORIA)
                     else:
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
                         embed_resultado = discord.Embed(
                             title="💥 O ESCUDO QUEBROU!",
-                            description=f"{message.author.mention}, o monstro era muito forte! Seu escudo não resistiu... 🐲💔\n\nVocê perdeu **50 Coins**!",
+                            description=f"{message.author.mention}, o monstro era muito forte! Seu escudo não resistiu... 🦇💔\n\nVocê perdeu **50 Coins**!",
                             color=0xFF0000
                         )
                         embed_resultado.set_image(url=GIF_DERROTA)
@@ -2980,18 +2980,18 @@ async def on_message(message):
                 
                 elif msg_content == "espada":
                     if random.random() < 0.01:
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 700
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 700
                         embed_resultado = discord.Embed(
                             title="⚔️ GOLPE CRÍTICO ÉPICO!",
-                            description=f"{message.author.mention} DERROTOU O MONSTRO COM UM ÚNICO GOLPE! 🐲⚔️✨\n\nVocê é um VERDADEIRO HERÓI! Ganhou **700 Coins**!",
+                            description=f"{message.author.mention} DERROTOU O MONSTRO COM UM ÚNICO GOLPE! 🦇⚔️✨\n\nVocê é um VERDADEIRO HERÓI! Ganhou **700 Coins**!",
                             color=0xFFD700
                         )
                         embed_resultado.set_image(url=GIF_VITORIA)
                     else:
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
                         embed_resultado = discord.Embed(
                             title="💀 VOCÊ FOI DERROTADO!",
-                            description=f"{message.author.mention} tentou atacar mas o monstro era muito forte! 🐲💔\n\nVocê perdeu **100 Coins**!",
+                            description=f"{message.author.mention} tentou atacar mas o monstro era muito forte! 🦇💔\n\nVocê perdeu **100 Coins**!",
                             color=0xFF0000
                         )
                         embed_resultado.set_image(url=GIF_DERROTA)
@@ -3000,10 +3000,10 @@ async def on_message(message):
                     return
                 
                 elif msg_content == "fugir":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
                     embed_resultado = discord.Embed(
                         title="🏃 VOCÊ FUGIU!",
-                        description=f"{message.author.mention} preferiu a segurança e fugiu do monstro! 🐲💨\n\nVocê perdeu **50 Coins** mas está a salvo!",
+                        description=f"{message.author.mention} preferiu a segurança e fugiu do monstro! 🦇💨\n\nVocê perdeu **50 Coins** mas está a salvo!",
                         color=0xFFA500
                     )
                     await message.reply(embed=embed_resultado)
@@ -3017,8 +3017,8 @@ async def on_message(message):
                 if sorte < 0.5:
                     ganhou, premio = True, 300
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    embed_mimico = discord.Embed(title="💀 O MÍMICO TE PEGOU!", description=f"{message.author.mention}, o baú era um monstro! Você perdeu **100 Coins**! 🐲💔", color=0xFF0000)
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
+                    embed_mimico = discord.Embed(title="💀 O MÍMICO TE PEGOU!", description=f"{message.author.mention}, o baú era um monstro! Você perdeu **100 Coins**! 🦇💔", color=0xFF0000)
                     embed_mimico.set_image(url=GIF_MIMICO)
                     await message.reply(embed=embed_mimico)
                     await atualizar_ranking(message.guild)
@@ -3028,8 +3028,8 @@ async def on_message(message):
                 if msg_content == jogo_em_andamento["resposta"]:
                     ganhou, premio = True, 150
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
-                    await message.reply("🥺 Errou a palavra! O Monstrinho ficou triste e você perdeu **25 coins**! 🐲💔")
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
+                    await message.reply("🥺 Errou a palavra! O Vampy ficou triste e você perdeu **25 coins**! 🦇💔")
                     await atualizar_ranking(message.guild) 
                     return
 
@@ -3046,7 +3046,7 @@ async def on_message(message):
                     if val == 21:
                         # Blackjack de cara!
                         premio_bj = 350
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
                         embed_bj = discord.Embed(
                             title="🌟 BLACKJACK! 21 DE CARA!",
                             description=(
@@ -3082,7 +3082,7 @@ async def on_message(message):
 
                     if val > 21:
                         # Estourou
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
                         embed_bj = discord.Embed(
                             title="💥 ESTOUROU! PASSOU DE 21!",
                             description=(
@@ -3101,7 +3101,7 @@ async def on_message(message):
                         # Acertou 21 com HIT
                         ganhou_bj = True
                         premio_bj = 200
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
                         embed_bj = discord.Embed(
                             title="🎯 21! PERFEITO!",
                             description=(
@@ -3146,7 +3146,7 @@ async def on_message(message):
                     if val_dealer > 21 or val_jogador > val_dealer:
                         # Jogador venceu
                         premio_bj = 200
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_bj
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
                         embed_bj = discord.Embed(
                             title="✅ VOCÊ VENCEU O DEALER!",
                             description=(
@@ -3170,7 +3170,7 @@ async def on_message(message):
                             color=0xFFA500
                         )
                     else:
-                        pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
+                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
                         embed_bj = discord.Embed(
                             title="❌ O DEALER VENCEU!",
                             description=(
@@ -3199,7 +3199,7 @@ async def on_message(message):
                     return
                 tipo_campo, valor_campo = resultado_campo
                 if tipo_campo == "cofre":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + valor_campo
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + valor_campo
                     embed_campo = discord.Embed(
                         title="🟩 COFRE ENCONTRADO!",
                         description=(
@@ -3211,7 +3211,7 @@ async def on_message(message):
                     )
                     embed_campo.set_image(url=GIF_VITORIA)
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + valor_campo  # valor negativo
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + valor_campo  # valor negativo
                     embed_campo = discord.Embed(
                         title="💣 BOOM! VOCÊ PISOU NUMA MINA!",
                         description=(
@@ -3242,25 +3242,25 @@ async def on_message(message):
                 if not config_d:
                     return
                 if random.random() < config_d["chance"]:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + config_d["ganho"]
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + config_d["ganho"]
                     embed_dragao = discord.Embed(
                         title=config_d["win_title"],
                         description=(
                             f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
                             f"*{config_d['win_desc']}*\n\n"
-                            f"Você ganhou **{config_d['ganho']} Coins**! 🐲✨"
+                            f"Você ganhou **{config_d['ganho']} Coins**! 🦇✨"
                         ),
                         color=0x00FF7F
                     )
                     embed_dragao.set_image(url=GIF_VITORIA)
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - config_d["perda"]
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - config_d["perda"]
                     embed_dragao = discord.Embed(
                         title=config_d["lose_title"],
                         description=(
                             f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
                             f"*{config_d['lose_desc']}*\n\n"
-                            f"Você perdeu **{config_d['perda']} Coins**! 🐲💔"
+                            f"Você perdeu **{config_d['perda']} Coins**! 🦇💔"
                         ),
                         color=0xFF0000
                     )
@@ -3281,8 +3281,8 @@ async def on_message(message):
                     try:
                         resp = await bot.wait_for("message", check=check_caixa, timeout=30)
                         if resp.content.lower() == "ganhar":
-                            pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 80
-                            await message.reply("🐲 Você escolheu ganhar! +80 Coins na conta! 💚")
+                            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 80
+                            await message.reply("🦇 Você escolheu ganhar! +80 Coins na conta! 💚")
                         else:
                             await message.reply("😇 Que generoso! Mencione para quem você quer doar 100 coins agora!")
                             def check_doacao(m):
@@ -3290,24 +3290,24 @@ async def on_message(message):
                             try:
                                 msg_alvo = await bot.wait_for("message", check=check_doacao, timeout=30)
                                 alvo = msg_alvo.mentions[0]
-                                if pontuacao_monstrinho.get(user_id, 0) >= 100:
-                                    pontuacao_monstrinho[user_id] -= 100
-                                    pontuacao_monstrinho[alvo.id] = pontuacao_monstrinho.get(alvo.id, 0) + 100
-                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! O Monstrinho amou sua bondade! 🐲✨")
+                                if pontuacao_vampy.get(user_id, 0) >= 100:
+                                    pontuacao_vampy[user_id] -= 100
+                                    pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + 100
+                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! O Vampy amou sua bondade! 🦇✨")
                                 else:
-                                    await message.reply("❌ Você não tem coins suficientes para doar! O Monstrinho ficou confuso. 🐲")
+                                    await message.reply("❌ Você não tem coins suficientes para doar! O Vampy ficou confuso. 🦇")
                             except asyncio.TimeoutError:
                                 await message.reply("⏰ Tempo de doação acabou!")
                         await atualizar_ranking(message.guild)
                     except asyncio.TimeoutError:
-                        await message.reply("⏰ Você demorou demais e a caixa se fechou! 🐲")
+                        await message.reply("⏰ Você demorou demais e a caixa se fechou! 🦇")
 
                 elif resultado_caixa == "raro":
                     ganhou, premio = True, 450
                     
                 elif resultado_caixa == "perder":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **50 coins**! 🐲💔")
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
+                    await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **50 coins**! 🦇💔")
                     await atualizar_ranking(message.guild) 
                 
                 if not ganhou: return
@@ -3315,12 +3315,12 @@ async def on_message(message):
             elif tipo == "numero":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 700
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
                     if msg_content.isdigit():
                         tentado = int(msg_content)
                         correto  = int(jogo_em_andamento["resposta"])
                         dica = "🔺 **Muito alto!** Tente menor." if tentado > correto else "🔻 **Muito baixo!** Tente maior."
-                        await message.reply(f"❌ {dica} (-25 coins) 🐲")
+                        await message.reply(f"❌ {dica} (-25 coins) 🦇")
                     else:
                         await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
                     await atualizar_ranking(message.guild)
@@ -3328,27 +3328,27 @@ async def on_message(message):
             elif tipo == "ppt":
                 bot_choice = random.choice(["pedra", "papel", "tesoura"])
                 if msg_content == bot_choice:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 25
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
                     await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -25 coins... 🥺")
                     await atualizar_ranking(message.guild)
                 elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
                     ganhou, premio = True, 200
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 50
-                    await message.reply(f"😜 Eu venci com **{bot_choice}**! -50 coins... 🐲💔")
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
+                    await message.reply(f"😜 Eu venci com **{bot_choice}**! -50 coins... 🦇💔")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "cara_coroa":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 200
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 75
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 75
                     await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -75 coins! 🥺💔")
                     await atualizar_ranking(message.guild)
 
             elif tipo == "dado":
                 if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 60
                 else:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 10
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 10
                     await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -10 coins! 🥺")
                     await atualizar_ranking(message.guild)
 
@@ -3358,16 +3358,16 @@ async def on_message(message):
                 resultado = random.choices(opcoes_roleta, weights=pesos)[0]
                 
                 if resultado == "700":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + 700
-                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **700 Coins**! 🐲✨", color=0x00FFFF))
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 700
+                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **700 Coins**! 🦇✨", color=0x00FFFF))
                 elif resultado in ["80", "150"]:
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + int(resultado)
-                    await message.reply(f"🎉 {message.author.mention} ganhou **{resultado} Coins**! 🐲💚")
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + int(resultado)
+                    await message.reply(f"🎉 {message.author.mention} ganhou **{resultado} Coins**! 🦇💚")
                 elif resultado == "perder":
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) - 100
-                    await message.reply(embed=discord.Embed(title="💀 AZAR", description=f"{message.author.mention} perdeu **100 Coins**! 🐲💔", color=0xFF0000).set_image(url=GIF_DERROTA))
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
+                    await message.reply(embed=discord.Embed(title="💀 AZAR", description=f"{message.author.mention} perdeu **100 Coins**! 🦇💔", color=0xFF0000).set_image(url=GIF_DERROTA))
                 elif resultado == "jogo":
-                    await message.reply(f"🎡 {message.author.mention}, você ativou um bônus! Outro jogo vindo aí! 🐲🔥")
+                    await message.reply(f"🎡 {message.author.mention}, você ativou um bônus! Outro jogo vindo aí! 🦇🔥")
                     await asyncio.sleep(2); await disparar_pergunta(message.guild)
                 elif resultado == "dobrar":
                     premio_atual = 100
@@ -3382,16 +3382,16 @@ async def on_message(message):
                                     premio_atual *= 2
                                     await message.reply(f"✅ **CONSEGUIU!** Agora você tem **{premio_atual}** coins!")
                                 else:
-                                    await message.reply(f"💥 **PERDEU TUDO!** O Monstrinho engoliu suas moedas! 🐲💔")
+                                    await message.reply(f"💥 **PERDEU TUDO!** O Vampy engoliu suas moedas! 🦇💔")
                                     premio_atual = 0
                                     continuar = False
                             else:
-                                await message.reply(f"💰 Sábia escolha! Você garantiu **{premio_atual}** coins! 🐲💚")
+                                await message.reply(f"💰 Sábia escolha! Você garantiu **{premio_atual}** coins! 🦇💚")
                                 continuar = False
                         except asyncio.TimeoutError:
                             await message.reply(f"⏰ Tempo acabou! Você parou com **{premio_atual}** coins.")
                             continuar = False
-                    pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio_atual
+                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_atual
                 
                 await atualizar_ranking(message.guild); return
 
@@ -3401,9 +3401,9 @@ async def on_message(message):
             if ganhou:
                 jogo_em_andamento["venceu"] = True
                 jogo_em_andamento["resposta"] = None
-                pontuacao_monstrinho[user_id] = pontuacao_monstrinho.get(user_id, 0) + premio
-                embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Monstrinho-Coins**! 🐲💚", color=0x00FF7F)
-                embed_acerto.set_image(url=GIF_ACERTO_MONSTRINHO)
+                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio
+                embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Vampy-Coins**! 🦇💚", color=0x00FF7F)
+                embed_acerto.set_image(url=GIF_ACERTO_VAMPY)
                 await message.reply(embed=embed_acerto)
                 await atualizar_ranking(message.guild) 
             return
@@ -3486,8 +3486,8 @@ async def on_message(message):
                         inline=False
                     )
                     embed_castigo.set_footer(
-                        text="🐲 Monstrinho Moderação  •  Use os botões para gerenciar",
-                        icon_url=AVATAR_MONSTRINHO
+                        text="🦇 Vampy Moderação  •  Use os botões para gerenciar",
+                        icon_url=AVATAR_VAMPY
                     )
 
                     mencao_staff = cargo_staff.mention if cargo_staff else ""
@@ -3500,7 +3500,7 @@ async def on_message(message):
                 # Mensagem simples no canal da infração
                 await message.channel.send(
                     f"😢 {membro.mention} você ignorou todos os meus avisos... terei que te castigar por **{duracao_str}**. "
-                    f"Espero que você reflita e volte com mais calma! 🐲💔\n*Se foi um engano, chame a staff!*"
+                    f"Espero que você reflita e volte com mais calma! 🦇💔\n*Se foi um engano, chame a staff!*"
                 )
 
             # ── AVISOS 1 / 2 / 3 ─────────────────────────────────────────────
@@ -3608,7 +3608,7 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
         embed_reality.add_field(name="👤 Enviado por",    value=f"{autor.mention} (`{autor}` | ID: `{autor.id}`)", inline=False)
         embed_reality.add_field(name="📬 Destinatário",   value=dest_nome,                                         inline=False)
         embed_reality.set_thumbnail(url=autor.display_avatar.url)
-        embed_reality.set_footer(text="🐲 Monstrinho — Linha Indireta • Apenas você vê isso, Reality.")
+        embed_reality.set_footer(text="🦇 Vampy — Linha Indireta • Apenas você vê isso, Reality.")
 
         # ── Envia ao destinatário escolhido ───────────────────────────────
         enviado = False
@@ -3631,7 +3631,7 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
             await interaction.followup.send(
                 f"✅ **Mensagem enviada com sucesso!**\n"
                 f"Sua identidade foi mantida em **sigilo total**. "
-                f"**{dest_nome}** recebeu sua mensagem anonimamente. 🐲🔒",
+                f"**{dest_nome}** recebeu sua mensagem anonimamente. 🦇🔒",
                 ephemeral=True,
             )
         else:
@@ -3818,7 +3818,7 @@ async def _setup_linha_indireta():
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║         MONSTRINHO BANIR — Painel de Banimento v1.0             ║
+# ║         VAMPY BANIR — Painel de Banimento v1.0             ║
 # ║   Bane o membro + painel com Revogar → votação da direção       ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
@@ -3903,7 +3903,7 @@ class BanirMembroView(discord.ui.View):
             color=0xffaa00,
             timestamp=datetime.utcnow()
         )
-        embed_dir.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+        embed_dir.set_footer(text="🦇 Vampy • Ban Appeal System")
 
         vote_view = VotacaoBanView(guild, membro_id, membro_nome)
         msg       = await direcao_ch.send(embed=embed_dir, view=vote_view)
@@ -3972,7 +3972,7 @@ async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: st
             color=0xff4444,
             timestamp=datetime.utcnow()
         )
-        embed_dm.set_footer(text="🦇 Monstrinho • Sistema de Moderação")
+        embed_dm.set_footer(text="🦇 Vampy • Sistema de Moderação")
         await membro.send(embed=embed_dm)
     except Exception:
         pass
@@ -3994,8 +3994,8 @@ async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: st
     embed_conf.add_field(name="🛡️ Banido por", value=ctx.author.mention,       inline=True)
     embed_conf.add_field(name="📋 Motivo",     value=motivo,                    inline=False)
     embed_conf.set_footer(
-        text="🦇 Monstrinho Moderação • Use os botões abaixo para gerenciar",
-        icon_url=AVATAR_MONSTRINHO
+        text="🦇 Vampy Moderação • Use os botões abaixo para gerenciar",
+        icon_url=AVATAR_VAMPY
     )
 
     view = BanirMembroView()
@@ -4009,11 +4009,11 @@ async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: st
             color=0xCC0000,
             timestamp=datetime.utcnow()
         )
-        embed_log.set_author(name=f"{nome}  •  ID: {uid}", icon_url=AVATAR_MONSTRINHO)
+        embed_log.set_author(name=f"{nome}  •  ID: {uid}", icon_url=AVATAR_VAMPY)
         embed_log.add_field(name="👤 Membro",     value=f"**{nome}** (`{uid}`)", inline=True)
         embed_log.add_field(name="🛡️ Staff",      value=ctx.author.mention,       inline=True)
         embed_log.add_field(name="📋 Motivo",      value=motivo,                   inline=False)
-        embed_log.set_footer(text="🐲 Monstrinho Moderação")
+        embed_log.set_footer(text="🦇 Vampy Moderação")
         await canal_adv.send(embed=embed_log)
 
     try:
@@ -4033,8 +4033,8 @@ async def cmd_banir_error(ctx: commands.Context, error: Exception):
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║        MONSTRINHO BAN APPEAL — Sistema de Votação v1.0          ║
-# ║   Votação da direção pra desbanir membros • Estilo Monstrinho   ║
+# ║        VAMPY BAN APPEAL — Sistema de Votação v1.0          ║
+# ║   Votação da direção pra desbanir membros • Estilo Vampy   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
@@ -4124,7 +4124,7 @@ class VotacaoBanView(discord.ui.View):
                 ),
                 inline=False
             )
-        embed.set_footer(text="🦇 Monstrinho • Sistema de Votação de Ban Appeal")
+        embed.set_footer(text="🦇 Vampy • Sistema de Votação de Ban Appeal")
         return embed
 
     @discord.ui.button(label="✅ Aprovar Retorno", style=discord.ButtonStyle.success, emoji="✅")
@@ -4207,7 +4207,7 @@ class VotacaoBanView(discord.ui.View):
                 try:
                     await self.guild.unban(
                         discord.Object(id=self.user_id),
-                        reason="✅ Votação da direção aprovada — Monstrinho Ban Appeal"
+                        reason="✅ Votação da direção aprovada — Vampy Ban Appeal"
                     )
                     await self.message.channel.send(
                         f"🎉 **{self.user_name}** (`{self.user_id}`) foi desbanido(a) com sucesso!! "
@@ -4230,7 +4230,7 @@ class VotacaoBanView(discord.ui.View):
         await self._encerrar()
 
 
-class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
+class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
     """Sistema de votação para ban appeal via DM."""
 
     def __init__(self, bot: commands.Bot):
@@ -4261,7 +4261,7 @@ class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
 
         if guild_encontrado is None:
             await message.channel.send(
-                "❌ Você não está banido de nenhum servidor gerenciado pelo Monstrinho! 🦇\n"
+                "❌ Você não está banido de nenhum servidor gerenciado pelo Vampy! 🦇\n"
                 "Se acha que é um erro, entre em contato com a administração."
             )
             return
@@ -4297,7 +4297,7 @@ class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
             color=0xffaa00,
             timestamp=datetime.utcnow()
         )
-        embed_direcao.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+        embed_direcao.set_footer(text="🦇 Vampy • Ban Appeal System")
         try:
             embed_direcao.set_thumbnail(url=message.author.display_avatar.url)
         except Exception:
@@ -4356,7 +4356,7 @@ class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
             color=0xffaa00,
             timestamp=datetime.utcnow()
         )
-        embed_dir.set_footer(text="🦇 Monstrinho • Ban Appeal System")
+        embed_dir.set_footer(text="🦇 Vampy • Ban Appeal System")
 
         view = VotacaoBanView(guild, user_id, user_name)
         msg  = await direcao_ch.send(embed=embed_dir, view=view)
@@ -4380,8 +4380,8 @@ class BanAppealCog(commands.Cog, name="MonStrinhoBanAppeal"):
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║         MONSTRINHO VOICEMASTER — Calls Fofas v1.0               ║
-# ║   Sistema completo de calls temporárias • Estilo Monstrinho     ║
+# ║         VAMPY VOICEMASTER — Calls Fofas v1.0               ║
+# ║   Sistema completo de calls temporárias • Estilo Vampy     ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -4401,25 +4401,25 @@ VM_CATEGORY_ID       = 1304658655026741260    # ID da categoria onde o lobby e a
 _VM_MSGS = {
     "sem_call":            "Você não tem uma call ativa ainda, {user}!! Entra no 🎙️ Criar Call pra começar!! 🦇",
     "renomeada":           "Prontinho!! Renomeei sua call pra **{nome}**!! Ficou lindo!! ✨🦇",
-    "limite_set":          "Ok!! Agora sua call aceita até **{limite}** pessoas!! 🎯🐲",
+    "limite_set":          "Ok!! Agora sua call aceita até **{limite}** pessoas!! 🎯🦇",
     "limite_removido":     "Removido!! Qualquer quantidade de pessoas pode entrar agora!! 🥳🦇",
-    "trancada":            "Call trancada!! Só quem você convidar pode entrar agora!! 🔒🐲",
+    "trancada":            "Call trancada!! Só quem você convidar pode entrar agora!! 🔒🦇",
     "destrancada":         "Call aberta!! Qualquer pessoa pode entrar agora!! 🔓🦇",
-    "invisivel":           "Agora sua call tá oculta!! Ninguém vai saber que ela existe!! 👻🐲",
+    "invisivel":           "Agora sua call tá oculta!! Ninguém vai saber que ela existe!! 👻🦇",
     "visivel":             "Sua call voltou a aparecer pra todo mundo!! 👁️🦇",
-    "usuario_kickado":     "Tchau tchau, **{user}**!! O dono te pediu pra sair da call!! 👋🐲",
+    "usuario_kickado":     "Tchau tchau, **{user}**!! O dono te pediu pra sair da call!! 👋🦇",
     "usuario_banido":      "**{user}** foi banido(a) da call!! Não pode mais entrar!! 🚫🦇",
-    "usuario_permitido":   "**{user}** agora pode entrar na sua call!! Bem-vindo(a)!! 💕🐲",
-    "dono_transferido":    "Transferido!! Agora **{user}** é o(a) novo(a) dono(a) da call!! 👑🐲",
+    "usuario_permitido":   "**{user}** agora pode entrar na sua call!! Bem-vindo(a)!! 💕🦇",
+    "dono_transferido":    "Transferido!! Agora **{user}** é o(a) novo(a) dono(a) da call!! 👑🦇",
     "dono_reivindicado":   "Você assumiu o controle da call!! Agora é sua!! 👑🥳🦇",
-    "bitrate_set":         "Qualidade de áudio atualizada pra **{bitrate}kbps**!! Ficou top!! 🎧🐲",
+    "bitrate_set":         "Qualidade de áudio atualizada pra **{bitrate}kbps**!! Ficou top!! 🎧🦇",
     "permanente":          "Sua call agora é **permanente**!! Não vai sumir mesmo vazia!! 💎🦇",
-    "temporaria":          "Sua call voltou a ser **temporária**!! Vai sumir quando ficar vazia!! 🕐🐲",
+    "temporaria":          "Sua call voltou a ser **temporária**!! Vai sumir quando ficar vazia!! 🕐🦇",
     "nao_na_call":         "Você precisa tá dentro da call pra usar isso, {user}!! 🥺🦇",
-    "user_nao_na_call":    "Esse(a) usuário(a) não tá na sua call!! 🤔🐲",
+    "user_nao_na_call":    "Esse(a) usuário(a) não tá na sua call!! 🤔🦇",
     "ja_dono":             "Você já é o(a) dono(a) dessa call!! 😄🦇",
-    "dono_ainda_na_call":  "O dono ainda tá na call!! Só dá pra reivindicar quando ele sair!! 🥺🐲",
-    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use !vm reset pra recriar!! 🤔🐲",
+    "dono_ainda_na_call":  "O dono ainda tá na call!! Só dá pra reivindicar quando ele sair!! 🥺🦇",
+    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use !vm reset pra recriar!! 🤔🦇",
 }
 
 def _vm_msg(key: str, **kwargs) -> str:
@@ -4433,17 +4433,17 @@ _VM_COR_ERRO  = 0xFF6B6B
 
 def _vm_embed_ok(titulo: str, desc: str) -> discord.Embed:
     e = discord.Embed(title=titulo, description=desc, color=_VM_COR_OK, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Monstrinho VoiceMaster")
+    e.set_footer(text="🦇 Vampy VoiceMaster")
     return e
 
 def _vm_embed_erro(desc: str) -> discord.Embed:
     e = discord.Embed(title="❌ Eita!!", description=desc, color=_VM_COR_ERRO, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Monstrinho VoiceMaster")
+    e.set_footer(text="🦇 Vampy VoiceMaster")
     return e
 
 def _vm_embed_info(titulo: str, desc: str) -> discord.Embed:
     e = discord.Embed(title=titulo, description=desc, color=_VM_COR_FOFA, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Monstrinho VoiceMaster")
+    e.set_footer(text="🦇 Vampy VoiceMaster")
     return e
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -4579,7 +4579,7 @@ class VMModalConvidar(discord.ui.Modal, title="💌 Convidar para a Call"):
             return
         # Criar link de convite temporário (1h, 1 uso) pro canal de voz
         try:
-            invite = await self.channel.create_invite(max_age=3600, max_uses=1, unique=True, reason="Monstrinho VoiceMaster — convite da call")
+            invite = await self.channel.create_invite(max_age=3600, max_uses=1, unique=True, reason="Vampy VoiceMaster — convite da call")
         except discord.Forbidden:
             await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra criar convite!! 😢🦇"), ephemeral=True)
             return
@@ -4597,7 +4597,7 @@ class VMModalConvidar(discord.ui.Modal, title="💌 Convidar para a Call"):
                 timestamp=datetime.utcnow()
             )
             embed_inv.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed_inv.set_footer(text="🦇 Monstrinho VoiceMaster")
+            embed_inv.set_footer(text="🦇 Vampy VoiceMaster")
             await target.send(embed=embed_inv)
             await interaction.response.send_message(
                 embed=_vm_embed_ok("💌 Convite Enviado!!", f"**{target.display_name}** recebeu o convite na DM!! 🦇"),
@@ -4639,7 +4639,7 @@ class VMModalKick(discord.ui.Modal, title="👋 Kickar da Call"):
             await interaction.response.send_message(embed=_vm_embed_erro("Você não pode kickar você mesmo, bobão(a)!! 🥺🦇"), ephemeral=True)
             return
         try:
-            await target.move_to(None, reason="Kickado da call pelo dono — Monstrinho VoiceMaster")
+            await target.move_to(None, reason="Kickado da call pelo dono — Vampy VoiceMaster")
             await interaction.response.send_message(embed=_vm_embed_ok("👋 Kickado!!", _vm_msg("usuario_kickado", user=target.display_name)), ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(embed=_vm_embed_erro("Não consegui kickar... sem permissão!! 😢🦇"), ephemeral=True)
@@ -4849,7 +4849,7 @@ class VMPainelView(discord.ui.View):
         ch = user.voice.channel
         info = self.cog.vm_channels.get(ch.id)
         if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Monstrinho!! 🤔🦇"), ephemeral=True)
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Vampy!! 🤔🦇"), ephemeral=True)
             return
         dono = interaction.guild.get_member(info["owner"])
         banidos = ", ".join(f"<@{uid}>" for uid in info.get("banned", [])) or "Ninguém"
@@ -4861,7 +4861,7 @@ class VMPainelView(discord.ui.View):
         embed.add_field(name="👻 Oculta", value="Sim 👻" if info.get("hidden") else "Não 👁️", inline=True)
         embed.add_field(name="💎 Permanente", value="Sim 💎" if info.get("permanent") else "Não 🕐", inline=True)
         embed.add_field(name="🚫 Banidos", value=banidos, inline=False)
-        embed.set_footer(text="🦇 Monstrinho VoiceMaster")
+        embed.set_footer(text="🦇 Vampy VoiceMaster")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(label="🎙️ Bitrate", style=discord.ButtonStyle.secondary, custom_id="vm_bitrate", row=2)
@@ -4879,7 +4879,7 @@ class VMPainelView(discord.ui.View):
         ch = user.voice.channel
         info = self.cog.vm_channels.get(ch.id)
         if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Monstrinho!! 🤔🦇"), ephemeral=True)
+            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pelo Vampy!! 🤔🦇"), ephemeral=True)
             return
         if info["owner"] == user.id:
             await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("ja_dono")), ephemeral=True)
@@ -4893,11 +4893,11 @@ class VMPainelView(discord.ui.View):
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🐲  COG — VOICEMASTER
+# 🦇  COG — VOICEMASTER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
-    """MONSTRINHO VOICEMASTER — Calls Fofas v1.0 🦇"""
+class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
+    """VAMPY VOICEMASTER — Calls Fofas v1.0 🦇"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -4933,7 +4933,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                     lobby = await guild.create_voice_channel(
                         name=VM_LOBBY_NAME,
                         category=categoria,
-                        reason="Monstrinho VoiceMaster — criação automática no boot"
+                        reason="Vampy VoiceMaster — criação automática no boot"
                     )
                     self.vm_lobbies[guild.id] = lobby.id
                 except discord.Forbidden:
@@ -4945,11 +4945,11 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
             lobby_id = self.vm_lobbies.get(guild.id)
             lobby    = guild.get_channel(lobby_id) if lobby_id else None
             embed = discord.Embed(
-                title="🎙️ Monstrinho VoiceMaster Online!!",
+                title="🎙️ Vampy VoiceMaster Online!!",
                 description=(
                     "```\n"
                     "╔══════════════════════════════════════╗\n"
-                    "║   MONSTRINHO VOICEMASTER  🦇          ║\n"
+                    "║   VAMPY VOICEMASTER  🦇          ║\n"
                     "║     — Calls Fofas v1.0 —            ║\n"
                     "║       ✅  ONLINE  ✅                 ║\n"
                     "╚══════════════════════════════════════╝\n"
@@ -4972,7 +4972,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 value="`!vm painel` • `!vm reset` • `!vm info`",
                 inline=False
             )
-            embed.set_footer(text="🦇 Monstrinho VoiceMaster • Calls com muito amor!!")
+            embed.set_footer(text="🦇 Vampy VoiceMaster • Calls com muito amor!!")
             await log_ch.send(embed=embed)
 
     # ── 🎙️ Entrou/saiu de voz ─────────────────────
@@ -5004,7 +5004,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 name=self._nome(member),
                 category=categoria,
                 user_limit=VM_DEFAULT_LIMIT,
-                reason=f"Monstrinho VoiceMaster: call de {member}"
+                reason=f"Vampy VoiceMaster: call de {member}"
             )
             await novo.set_permissions(member, connect=True, manage_channels=True, move_members=True)
             self.vm_channels[novo.id] = {
@@ -5013,20 +5013,20 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 "created_at": datetime.utcnow()
             }
             try:
-                await member.move_to(novo, reason="Monstrinho VoiceMaster")
+                await member.move_to(novo, reason="Vampy VoiceMaster")
             except discord.HTTPException:
                 pass
 
             # ── Enviar painel de controle no chat de texto da call ──
             try:
                 embed_call = discord.Embed(
-                    title="🎙️ Painel de Controle — Calls do Monstrinho",
+                    title="🎙️ Painel de Controle — Calls do Vampy",
                     description=(
                         f"Oi, {member.mention}!! Sua call foi criada!! 🥳🦇\n"
                         "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
                         "```\n"
                         "╔══════════════════════════════════════╗\n"
-                        "║   MONSTRINHO VOICEMASTER  🦇          ║\n"
+                        "║   VAMPY VOICEMASTER  🦇          ║\n"
                         "║     — Calls Fofas v1.0 —            ║\n"
                         "╚══════════════════════════════════════╝\n"
                         "```"
@@ -5051,7 +5051,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 ]
                 for titulo, desc in campos_call:
                     embed_call.add_field(name=titulo, value=desc, inline=True)
-                embed_call.set_footer(text="🦇 Monstrinho VoiceMaster • Feito com muito amor!!")
+                embed_call.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
                 # Envia no chat de texto interno do canal de voz
                 await novo.send(embed=embed_call, view=VMPainelView(self))
             except (discord.Forbidden, discord.HTTPException):
@@ -5066,7 +5066,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                     color=_VM_COR_OK, timestamp=datetime.utcnow()
                 )
                 embed.set_thumbnail(url=member.display_avatar.url)
-                embed.set_footer(text="🦇 Monstrinho VoiceMaster")
+                embed.set_footer(text="🦇 Vampy VoiceMaster")
                 await log_ch.send(embed=embed)
         except discord.Forbidden:
             pass
@@ -5074,7 +5074,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
     async def _deletar_call(self, channel: discord.VoiceChannel):
         self.vm_channels.pop(channel.id, None)
         try:
-            await channel.delete(reason="Monstrinho VoiceMaster: call vazia")
+            await channel.delete(reason="Vampy VoiceMaster: call vazia")
         except (discord.NotFound, discord.Forbidden):
             pass
 
@@ -5082,13 +5082,13 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
 
     async def _enviar_painel(self, channel: discord.TextChannel):
         embed = discord.Embed(
-            title="🎙️ Painel de Controle — Calls do Monstrinho",
+            title="🎙️ Painel de Controle — Calls do Vampy",
             description=(
                 "Gerencie sua call com os botinhos aqui embaixo!! 🦇\n"
                 "Você precisa ser **dono(a)** de uma call e estar **dentro dela** pra usar!! 💕\n\n"
                 "```\n"
                 "╔══════════════════════════════════════╗\n"
-                "║   MONSTRINHO VOICEMASTER  🦇          ║\n"
+                "║   VAMPY VOICEMASTER  🦇          ║\n"
                 "║     — Calls Fofas v1.0 —            ║\n"
                 "╚══════════════════════════════════════╝\n"
                 "```"
@@ -5112,7 +5112,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
         ]
         for titulo, desc in campos:
             embed.add_field(name=titulo, value=desc, inline=True)
-        embed.set_footer(text="🦇 Monstrinho VoiceMaster • Feito com muito amor!!")
+        embed.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
         view = VMPainelView(self)
         return await channel.send(embed=embed, view=view)
 
@@ -5121,7 +5121,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
     @commands.group(name="vm", aliases=["voicemaster", "call"], invoke_without_command=True)
     async def vm_group(self, ctx: commands.Context):
         await ctx.send(embed=_vm_embed_info(
-            "🎙️ Monstrinho VoiceMaster",
+            "🎙️ Vampy VoiceMaster",
             "`!vm setup` • `!vm painel` • `!vm reset` • `!vm info`\n\nOu use os botões no painel de controle!! 🦇"
         ), delete_after=15)
 
@@ -5136,7 +5136,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 return
         try:
             categoria = guild.get_channel(VM_CATEGORY_ID)
-            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, category=categoria, reason="Monstrinho VoiceMaster Setup")
+            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, category=categoria, reason="Vampy VoiceMaster Setup")
             self.vm_lobbies[guild.id] = lobby.id
             await self._enviar_painel(ctx.channel)
             embed = discord.Embed(
@@ -5144,7 +5144,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 description=f"Tudo prontinho!! 🥳🦇\n\n**Canal Lobby:** {lobby.mention}\n\nPeça pras pessoas entrarem em {lobby.mention} pra criar uma call!!",
                 color=_VM_COR_OK, timestamp=datetime.utcnow()
             )
-            embed.set_footer(text="🦇 Monstrinho VoiceMaster")
+            embed.set_footer(text="🦇 Vampy VoiceMaster")
             await ctx.send(embed=embed, delete_after=20)
             log_ch = await self._log(guild)
             if log_ch:
@@ -5177,7 +5177,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
                 ch = guild.get_channel(ch_id)
                 if ch:
                     try:
-                        await ch.delete(reason="Monstrinho VoiceMaster Reset")
+                        await ch.delete(reason="Vampy VoiceMaster Reset")
                         deletadas += 1
                     except Exception:
                         pass
@@ -5186,7 +5186,7 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
             old = guild.get_channel(lobby_id)
             if old:
                 try:
-                    await old.delete(reason="Monstrinho VoiceMaster Reset")
+                    await old.delete(reason="Vampy VoiceMaster Reset")
                 except Exception:
                     pass
         await ctx.send(embed=_vm_embed_ok("🧹 Resetado!!", f"Limpei **{deletadas}** call(s)!! Use `!vm setup` pra configurar de novo!! 🦇"), delete_after=15)
@@ -5200,12 +5200,12 @@ class VoiceMasterCog(commands.Cog, name="MonStrinhoVoiceMaster"):
         ativas   = sum(1 for ch_id in self.vm_channels if guild.get_channel(ch_id))
         perms    = sum(1 for ch_id, i in self.vm_channels.items() if i.get("permanent") and guild.get_channel(ch_id))
         tran     = sum(1 for ch_id, i in self.vm_channels.items() if i.get("locked")    and guild.get_channel(ch_id))
-        embed = discord.Embed(title="📊 Monstrinho VoiceMaster — Info", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
+        embed = discord.Embed(title="📊 Vampy VoiceMaster — Info", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
         embed.add_field(name="🎙️ Canal Lobby",  value=lobby.mention if lobby else "❌ Não configurado", inline=False)
         embed.add_field(name="📞 Calls Ativas", value=f"`{ativas}`",  inline=True)
         embed.add_field(name="💎 Permanentes",  value=f"`{perms}`",   inline=True)
         embed.add_field(name="🔒 Trancadas",    value=f"`{tran}`",    inline=True)
-        embed.set_footer(text="🦇 Monstrinho VoiceMaster")
+        embed.set_footer(text="🦇 Vampy VoiceMaster")
         await ctx.send(embed=embed)
 
     @vm_group.error
@@ -5240,7 +5240,7 @@ async def ativar_limpeza_canal(ctx: commands.Context):
         color=0xffaa00,
         timestamp=datetime.utcnow()
     )
-    embed_confirm.set_footer(text="🦇 Monstrinho Security • Limpeza de Canal")
+    embed_confirm.set_footer(text="🦇 Vampy Security • Limpeza de Canal")
     await ctx.send(embed=embed_confirm)
 
     def check(m):
@@ -5288,7 +5288,7 @@ async def ativar_limpeza_canal(ctx: commands.Context):
             color=0x00ff99,
             timestamp=datetime.utcnow()
         )
-        embed_ok.set_footer(text="🦇 Monstrinho Security • Limpeza Concluída")
+        embed_ok.set_footer(text="🦇 Vampy Security • Limpeza Concluída")
         await canal.send(embed=embed_ok, delete_after=10)
 
     except discord.Forbidden:
@@ -5361,7 +5361,7 @@ async def clonar_canal(ctx: commands.Context):
         color=0xffaa00,
         timestamp=datetime.utcnow()
     )
-    embed_confirm.set_footer(text="🦇 Monstrinho Security • Recriar Canal")
+    embed_confirm.set_footer(text="🦇 Vampy Security • Recriar Canal")
     msg_confirm = await ctx.send(embed=embed_confirm)
 
     def check(m):
@@ -5416,7 +5416,7 @@ async def clonar_canal(ctx: commands.Context):
 
     try:
         # ── 1. Apagar o canal original ───────────────────────────
-        await canal.delete(reason=f"Monstrinho ClonarCanal — executado por {executador}")
+        await canal.delete(reason=f"Vampy ClonarCanal — executado por {executador}")
 
         # ── 2. Recriar o canal com as configs salvas ─────────────
         novo_canal = await guild.create_text_channel(
@@ -5426,7 +5426,7 @@ async def clonar_canal(ctx: commands.Context):
             nsfw         = nsfw,
             category     = categoria,
             overwrites   = overwrites,
-            reason       = f"Monstrinho ClonarCanal — recriado por {executador}"
+            reason       = f"Vampy ClonarCanal — recriado por {executador}"
         )
 
         # ── 3. Ajustar a posição exata ───────────────────────────
@@ -5449,7 +5449,7 @@ async def clonar_canal(ctx: commands.Context):
             color=0x00ff99,
             timestamp=datetime.utcnow()
         )
-        embed_ok.set_footer(text="🦇 Monstrinho Security • Canal Recriado")
+        embed_ok.set_footer(text="🦇 Vampy Security • Canal Recriado")
         await novo_canal.send(embed=embed_ok)
 
     except discord.Forbidden:
@@ -5494,7 +5494,7 @@ async def clonar_canal_error(ctx: commands.Context, error: Exception):
 
 async def _main():
     async with bot:
-        await bot.add_cog(MonstrinhoCog(bot))
+        await bot.add_cog(VampyCog(bot))
         await bot.add_cog(VoiceMasterCog(bot))
         await bot.add_cog(BanAppealCog(bot))
         bot.add_view(BanirMembroView())          # intercepta botões existentes no Discord
