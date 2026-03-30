@@ -2761,6 +2761,98 @@ async def auto_traduzir_mensagem(message: discord.Message):
     except Exception:
         pass
 
+# ══════════════════════════════════════════════════════════════════
+# 🇺🇸 AUTO-TRADUÇÃO PARA INGLÊS — Respostas ao membro específico
+# Quando alguém responder ao membro MEMBRO_EN_ID, o bot traduz
+# automaticamente a mensagem de PT-BR para inglês.
+# A mensagem do bot some após 60 segundos.
+# ══════════════════════════════════════════════════════════════════
+
+async def traduzir_resposta_para_ingles(message: discord.Message):
+    """Se a mensagem for uma resposta a alguém com o cargo Translate, traduz PT→EN e envia embed temporário."""
+    if not TRADUCAO_DISPONIVEL:
+        print("[TRANSLATE-EN] ❌ Bibliotecas não instaladas (deep-translator / langdetect)")
+        return
+    if message.author.bot:
+        return
+
+    # Verifica se é uma resposta (reply) a outra mensagem
+    ref = message.reference
+    if not ref:
+        return
+
+    # Obtém o membro autor da mensagem original
+    autor_original = None
+    if ref.resolved and isinstance(ref.resolved, discord.Message):
+        autor_original = ref.resolved.author
+    elif ref.message_id:
+        try:
+            msg_original = await message.channel.fetch_message(ref.message_id)
+            autor_original = msg_original.author
+        except Exception:
+            return
+
+    if not autor_original or autor_original.bot:
+        return
+
+    # Verifica se o autor original tem o cargo Translate
+    membro_original = message.guild.get_member(autor_original.id)
+    if not membro_original:
+        return
+    tem_cargo_translate = any(role.id == CARGO_TRANSLATE_ID for role in membro_original.roles)
+    if not tem_cargo_translate:
+        return
+
+    texto = message.content.strip()
+    if not texto or len(texto) < 2:
+        return
+
+    print(f"[TRANSLATE-EN] 🔍 Traduzindo resposta de {message.author}: '{texto[:60]}'")
+
+    try:
+        loop = asyncio.get_running_loop()
+        idioma = await loop.run_in_executor(None, detectar_idioma, texto)
+        print(f"[TRANSLATE-EN] 🌍 Idioma detectado: {idioma}")
+    except Exception as e:
+        print(f"[TRANSLATE-EN] ❌ Erro ao detectar idioma: {e}")
+        idioma = "pt"  # assume PT e tenta traduzir mesmo assim
+
+    # Se já estiver em inglês, não precisa traduzir
+    if idioma in ("en",):
+        print("[TRANSLATE-EN] ✅ Já é inglês, sem tradução.")
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+        traduzido = await loop.run_in_executor(
+            None,
+            lambda: GoogleTranslator(source="auto", target="en").translate(texto)
+        )
+        print(f"[TRANSLATE-EN] ✅ Traduzido para EN: '{traduzido[:60]}'")
+    except Exception as e:
+        print(f"[TRANSLATE-EN] ❌ Erro ao traduzir: {e}")
+        return
+
+    if not traduzido or traduzido.strip().lower() == texto.lower():
+        print("[TRANSLATE-EN] ⚠️ Tradução igual ao original, ignorando.")
+        return
+
+    embed = discord.Embed(
+        description=(
+            f"🇺🇸 **Auto-translation** of {message.author.mention}'s message:\n\n"
+            f"{traduzido}"
+        ),
+        color=0x57F287,
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text="🦇 Vampy Translate • This message disappears in 1 minute")
+    msg_traduzida = await message.channel.send(embed=embed)
+    await asyncio.sleep(60)
+    try:
+        await msg_traduzida.delete()
+    except Exception:
+        pass
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -2770,6 +2862,9 @@ async def on_message(message):
 
     # --- AUTO-TRADUÇÃO (cargo Translate) ---
     asyncio.create_task(auto_traduzir_mensagem(message))
+
+    # --- AUTO-TRADUÇÃO PT→EN para respostas ao membro que só fala inglês ---
+    asyncio.create_task(traduzir_resposta_para_ingles(message))
 
     # --- APRESENTAÇÃO DA VAMPY QUANDO MARCADA ---
     if bot.user in message.mentions and len(message.content.strip().split()) <= 3:
