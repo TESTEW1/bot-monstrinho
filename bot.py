@@ -5029,16 +5029,16 @@ class VMPainelView(discord.ui.View):
                 ephemeral=True)
             return
         guild  = interaction.guild
-        player = guild.voice_client  # wavelink.Player ou None — não usa sv_cog.players (não existe)
-        if player and getattr(player, "current", None):
-            embed = sv_cog._embed_nowplaying(player.current, player)
+        gp = sv_cog.players.get(guild.id)
+        if gp and gp.current:
+            embed = sv_cog._embed_nowplaying(gp.current, gp)
         else:
             embed = discord.Embed(
                 title="🎵 Spotyvampy",
                 description="😴 Nada tocando agora!! Use `v!play <música>` pra começar!! 🦇",
                 color=SV_COR_PRIMARIA
             )
-            embed.set_footer(text="🦇 Spotyvampy v2.0 • Powered by Lavalink")
+            embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp")
         view = MusicControlView(sv_cog, guild.id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
@@ -5643,12 +5643,15 @@ async def clonar_canal_error(ctx: commands.Context, error: Exception):
 # ══════════════════════════════════════════════════════════════════
 
 
+
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║          🎵 SPOTYVAMPY — SISTEMA DE MÚSICA v2.0             ║
-# ║   Powered by Lavalink + Wavelink — Sem bot-detection do YT!    ║
+# ║          🎵 SPOTYVAMPY — SISTEMA DE MÚSICA v3.0             ║
+# ║   Powered by yt-dlp + FFmpeg — Sem servidor externo!!          ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-import wavelink  # pip install wavelink
+import yt_dlp          # pip install yt-dlp
+import asyncio
+import functools
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ⚙️  CONFIGURAÇÕES DO PLAYER
@@ -5657,11 +5660,97 @@ import wavelink  # pip install wavelink
 SV_COR_PRIMARIA  = 0x1db954   # verde spotify
 SV_COR_ERRO      = 0xff4444
 SV_COR_AVISO     = 0xffaa00
-SV_VOLUME_PADRAO = 50         # 50% (escala 0-100)
+SV_VOLUME_PADRAO = 0.5        # 50% (escala 0.0-2.0 para FFmpeg)
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
-LAVALINK_URI      = os.getenv("LAVALINK_URI",      "http://lavalink:2333")
-LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD", "vampypassword")
+# Opções do yt-dlp para extração de áudio
+YTDL_OPTIONS = {
+    "format":            "bestaudio/best",
+    "noplaylist":        False,
+    "quiet":             True,
+    "no_warnings":       True,
+    "default_search":    "ytsearch",
+    "source_address":    "0.0.0.0",
+    "cookiefile":        None,
+    "extractor_retries": 3,
+    "socket_timeout":    15,
+}
+
+# Opções do FFmpeg para stream de áudio
+FFMPEG_OPTIONS = {
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options":        "-vn -filter:a volume=0.5",
+}
+
+ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎵  TRACK — representa uma música
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class Track:
+    """Representa uma faixa de áudio extraída pelo yt-dlp."""
+    def __init__(self, data: dict, requester=None):
+        self.title     = data.get("title",    "Desconhecido")
+        self.url       = data.get("webpage_url", data.get("url", ""))
+        self.stream    = data.get("url", "")          # URL do stream de áudio
+        self.duration  = data.get("duration",  0)     # em segundos
+        self.thumbnail = data.get("thumbnail", None)
+        self.uploader  = data.get("uploader",  data.get("channel", "Desconhecido"))
+        self.requester = requester
+
+    def fmt_duration(self) -> str:
+        s = int(self.duration or 0)
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+    def make_source(self, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
+        opts = dict(FFMPEG_OPTIONS)
+        opts["options"] = f"-vn -filter:a volume={volume}"
+        raw = discord.FFmpegPCMAudio(self.stream, **opts)
+        return discord.PCMVolumeTransformer(raw, volume=volume)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🧠  GUILD PLAYER — estado de música por servidor
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class GuildPlayer:
+    """Mantém o estado de reprodução de um servidor."""
+
+    LOOP_OFF  = "off"
+    LOOP_ONE  = "one"
+    LOOP_ALL  = "all"
+
+    def __init__(self, vc: discord.VoiceClient, text_channel):
+        self.vc:           discord.VoiceClient = vc
+        self.text_channel                      = text_channel
+        self.queue:        list[Track]         = []
+        self.current:      Track | None        = None
+        self.loop_mode:    str                 = self.LOOP_OFF
+        self.volume:       float               = SV_VOLUME_PADRAO
+        self._play_lock                        = asyncio.Lock()
+
+    @property
+    def connected(self) -> bool:
+        return self.vc and self.vc.is_connected()
+
+    @property
+    def playing(self) -> bool:
+        return self.vc and self.vc.is_playing()
+
+    @property
+    def paused(self) -> bool:
+        return self.vc and self.vc.is_paused()
+
+    def clear_queue(self):
+        self.queue.clear()
+
+    def shuffle_queue(self):
+        import random
+        random.shuffle(self.queue)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -5676,78 +5765,78 @@ class MusicControlView(discord.ui.View):
         self.cog      = cog
         self.guild_id = guild_id
 
-    def _player(self) -> wavelink.Player | None:
-        guild = self.cog.bot.get_guild(self.guild_id)
-        return guild.voice_client if guild else None
+    def _gp(self) -> "GuildPlayer | None":
+        return self.cog.players.get(self.guild_id)
 
     @discord.ui.button(emoji="⏸️", label="Pausar", style=discord.ButtonStyle.secondary, row=0)
     async def btn_pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p or not p.connected:
+        gp = self._gp()
+        if not gp or not gp.connected:
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        if p.paused:
-            await p.pause(False)
+        if gp.paused:
+            gp.vc.resume()
             button.label = "Pausar"; button.emoji = "⏸️"
         else:
-            await p.pause(True)
+            gp.vc.pause()
             button.label = "Continuar"; button.emoji = "▶️"
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(emoji="⏭️", label="Pular", style=discord.ButtonStyle.primary, row=0)
     async def btn_pular(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p or not p.playing:
+        gp = self._gp()
+        if not gp or not gp.playing:
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        await p.skip(force=True)
+        gp.vc.stop()
         await interaction.response.send_message(embed=discord.Embed(
             description="⏭️ Pulei a música!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="⏹️", label="Parar", style=discord.ButtonStyle.danger, row=0)
     async def btn_parar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p:
+        gp = self._gp()
+        if not gp:
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        p.queue.clear()
-        p.queue.mode = wavelink.QueueMode.normal
-        await p.stop()
+        gp.clear_queue()
+        gp.loop_mode = GuildPlayer.LOOP_OFF
+        gp.current   = None
+        gp.vc.stop()
         await interaction.response.send_message(embed=discord.Embed(
             description="⏹️ Música parada e fila limpa!! 🦇", color=SV_COR_ERRO), ephemeral=True)
 
     @discord.ui.button(emoji="🔁", label="Loop", style=discord.ButtonStyle.secondary, row=0)
     async def btn_loop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p:
+        gp = self._gp()
+        if not gp:
             return await interaction.response.send_message("❌ Não há player ativo!!", ephemeral=True)
-        if p.queue.mode == wavelink.QueueMode.loop:
-            p.queue.mode = wavelink.QueueMode.normal
+        if gp.loop_mode == GuildPlayer.LOOP_ONE:
+            gp.loop_mode = GuildPlayer.LOOP_OFF
             status = "❌ desativado"
         else:
-            p.queue.mode = wavelink.QueueMode.loop
+            gp.loop_mode = GuildPlayer.LOOP_ONE
             status = "✅ ativado (música)"
         await interaction.response.send_message(embed=discord.Embed(
             description=f"🔁 Loop {status}!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="📋", label="Fila", style=discord.ButtonStyle.secondary, row=1)
     async def btn_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        embed = self.cog._embed_fila(p)
+        gp = self._gp()
+        embed = self.cog._embed_fila(gp)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(emoji="🔀", label="Embaralhar", style=discord.ButtonStyle.secondary, row=1)
     async def btn_shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p or not p.queue:
+        gp = self._gp()
+        if not gp or not gp.queue:
             return await interaction.response.send_message("❌ A fila está vazia!!", ephemeral=True)
-        p.queue.shuffle()
+        gp.shuffle_queue()
         await interaction.response.send_message(embed=discord.Embed(
-            description=f"🔀 Fila embaralhada com `{len(p.queue)}` músicas!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
+            description=f"🔀 Fila embaralhada com `{len(gp.queue)}` músicas!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="🎵", label="Tocando Agora", style=discord.ButtonStyle.primary, row=1)
     async def btn_nowplaying(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self._player()
-        if not p or not p.current:
+        gp = self._gp()
+        if not gp or not gp.current:
             return await interaction.response.send_message("❌ Nada tocando agora!!", ephemeral=True)
-        embed = self.cog._embed_nowplaying(p.current, p)
+        embed = self.cog._embed_nowplaying(gp.current, gp)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -5756,106 +5845,165 @@ class MusicControlView(discord.ui.View):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
-    """🎵 SPOTYVAMPY — Sistema de Música v2.0 powered by Lavalink 🦇"""
+    """🎵 SPOTYVAMPY — Sistema de Música v3.0 powered by yt-dlp 🦇"""
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        self.bot     = bot
+        self.players: dict[int, GuildPlayer] = {}   # guild_id → GuildPlayer
 
     # ── Helpers ──────────────────────────────────
 
-    def _fmt_duration(self, ms: int) -> str:
-        if not ms:
-            return "∞"
-        s = ms // 1000
-        m, s = divmod(s, 60)
-        h, m = divmod(m, 60)
-        return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
-
-    def _embed_nowplaying(self, track: wavelink.Playable, player: wavelink.Player) -> discord.Embed:
-        requester = getattr(track.extras, "requester", None)
+    def _embed_nowplaying(self, track: Track, gp: GuildPlayer) -> discord.Embed:
+        loop_labels = {GuildPlayer.LOOP_OFF: "❌ Off", GuildPlayer.LOOP_ONE: "🔂 Música", GuildPlayer.LOOP_ALL: "🔁 Fila"}
         embed = discord.Embed(
             title="🎵 Tocando Agora",
-            description=f"**[{track.title}]({track.uri})**",
+            description=f"**[{track.title}]({track.url})**",
             color=SV_COR_PRIMARIA,
             timestamp=datetime.utcnow()
         )
-        embed.add_field(name="⏱️ Duração",    value=f"`{self._fmt_duration(track.length)}`",  inline=True)
-        embed.add_field(name="🎤 Artista",    value=f"`{track.author}`",                       inline=True)
-        embed.add_field(name="👤 Pedido por", value=requester.mention if requester else "—",   inline=True)
-        loop_status = {"loop": "🔂 Música", "loop_all": "🔁 Fila", "normal": "❌ Off"}.get(player.queue.mode.name, "❌ Off")
-        embed.add_field(name="🔁 Loop",    value=loop_status,                              inline=True)
-        embed.add_field(name="🔊 Volume",  value=f"`{player.volume}%`",                    inline=True)
-        embed.add_field(name="📋 Na fila", value=f"`{len(player.queue)}` músicas",         inline=True)
-        if track.artwork:
-            embed.set_thumbnail(url=track.artwork)
-        embed.set_footer(text="🦇 Spotyvampy • Powered by Lavalink • Feito com muito amor!!")
+        embed.add_field(name="⏱️ Duração",    value=f"`{track.fmt_duration()}`",                    inline=True)
+        embed.add_field(name="🎤 Artista",    value=f"`{track.uploader}`",                           inline=True)
+        embed.add_field(name="👤 Pedido por", value=track.requester.mention if track.requester else "—", inline=True)
+        embed.add_field(name="🔁 Loop",    value=loop_labels.get(gp.loop_mode, "❌ Off"),            inline=True)
+        embed.add_field(name="🔊 Volume",  value=f"`{int(gp.volume * 100)}%`",                       inline=True)
+        embed.add_field(name="📋 Na fila", value=f"`{len(gp.queue)}` músicas",                       inline=True)
+        if track.thumbnail:
+            embed.set_thumbnail(url=track.thumbnail)
+        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Feito com muito amor!!")
         return embed
 
-    def _embed_fila(self, player: wavelink.Player | None) -> discord.Embed:
+    def _embed_fila(self, gp: "GuildPlayer | None") -> discord.Embed:
         embed = discord.Embed(title="📋 Fila de Músicas — Spotyvampy", color=SV_COR_PRIMARIA, timestamp=datetime.utcnow())
-        if not player or (not player.current and not player.queue):
+        if not gp or (not gp.current and not gp.queue):
             embed.description = "😴 A fila está vazia!! Use `v!play` pra adicionar músicas!! 🦇"
             return embed
-        if player.current:
+        if gp.current:
             embed.add_field(
                 name="🎵 Tocando Agora",
-                value=f"**{player.current.title}** `{self._fmt_duration(player.current.length)}`",
+                value=f"**{gp.current.title}** `{gp.current.fmt_duration()}`",
                 inline=False
             )
-        if player.queue:
+        if gp.queue:
             linhas = []
-            for i, t in enumerate(list(player.queue)[:10], 1):
-                linhas.append(f"`{i}.` **{t.title}** `{self._fmt_duration(t.length)}`")
-            if len(player.queue) > 10:
-                linhas.append(f"... e mais `{len(player.queue) - 10}` músicas")
-            embed.add_field(name=f"📋 Próximas ({len(player.queue)})", value="\n".join(linhas), inline=False)
+            for i, t in enumerate(gp.queue[:10], 1):
+                linhas.append(f"`{i}.` **{t.title}** `{t.fmt_duration()}`")
+            if len(gp.queue) > 10:
+                linhas.append(f"... e mais `{len(gp.queue) - 10}` músicas")
+            embed.add_field(name=f"📋 Próximas ({len(gp.queue)})", value="\n".join(linhas), inline=False)
         else:
             embed.add_field(name="📋 Fila", value="Sem próximas músicas na fila!!", inline=False)
         embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!!")
         return embed
 
-    async def _get_or_create_player(self, ctx: commands.Context) -> wavelink.Player | None:
-        """Garante que o bot está na call e retorna o player."""
+    # ── Busca assíncrona via yt-dlp ──────────────
+
+    async def _search(self, query: str) -> list[dict]:
+        """Busca/extrai info de áudio via yt-dlp em thread separada."""
+        loop = asyncio.get_event_loop()
+        is_url = query.lower().startswith("http://") or query.lower().startswith("https://")
+        search_q = query if is_url else f"ytsearch5:{query}"
+
+        opts = dict(YTDL_OPTIONS)
+        opts["noplaylist"] = False
+
+        def _extract():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(search_q, download=False)
+                if not info:
+                    return []
+                # playlist ou resultado de busca
+                if "entries" in info:
+                    return [e for e in info["entries"] if e]
+                return [info]
+
+        return await loop.run_in_executor(None, _extract)
+
+    # ── Gerenciar player ─────────────────────────
+
+    async def _get_or_create_player(self, ctx: commands.Context) -> "GuildPlayer | None":
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send(embed=discord.Embed(
                 description="❌ Você precisa estar em um canal de voz pra usar o Spotyvampy!! 🦇",
                 color=SV_COR_ERRO))
             return None
 
-        player: wavelink.Player | None = ctx.guild.voice_client
+        gid = ctx.guild.id
+        gp  = self.players.get(gid)
 
-        if player and player.connected:
-            # Já conectado — só atualiza text_channel
-            player.text_channel = ctx.channel
-            return player
+        if gp and gp.connected:
+            gp.text_channel = ctx.channel
+            return gp
 
-        # Conectar no canal do usuário
+        # Desconectar player morto se existir
+        if gp and not gp.connected:
+            del self.players[gid]
+
         try:
-            player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
-            player.text_channel = ctx.channel
-            player.autoplay = wavelink.AutoPlayMode.disabled  # CRÍTICO: desativa autoplay interno
-            player.inactive_timeout = None                    # sem timeout automático
-            await player.set_volume(SV_VOLUME_PADRAO)
-            return player
+            vc = await ctx.author.voice.channel.connect()
+            gp = GuildPlayer(vc, ctx.channel)
+            self.players[gid] = gp
+            return gp
         except Exception as e:
             print(f"[Spotyvampy] Erro ao conectar: {e}")
             await ctx.send(embed=discord.Embed(
-                description="❌ Não consegui entrar na call!! 😢🦇", color=SV_COR_ERRO))
+                description=f"❌ Não consegui entrar na call!! 😢🦇\n`{e}`",
+                color=SV_COR_ERRO))
             return None
+
+    def _play_next(self, guild_id: int):
+        """Callback chamado quando uma música termina. Agenda a próxima."""
+        gp = self.players.get(guild_id)
+        if not gp or not gp.connected:
+            return
+
+        if gp.loop_mode == GuildPlayer.LOOP_ONE and gp.current:
+            # Replay da música atual
+            asyncio.run_coroutine_threadsafe(
+                self._play_track(gp, gp.current), self.bot.loop)
+            return
+
+        if gp.loop_mode == GuildPlayer.LOOP_ALL and gp.current:
+            gp.queue.append(gp.current)
+
+        if gp.queue:
+            next_track = gp.queue.pop(0)
+            asyncio.run_coroutine_threadsafe(
+                self._play_track(gp, next_track), self.bot.loop)
+        else:
+            gp.current = None
+            asyncio.run_coroutine_threadsafe(
+                self._send_queue_ended(gp), self.bot.loop)
+
+    async def _send_queue_ended(self, gp: GuildPlayer):
+        if gp.text_channel:
+            try:
+                await gp.text_channel.send(embed=discord.Embed(
+                    description="📭 A fila acabou!! Obrigada por usar o Spotyvampy!! 🦇💚",
+                    color=SV_COR_PRIMARIA))
+            except Exception:
+                pass
+
+    async def _play_track(self, gp: GuildPlayer, track: Track):
+        """Inicia a reprodução de uma track no VoiceClient."""
+        if not gp.connected:
+            return
+        gp.current = track
+        source = track.make_source(gp.volume)
+        after_cb = lambda e: self._play_next(gp.vc.guild.id)
+        gp.vc.play(source, after=after_cb)
+        # Envia embed de "tocando agora"
+        if gp.text_channel:
+            try:
+                embed = self._embed_nowplaying(track, gp)
+                view  = MusicControlView(self, gp.vc.guild.id)
+                await gp.text_channel.send(embed=embed, view=view)
+            except Exception:
+                pass
 
     # ── 🟢 Boot ───────────────────────────────────
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await asyncio.sleep(5)
-        # Conectar ao Lavalink
-        try:
-            nodes = [wavelink.Node(uri=LAVALINK_URI, password=LAVALINK_PASSWORD)]
-            await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
-            print(f"[Spotyvampy] ✅ Conectado ao Lavalink em {LAVALINK_URI}")
-        except Exception as e:
-            print(f"[Spotyvampy] ❌ Erro ao conectar ao Lavalink: {e}")
-
         await asyncio.sleep(3)
         for guild in self.bot.guilds:
             log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
@@ -5866,8 +6014,8 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 description=(
                     "```\n"
                     "╔══════════════════════════════════════╗\n"
-                    "║   SPOTYVAMPY  🦇  v2.0           ║\n"
-                    "║    — Powered by Lavalink —          ║\n"
+                    "║   SPOTYVAMPY  🦇  v3.0           ║\n"
+                    "║    — Powered by yt-dlp —            ║\n"
                     "║       ✅  ONLINE  ✅                 ║\n"
                     "╚══════════════════════════════════════╝\n"
                     "```"
@@ -5879,164 +6027,102 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                             value="`v!play` `v!pular` `v!parar` `v!fila` `v!tocando` `v!volume` `v!loop` `v!embaralhar` `v!sair`",
                             inline=False)
             embed.add_field(name="🎧 Fontes Suportadas",
-                            value="YouTube • Spotify • SoundCloud • Bandcamp • Vimeo • Radio",
+                            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
                             inline=False)
             embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `v!spotyvampy`", inline=False)
-            embed.set_footer(text="🦇 Spotyvampy v2.0 • Música com muito amor!!")
+            embed.set_footer(text="🦇 Spotyvampy v3.0 • Sem servidor externo!!")
             await log_ch.send(embed=embed)
-
-    # ── 🎵 Eventos Wavelink ───────────────────────
-
-    @commands.Cog.listener()
-    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
-        player: wavelink.Player = payload.player
-        track  = payload.track
-        ch     = getattr(player, "text_channel", None)
-        if not ch:
-            return
-        embed = self._embed_nowplaying(track, player)
-        view  = MusicControlView(self, player.guild.id)
-        try:
-            await ch.send(embed=embed, view=view)
-        except Exception:
-            pass
-
-    @commands.Cog.listener()
-    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
-        player: wavelink.Player = payload.player
-        reason = payload.reason
-
-        # Loop de música única — re-toca a mesma
-        if player.queue.mode == wavelink.QueueMode.loop and payload.track:
-            await player.play(payload.track)
-            return
-
-        # Loop de fila — coloca a música no fim e pega a próxima
-        if player.queue.mode == wavelink.QueueMode.loop_all and payload.track:
-            player.queue.put(payload.track)
-
-        if player.queue:
-            next_track = player.queue.get()
-            await player.play(next_track)
-        elif reason == "finished":
-            ch = getattr(player, "text_channel", None)
-            if ch:
-                try:
-                    await ch.send(embed=discord.Embed(
-                        description="📭 A fila acabou!! Obrigada por usar o Spotyvampy!! 🦇💚",
-                        color=SV_COR_PRIMARIA))
-                except Exception:
-                    pass
-
-    @commands.Cog.listener()
-    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
-        print(f"[Spotyvampy] Lavalink node pronto: {payload.node.uri} | Sessão: {payload.session_id}")
 
     # ── 🎵 COMANDOS ───────────────────────────────
 
     @commands.command(name="play", aliases=["tocar", "p"])
     async def play(self, ctx: commands.Context, *, query: str):
-        """Toca música ou playlist do YouTube/Spotify/SoundCloud. Uso: v!play <nome ou URL>"""
+        """Toca música do YouTube/SoundCloud/etc. Uso: v!play <nome ou URL>"""
         async with ctx.typing():
-            player = await self._get_or_create_player(ctx)
-            if not player:
+            gp = await self._get_or_create_player(ctx)
+            if not gp:
                 return
 
             msg_busca = await ctx.send(embed=discord.Embed(
                 description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
 
             try:
-                # ── Detectar fonte correta ──────────────────────────────
-                # URL Spotify  → passa direto (LavaSrc resolve via "sp:" prefix)
-                # Busca texto  → YouTube Music (sem bot-detection do YouTube)
-                # Outra URL    → passa direto (YouTube, SoundCloud, etc.)
-                q_lower = query.lower()
-                is_url = q_lower.startswith("http://") or q_lower.startswith("https://")
-
-                if is_url and "spotify.com" in q_lower:
-                    # URL Spotify — LavaSrc converte automaticamente
-                    tracks = await wavelink.Playable.search(query)
-                elif is_url:
-                    # URL do YouTube, SoundCloud, etc. — passa direto
-                    tracks = await wavelink.Playable.search(query)
-                else:
-                    # Busca por nome — usa YouTube Music (sem bot-detection)
-                    tracks = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTubeMusic)
-
+                resultados = await self._search(query)
             except Exception as e:
                 print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
                 return await msg_busca.edit(embed=discord.Embed(
-                    description="❌ Erro ao buscar no Lavalink!! 😢🦇", color=SV_COR_ERRO))
+                    description=f"❌ Erro ao buscar!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
 
-            if not tracks:
+            if not resultados:
                 return await msg_busca.edit(embed=discord.Embed(
                     description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
 
-            adicionadas = 0
-            ja_tocando_antes = player.playing
+            adicionadas   = 0
+            tocando_antes = gp.playing or gp.paused
 
-            if isinstance(tracks, wavelink.Playlist):
-                # Playlist inteira
-                for t in tracks:
-                    t.extras = wavelink.ExtrasNamespace({"requester": ctx.author})
-                    if len(player.queue) < SV_FILA_MAX:
-                        player.queue.put(t)   # síncrono — evita race condition
-                        adicionadas += 1
+            # Playlist ou múltiplos resultados de URL → adiciona todos
+            is_url  = query.lower().startswith("http")
+            is_list = is_url and len(resultados) > 1
+
+            if is_list:
+                for data in resultados:
+                    if len(gp.queue) >= SV_FILA_MAX:
+                        break
+                    gp.queue.append(Track(data, requester=ctx.author))
+                    adicionadas += 1
                 await msg_busca.edit(embed=discord.Embed(
-                    description=f"📋 Playlist **{tracks.name}** adicionada com **{adicionadas}** músicas!! 🦇",
+                    description=f"📋 Playlist adicionada com **{adicionadas}** músicas!! 🦇",
                     color=SV_COR_PRIMARIA))
             else:
-                # Música única
-                track = tracks[0]
-                track.extras = wavelink.ExtrasNamespace({"requester": ctx.author})
-                if len(player.queue) >= SV_FILA_MAX:
+                track = Track(resultados[0], requester=ctx.author)
+                if len(gp.queue) >= SV_FILA_MAX:
                     return await msg_busca.edit(embed=discord.Embed(
                         description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
                         color=SV_COR_ERRO))
-                player.queue.put(track)  # síncrono — evita race condition
+                gp.queue.append(track)
                 adicionadas = 1
-                if ja_tocando_antes:
+                if tocando_antes:
                     await msg_busca.edit(embed=discord.Embed(
                         description=f"📋 **{track.title}** adicionada à fila!! 🦇",
                         color=SV_COR_PRIMARIA))
                 else:
                     await msg_busca.delete()
 
-            # Iniciar reprodução se não estava tocando antes
-            if not ja_tocando_antes:
-                next_track = player.queue.get()
-                await player.play(next_track)
+            # Iniciar reprodução se não estava tocando
+            if not tocando_antes and gp.queue:
+                next_track = gp.queue.pop(0)
+                await self._play_track(gp, next_track)
 
     @commands.command(name="pausar", aliases=["pause"])
     async def pausar(self, ctx: commands.Context):
         """Pausa ou continua a música. Uso: v!pausar"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.connected:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.connected:
             return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
-        if player.paused:
-            await player.pause(False)
+        if gp.paused:
+            gp.vc.resume()
             desc = "▶️ Música continuada!! 🦇"
         else:
-            await player.pause(True)
+            gp.vc.pause()
             desc = "⏸️ Música pausada!! 🦇"
         await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=8)
 
     @commands.command(name="continuar", aliases=["resume", "r"])
     async def continuar(self, ctx: commands.Context):
         """Continua a música se estiver pausada. Uso: v!continuar"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.paused:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.paused:
             return await ctx.send(embed=discord.Embed(description="❌ A música não está pausada!! 🦇", color=SV_COR_ERRO))
-        await player.pause(False)
+        gp.vc.resume()
         await ctx.send(embed=discord.Embed(description="▶️ Música continuada!! 🦇", color=SV_COR_PRIMARIA), delete_after=8)
 
     @commands.command(name="pular", aliases=["skip", "s"])
     async def pular(self, ctx: commands.Context):
         """Pula para a próxima música. Uso: v!pular"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.playing:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.playing:
             return await ctx.send(embed=discord.Embed(description="❌ Não há nada tocando!! 🦇", color=SV_COR_ERRO))
-        await player.skip(force=True)
+        gp.vc.stop()  # dispara o after_cb → _play_next
         await ctx.send(embed=discord.Embed(
             description=f"⏭️ Pulei!! 🦇 — pedido por {ctx.author.mention}",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -6044,12 +6130,13 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="parar", aliases=["stop"])
     async def parar(self, ctx: commands.Context):
         """Para a música e limpa a fila. Uso: v!parar"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player:
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
             return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
-        player.queue.clear()
-        player.queue.mode = wavelink.QueueMode.normal
-        await player.stop()
+        gp.clear_queue()
+        gp.loop_mode = GuildPlayer.LOOP_OFF
+        gp.current   = None
+        gp.vc.stop()
         await ctx.send(embed=discord.Embed(
             description=f"⏹️ Música parada e fila limpa por {ctx.author.mention}!! 🦇",
             color=SV_COR_ERRO))
@@ -6057,17 +6144,17 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="fila", aliases=["queue", "q"])
     async def fila(self, ctx: commands.Context):
         """Mostra a fila de músicas. Uso: v!fila"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        embed = self._embed_fila(player)
+        gp = self.players.get(ctx.guild.id)
+        embed = self._embed_fila(gp)
         await ctx.send(embed=embed)
 
     @commands.command(name="tocando", aliases=["nowplaying", "np"])
     async def tocando(self, ctx: commands.Context):
         """Mostra a música tocando agora. Uso: v!tocando"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.current:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.current:
             return await ctx.send(embed=discord.Embed(description="❌ Nada tocando agora!! 🦇", color=SV_COR_ERRO))
-        embed = self._embed_nowplaying(player.current, player)
+        embed = self._embed_nowplaying(gp.current, gp)
         view  = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
@@ -6077,10 +6164,12 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         if not 1 <= vol <= 100:
             return await ctx.send(embed=discord.Embed(
                 description="❌ Volume deve ser entre **1** e **100**!! 🦇", color=SV_COR_ERRO))
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player:
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
-        await player.set_volume(vol)
+        gp.volume = vol / 100
+        if gp.vc.source and isinstance(gp.vc.source, discord.PCMVolumeTransformer):
+            gp.vc.source.volume = gp.volume
         await ctx.send(embed=discord.Embed(
             description=f"🔊 Volume ajustado para **{vol}%** por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -6088,46 +6177,42 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="loop")
     async def loop(self, ctx: commands.Context, modo: str = "musica"):
         """Ativa loop. Modos: musica | fila | off. Uso: v!loop fila"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player:
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
         modo = modo.lower()
         if modo in ("off", "desligar", "0"):
-            player.queue.mode = wavelink.QueueMode.normal
+            gp.loop_mode = GuildPlayer.LOOP_OFF
             desc = "🔁 Loop **desativado**!! 🦇"
         elif modo in ("fila", "queue", "all"):
-            player.queue.mode = wavelink.QueueMode.loop_all
+            gp.loop_mode = GuildPlayer.LOOP_ALL
             desc = "🔁 Loop de **fila** ativado!! 🦇"
         else:
-            player.queue.mode = wavelink.QueueMode.loop
+            gp.loop_mode = GuildPlayer.LOOP_ONE
             desc = "🔂 Loop de **música** ativado!! 🦇"
         await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=10)
 
     @commands.command(name="embaralhar", aliases=["shuffle"])
     async def embaralhar(self, ctx: commands.Context):
         """Embaralha a fila. Uso: v!embaralhar"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.queue:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
-        player.queue.shuffle()
+        gp.shuffle_queue()
         await ctx.send(embed=discord.Embed(
-            description=f"🔀 Fila embaralhada com **{len(player.queue)}** músicas por {ctx.author.mention}!! 🦇",
+            description=f"🔀 Fila embaralhada com **{len(gp.queue)}** músicas por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
 
     @commands.command(name="remover", aliases=["remove", "rm"])
     async def remover(self, ctx: commands.Context, pos: int):
         """Remove uma música da fila pela posição. Uso: v!remover 3"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.queue:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
-        fila = list(player.queue)
-        if not 1 <= pos <= len(fila):
+        if not 1 <= pos <= len(gp.queue):
             return await ctx.send(embed=discord.Embed(
-                description=f"❌ Posição inválida!! A fila tem **{len(fila)}** músicas!! 🦇", color=SV_COR_ERRO))
-        removida = fila.pop(pos - 1)
-        player.queue.clear()
-        for t in fila:
-            player.queue.put(t)
+                description=f"❌ Posição inválida!! A fila tem **{len(gp.queue)}** músicas!! 🦇", color=SV_COR_ERRO))
+        removida = gp.queue.pop(pos - 1)
         await ctx.send(embed=discord.Embed(
             description=f"🗑️ **{removida.title}** removida da fila por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -6135,11 +6220,11 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="limparfila", aliases=["clearqueue", "cq"])
     async def limparfila(self, ctx: commands.Context):
         """Limpa a fila sem parar a música atual. Uso: v!limparfila"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.queue:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila já está vazia!! 🦇", color=SV_COR_ERRO))
-        qtd = len(player.queue)
-        player.queue.clear()
+        qtd = len(gp.queue)
+        gp.clear_queue()
         await ctx.send(embed=discord.Embed(
             description=f"🧹 **{qtd}** músicas removidas da fila por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -6147,11 +6232,13 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="sair", aliases=["dc", "disconnect", "desconectar"])
     async def sair(self, ctx: commands.Context):
         """Desconecta o bot do canal de voz. Uso: v!sair"""
-        player: wavelink.Player | None = ctx.guild.voice_client
-        if not player or not player.connected:
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.connected:
             return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhum canal de voz!! 🦇", color=SV_COR_ERRO))
-        player.queue.clear()
-        await player.disconnect()
+        gp.clear_queue()
+        gp.current = None
+        await gp.vc.disconnect()
+        del self.players[ctx.guild.id]
         await ctx.send(embed=discord.Embed(
             description=f"👋 Saí do canal de voz!! Tchau tchau, {ctx.author.mention}!! 🦇💚",
             color=SV_COR_PRIMARIA))
@@ -6164,15 +6251,15 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             description=(
                 "```\n"
                 "╔══════════════════════════════════════╗\n"
-                "║   SPOTYVAMPY  🦇  v2.0           ║\n"
-                "║    — Powered by Lavalink! —         ║\n"
+                "║   SPOTYVAMPY  🦇  v3.0           ║\n"
+                "║    — Powered by yt-dlp! —           ║\n"
                 "╚══════════════════════════════════════╝\n"
                 "```"
             ),
             color=SV_COR_PRIMARIA,
             timestamp=datetime.utcnow()
         )
-        embed.add_field(name="▶️  Tocar",       value="`v!play <nome/URL>` `v!p` `v!tocar`\nYouTube, Spotify, SoundCloud, Radio...", inline=False)
+        embed.add_field(name="▶️  Tocar",       value="`v!play <nome/URL>` `v!p` `v!tocar`\nYouTube, SoundCloud, Bandcamp, Vimeo...", inline=False)
         embed.add_field(name="⏸️  Pausar",      value="`v!pausar` `v!pause`",        inline=True)
         embed.add_field(name="▶️  Continuar",   value="`v!continuar` `v!resume`",    inline=True)
         embed.add_field(name="⏭️  Pular",       value="`v!pular` `v!skip`",          inline=True)
@@ -6187,10 +6274,10 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         embed.add_field(name="👋  Sair",        value="`v!sair` `v!dc`",             inline=True)
         embed.add_field(
             name="🎧 Fontes Suportadas",
-            value="YouTube • **Spotify** • SoundCloud • Bandcamp • Vimeo • Rádio Online",
+            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
             inline=False
         )
-        embed.set_footer(text="🦇 Spotyvampy v2.0 • Powered by Lavalink • Use v!sv pra ver esse menu")
+        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Use v!sv pra ver esse menu")
         view = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
@@ -6200,28 +6287,26 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.bot:
             return
-        guild  = member.guild
-        player: wavelink.Player | None = guild.voice_client
-        if not player or not player.connected:
+        gp = self.players.get(member.guild.id)
+        if not gp or not gp.connected:
             return
-        vc_channel = player.channel
+        vc_channel = gp.vc.channel
         if vc_channel and len([m for m in vc_channel.members if not m.bot]) == 0:
             await asyncio.sleep(60)
-            player = guild.voice_client
-            if player and player.connected:
-                if len([m for m in player.channel.members if not m.bot]) == 0:
-                    player.queue.clear()
-                    await player.disconnect()
-                    ch = getattr(player, "text_channel", None)
-                    if ch:
+            gp = self.players.get(member.guild.id)
+            if gp and gp.connected:
+                if len([m for m in gp.vc.channel.members if not m.bot]) == 0:
+                    gp.clear_queue()
+                    gp.current = None
+                    await gp.vc.disconnect()
+                    del self.players[member.guild.id]
+                    if gp.text_channel:
                         try:
-                            await ch.send(embed=discord.Embed(
+                            await gp.text_channel.send(embed=discord.Embed(
                                 description="👋 Saí do canal de voz por inatividade!! 🦇💚",
                                 color=SV_COR_AVISO))
                         except Exception:
                             pass
-
-
 
 
 async def _main():
