@@ -1019,8 +1019,7 @@ LISTA_EMOJIS_RAPIDOS = [
 PALAVRAS_PROIBIDAS_EXATAS = [
     # palavrões isolados (serão verificados com \b word boundary)
     "porra", "caralho", "merda", "bosta", "viado", "bicha", "piranha",
-    "arrombado", "imbecil", "otário", "otario", "retardado", "nojento",
-    "fdp", "vsf", "krl", "prr", "tmnc", "buceta", "carai", "karalho",
+    "arrombado", "buceta", "carai", "karalho",
 ]
 
 FRASES_PROIBIDAS = [
@@ -1029,7 +1028,7 @@ FRASES_PROIBIDAS = [
     "filho da puta", "filha da puta", "se mata", "se fode",
     "sua puta", "sua vadia", "puta que pariu", "puta merda",
     "vai a merda", "vai pra merda", "me fode", "me foder",
-    "idiota mesmo", "idiota do", "burro demais", "burra demais",
+    "idiota mesmo", "idiota do",
     "que lixo você", "você é um lixo", "vc é um lixo",
     "puto da vida", "puta que", "fdp mesmo", "vsf mesmo",
 ]
