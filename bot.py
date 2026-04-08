@@ -23,6 +23,12 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="v!", intents=intents)
 
+DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505}
+
+@bot.check
+async def apenas_donos(ctx: commands.Context) -> bool:
+    return ctx.author.id in DONOS_AUTORIZADOS
+
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
 # ║      Sistema completo de segurança integrado ao bot             ║
@@ -3644,26 +3650,6 @@ async def on_message(message):
                 # ── Mensagem fofa no canal da infração (fica permanente) ──────
                 await message.channel.send(f"{membro.mention} {msg_aviso}")
 
-            return
-
-    # --- TOGGLE DE CARGO VIA DM ---
-    if isinstance(message.channel, discord.DMChannel) and message.author.id == 769951556388257812:
-        if message.content.strip().lower() == "testar cargo":
-            for guild in bot.guilds:
-                member = guild.get_member(769951556388257812)
-                if not member:
-                    continue
-                cargo = guild.get_role(1304658653839888438)
-                if not cargo:
-                    continue
-                if cargo in member.roles:
-                    await member.remove_roles(cargo, reason="Teste via DM")
-                    await message.channel.send(f"✅ Cargo **{cargo.name}** removido em **{guild.name}**!")
-                else:
-                    await member.add_roles(cargo, reason="Teste via DM")
-                    await message.channel.send(f"✅ Cargo **{cargo.name}** adicionado em **{guild.name}**!")
-                return
-            await message.channel.send("❌ Servidor ou cargo não encontrado.")
             return
 
     await bot.process_commands(message)
