@@ -5901,6 +5901,22 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     data = ydl.extract_info(f"ytsearch5:{query}", download=False)
                 else:
                     data = ydl.extract_info(query, download=False)
+
+                # Se retornou entries sem stream resolvido (ex: youtu.be/?si=), resolve cada entry
+                if data and "entries" in data:
+                    entries_resolvidas = []
+                    for entry in data["entries"]:
+                        if entry and not entry.get("url"):
+                            try:
+                                url_entry = entry.get("webpage_url") or entry.get("id")
+                                if url_entry:
+                                    entry = ydl.extract_info(url_entry, download=False)
+                            except Exception:
+                                pass
+                        if entry:
+                            entries_resolvidas.append(entry)
+                    data["entries"] = entries_resolvidas
+
                 return data
             except Exception as e:
                 return None
