@@ -5671,9 +5671,14 @@ YTDL_OPTIONS = {
     "no_warnings":       True,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
-    "cookiefile":        None,
     "extractor_retries": 3,
     "socket_timeout":    15,
+    # Usa o cliente iOS do YouTube para evitar detecção de bot
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["ios", "web"],
+        }
+    },
 }
 
 # Opções do FFmpeg para stream de áudio
