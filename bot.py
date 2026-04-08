@@ -5823,6 +5823,8 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         try:
             player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
             player.text_channel = ctx.channel
+            player.autoplay = wavelink.AutoPlayMode.disabled  # CRÍTICO: desativa autoplay interno
+            player.inactive_timeout = None                    # sem timeout automático
             await player.set_volume(SV_VOLUME_PADRAO)
             return player
         except Exception as e:
@@ -5892,8 +5894,21 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
         player: wavelink.Player = payload.player
-        # Se a fila está vazia e não é loop, avisar
-        if not player.queue and payload.reason == "finished":
+        reason = payload.reason
+
+        # Loop de música única — re-toca a mesma
+        if player.queue.mode == wavelink.QueueMode.loop and payload.track:
+            await player.play(payload.track)
+            return
+
+        # Loop de fila — coloca a música no fim e pega a próxima
+        if player.queue.mode == wavelink.QueueMode.loop_all and payload.track:
+            player.queue.put(payload.track)
+
+        if player.queue:
+            next_track = player.queue.get()
+            await player.play(next_track)
+        elif reason == "finished":
             ch = getattr(player, "text_channel", None)
             if ch:
                 try:
@@ -5921,7 +5936,23 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
 
             try:
-                tracks = await wavelink.Playable.search(query)
+                # ── Detectar fonte correta ──────────────────────────────
+                # URL Spotify  → passa direto (LavaSrc resolve via "sp:" prefix)
+                # Busca texto  → YouTube Music (sem bot-detection do YouTube)
+                # Outra URL    → passa direto (YouTube, SoundCloud, etc.)
+                q_lower = query.lower()
+                is_url = q_lower.startswith("http://") or q_lower.startswith("https://")
+
+                if is_url and "spotify.com" in q_lower:
+                    # URL Spotify — LavaSrc converte automaticamente
+                    tracks = await wavelink.Playable.search(query)
+                elif is_url:
+                    # URL do YouTube, SoundCloud, etc. — passa direto
+                    tracks = await wavelink.Playable.search(query)
+                else:
+                    # Busca por nome — usa YouTube Music (sem bot-detection)
+                    tracks = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTubeMusic)
+
             except Exception as e:
                 print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
                 return await msg_busca.edit(embed=discord.Embed(
@@ -5932,13 +5963,14 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
 
             adicionadas = 0
+            ja_tocando_antes = player.playing
 
             if isinstance(tracks, wavelink.Playlist):
                 # Playlist inteira
                 for t in tracks:
                     t.extras = wavelink.ExtrasNamespace({"requester": ctx.author})
                     if len(player.queue) < SV_FILA_MAX:
-                        await player.queue.put_wait(t)
+                        player.queue.put(t)   # síncrono — evita race condition
                         adicionadas += 1
                 await msg_busca.edit(embed=discord.Embed(
                     description=f"📋 Playlist **{tracks.name}** adicionada com **{adicionadas}** músicas!! 🦇",
@@ -5951,17 +5983,17 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     return await msg_busca.edit(embed=discord.Embed(
                         description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
                         color=SV_COR_ERRO))
-                await player.queue.put_wait(track)
+                player.queue.put(track)  # síncrono — evita race condition
                 adicionadas = 1
-                if player.playing:
+                if ja_tocando_antes:
                     await msg_busca.edit(embed=discord.Embed(
                         description=f"📋 **{track.title}** adicionada à fila!! 🦇",
                         color=SV_COR_PRIMARIA))
                 else:
                     await msg_busca.delete()
 
-            # Iniciar reprodução se não estiver tocando
-            if not player.playing:
+            # Iniciar reprodução se não estava tocando antes
+            if not ja_tocando_antes:
                 next_track = player.queue.get()
                 await player.play(next_track)
 
