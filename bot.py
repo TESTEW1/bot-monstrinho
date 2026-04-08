@@ -5652,14 +5652,14 @@ SV_VOLUME_PADRAO = 0.5        # 50%
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
 YTDL_OPTIONS = {
-    "format":            "bestaudio/best",
+    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist":        False,
     "quiet":             True,
     "no_warnings":       True,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
     "extract_flat":      "in_playlist",
-    "cookiefile":        "cookies.txt",  # Exportar do YouTube com a extensão "Get cookies.txt LOCALLY"
+    "cookiefile":        "cookies.txt",
 }
 
 FFMPEG_OPTIONS = {
