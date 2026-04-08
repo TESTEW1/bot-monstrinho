@@ -4208,7 +4208,7 @@ async def cmd_banir_error(ctx: commands.Context, error: Exception):
 # ║   Votação da direção pra desbanir membros • Estila Vampy   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
+DIRECAO_CHANNEL_ID  = 1486114064009531713   # Canal da direção onde a votação é postada
 BOT_EXCLUIDO_ID     = 1304927837341618338   # ID do bot que NÃO vota
 VOTE_TIMEOUT_HOURS  = 48                    # Horas até a votação expirar automaticamente
 
@@ -4489,7 +4489,6 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
         )
 
     @commands.command(name="votobanner", aliases=["apelar", "votoban"])
-    @commands.has_permissions(administrator=True)
     async def votobanner(self, ctx: commands.Context, user_id: int, *, motivo: str = "Pedido de retorno."):
         """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <user_id> [motivo]"""
         guild    = ctx.guild
