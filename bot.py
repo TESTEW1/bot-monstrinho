@@ -6422,7 +6422,14 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 # ══════════════════════════════════════════════════════════════════
 
 AMBER_ID = 918222382840291369
-CARGOS_GERAL_NOMES = ["Reviver chat🧟‍♀️", "Bora call", "Cinema", "Gravação"]
+CARGOS_GERAL_NOMES = ["Reviver chat", "Bora call", "Cinema", "Gravação"]
+
+def _achar_cargo(guild: discord.Guild, nome: str):
+    """Busca cargo por nome exato ou parcial (ignora emojis no final)."""
+    for role in guild.roles:
+        if role.name == nome or role.name.startswith(nome):
+            return role
+    return None
 
 class DarCargoGeralView(discord.ui.View):
     def __init__(self, guild: discord.Guild):
@@ -6453,7 +6460,7 @@ class DarCargoBtn(discord.ui.Button):
         else:
             nomes = [self.nome_cargo]
 
-        cargos = [discord.utils.get(guild.roles, name=n) for n in nomes]
+        cargos = [_achar_cargo(guild, n) for n in nomes]
         cargos = [c for c in cargos if c]
 
         if not cargos:
@@ -6461,11 +6468,16 @@ class DarCargoBtn(discord.ui.Button):
             return
 
         count = 0
+        erros = 0
         for membro in membros:
             faltam = [c for c in cargos if c not in membro.roles]
             if faltam:
-                await membro.add_roles(*faltam, reason="v!darcargogeral pela Amber/dono")
-                count += 1
+                try:
+                    await membro.add_roles(*faltam, reason="v!darcargogeral pela Amber/dono")
+                    count += 1
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    erros += 1
 
         nomes_str = " + ".join([c.name for c in cargos])
         eh_amber = interaction.user.id == AMBER_ID
@@ -6477,6 +6489,17 @@ class DarCargoBtn(discord.ui.Button):
         for item in self.view.children:
             item.disabled = True
         await interaction.message.edit(view=self.view)
+
+@bot.command(name="fecharticket", aliases=["fechart", "closet"])
+async def fecharticket(ctx: commands.Context):
+    """Fecha (deleta) o canal de ticket atual. Uso: v!fecharticket"""
+    canal = ctx.channel
+    if "ticket" not in canal.name.lower():
+        return await ctx.send("❌ Esse canal não parece ser um ticket! 🦇", delete_after=5)
+    await ctx.send("🔒 Fechando ticket em 3 segundos... 🦇💚")
+    await asyncio.sleep(3)
+    await canal.delete(reason=f"Ticket fechado por {ctx.author}")
+
 
 @bot.command(name="darcargogeral")
 async def darcargogeral(ctx: commands.Context):
