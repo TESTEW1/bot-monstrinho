@@ -23,7 +23,7 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="v!", intents=intents)
 
-DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505}
+DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
 
 @bot.check
 async def apenas_donos(ctx: commands.Context) -> bool:
@@ -2136,7 +2136,11 @@ class AprovarMembroView(discord.ui.View):
             return
         cargo_membro = discord.utils.get(guild.roles, id=1304658653768581210)
         cargo_vampy_de = discord.utils.get(guild.roles, id=1432545143285743696)
-        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de] if c]
+        cargo_reviver = discord.utils.get(guild.roles, name="Reviver chat🧟‍♀️")
+        cargo_call = discord.utils.get(guild.roles, name="Bora call")
+        cargo_cinema = discord.utils.get(guild.roles, name="Cinema")
+        cargo_gravacao = discord.utils.get(guild.roles, name="Gravação")
+        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de, cargo_reviver, cargo_call, cargo_cinema, cargo_gravacao] if c]
         if cargos_para_adicionar:
             await membro.add_roles(*cargos_para_adicionar)
         try: await membro.send("AAAA 😭🦇💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
@@ -4489,8 +4493,17 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
         )
 
     @commands.command(name="votobanner", aliases=["apelar", "votoban"])
-    async def votobanner(self, ctx: commands.Context, user_id: int, *, motivo: str = "Pedido de retorno."):
-        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <user_id> [motivo]"""
+    async def votobanner(self, ctx: commands.Context, usuario: str, *, motivo: str = "Pedido de retorno."):
+        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <@user ou ID> [motivo]"""
+        # Aceita menção (<@123>) ou ID puro
+        import re as _re
+        match = _re.match(r"<@!?(\d+)>", usuario)
+        try:
+            user_id = int(match.group(1)) if match else int(usuario)
+        except ValueError:
+            await ctx.send("❌ Uso: `v!votobanner <@user ou ID> [motivo]`", delete_after=8)
+            return
+
         guild    = ctx.guild
         guild_id = guild.id
 
@@ -6400,6 +6413,93 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                                 color=SV_COR_AVISO))
                         except Exception:
                             pass
+
+
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🦇  COMANDOS FOFOS — Amber Edition
+# ══════════════════════════════════════════════════════════════════
+
+AMBER_ID = 918222382840291369
+CARGOS_GERAL_NOMES = ["Reviver chat🧟‍♀️", "Bora call", "Cinema", "Gravação"]
+
+class DarCargoGeralView(discord.ui.View):
+    def __init__(self, guild: discord.Guild):
+        super().__init__(timeout=60)
+        self.guild = guild
+        for nome in CARGOS_GERAL_NOMES:
+            self.add_item(DarCargoBtn(nome, False))
+        self.add_item(DarCargoBtn("✨ Todos", True))
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+class DarCargoBtn(discord.ui.Button):
+    def __init__(self, label: str, todos: bool):
+        cor = discord.ButtonStyle.success if todos else discord.ButtonStyle.primary
+        super().__init__(label=label, style=cor)
+        self.todos = todos
+        self.nome_cargo = label
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        membros = [m for m in guild.members if not m.bot]
+
+        if self.todos:
+            nomes = CARGOS_GERAL_NOMES
+        else:
+            nomes = [self.nome_cargo]
+
+        cargos = [discord.utils.get(guild.roles, name=n) for n in nomes]
+        cargos = [c for c in cargos if c]
+
+        if not cargos:
+            await interaction.followup.send("❌ Nenhum cargo encontrado!", ephemeral=True)
+            return
+
+        count = 0
+        for membro in membros:
+            faltam = [c for c in cargos if c not in membro.roles]
+            if faltam:
+                await membro.add_roles(*faltam, reason="v!darcargogeral pela Amber/dono")
+                count += 1
+
+        nomes_str = " + ".join([c.name for c in cargos])
+        eh_amber = interaction.user.id == AMBER_ID
+        if eh_amber:
+            msg = f"feito Amberzinha!! 🦇💚 dei **{nomes_str}** pra **{count}** membros!! tá tudo certinho ✨🫶"
+        else:
+            msg = f"✅ Cargo(s) **{nomes_str}** dado(s) pra **{count}** membros!!"
+        await interaction.followup.send(msg, ephemeral=True)
+        for item in self.view.children:
+            item.disabled = True
+        await interaction.message.edit(view=self.view)
+
+@bot.command(name="darcargogeral")
+async def darcargogeral(ctx: commands.Context):
+    """Dá um cargo de notificação pra todos os membros do servidor."""
+    eh_amber = ctx.author.id == AMBER_ID
+    if eh_amber:
+        embed = discord.Embed(
+            title="🦇💚 oi Amberzinha!!",
+            description=(
+                "aaaa que bom que você apareceu!! 🥺✨\n\n"
+                "qual carguinho você quer dar pra galera toda??\n"
+                "é só escolher aqui embaixo que eu já mando pra todo mundo!! 🦇💖"
+            ),
+            color=0x9b59b6
+        )
+    else:
+        embed = discord.Embed(
+            title="🦇 Dar cargo geral",
+            description="Escolha qual cargo dar pra todos os membros do servidor:",
+            color=0x7c3aed
+        )
+    embed.set_footer(text="🦇 Vampy • expira em 60s")
+    await ctx.send(embed=embed, view=DarCargoGeralView(ctx.guild))
 
 
 async def _main():
