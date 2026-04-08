@@ -5665,7 +5665,7 @@ SV_FILA_MAX      = 50         # máximo de músicas na fila
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio/best",
+    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist":        False,
     "quiet":             True,
     "no_warnings":       True,
@@ -5673,7 +5673,6 @@ YTDL_OPTIONS = {
     "source_address":    "0.0.0.0",
     "extractor_retries": 3,
     "socket_timeout":    15,
-    # Usa o cliente iOS do YouTube para evitar detecção de bot
     "extractor_args": {
         "youtube": {
             "player_client": ["ios", "web"],
