@@ -5024,12 +5024,22 @@ class VMPainelView(discord.ui.View):
         """Abre o painel de música Spotyvampy diretamente do painel da call."""
         sv_cog = interaction.client.cogs.get("SpotyvampyCog")
         if not sv_cog:
-            await interaction.response.send_message("❌ Spotyvampy não está disponível no momento!! 🥺🦇", ephemeral=True)
+            await interaction.response.send_message(
+                embed=discord.Embed(description="❌ Spotyvampy não está disponível no momento!! 🥺🦇", color=0xff4444),
+                ephemeral=True)
             return
         guild  = interaction.guild
-        player = sv_cog.players.get(guild.id)
-        embed  = sv_cog._embed_painel(player)
-        view   = MusicControlView(sv_cog, guild.id)
+        player = guild.voice_client  # wavelink.Player ou None — não usa sv_cog.players (não existe)
+        if player and getattr(player, "current", None):
+            embed = sv_cog._embed_nowplaying(player.current, player)
+        else:
+            embed = discord.Embed(
+                title="🎵 Spotyvampy",
+                description="😴 Nada tocando agora!! Use `v!play <música>` pra começar!! 🦇",
+                color=SV_COR_PRIMARIA
+            )
+            embed.set_footer(text="🦇 Spotyvampy v2.0 • Powered by Lavalink")
+        view = MusicControlView(sv_cog, guild.id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
