@@ -21,7 +21,7 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="v!", intents=intents)
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
@@ -225,18 +225,18 @@ class VampyCog(commands.Cog, name="VampySecurity"):
             # Embed de Comandos
             cmds = discord.Embed(title="📋 Comandos — VAMPY SECURITY", color=0x5865F2, timestamp=now)
             cmds.add_field(name="🔍 Status & Info", inline=False, value=(
-                "`!security status` — Painel completo\n"
-                "`!segurança status` — Alias PT\n"
-                "`!security riskscore @user` — Risco do usuário\n"
-                "`!security flagged` — Usuários suspeitos"
+                "`v!security status` — Painel completo\n"
+                "`v!segurança status` — Alias PT\n"
+                "`v!security riskscore @user` — Risco do usuário\n"
+                "`v!security flagged` — Usuários suspeitos"
             ))
             cmds.add_field(name="🔧 Administração", inline=False, value=(
-                "`!security reset` — Limpar alertas\n"
-                "`!security lockdown on/off` — Lockdown manual\n"
-                "`!security emergency on/off` — Modo emergência\n"
-                "`!security unflag @user` — Remover flag\n"
-                "`!security alerts` — Últimos 10 alertas\n"
-                "`!security stats` — Estatísticas gerais"
+                "`v!security reset` — Limpar alertas\n"
+                "`v!security lockdown on/off` — Lockdown manual\n"
+                "`v!security emergency on/off` — Modo emergência\n"
+                "`v!security unflag @user` — Remover flag\n"
+                "`v!security alerts` — Últimos 10 alertas\n"
+                "`v!security stats` — Estatísticas gerais"
             ))
             cmds.add_field(name="⚠️ Permissão", value="Todos os comandos exigem **Administrador**.", inline=False)
             cmds.set_footer(text="VAMPY SECURITY SYSTEM • GOD MODE v2.0")
@@ -4074,7 +4074,7 @@ class BanirMembroView(discord.ui.View):
 @bot.command(name="banir", aliases=["ban"])
 @commands.has_permissions(ban_members=True)
 async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: str = "Sem motivo informado."):
-    """Bana um membro e posta painel com opção de revogar. Uso: !banir @membro [motivo]"""
+    """Bana um membro e posta painel com opção de revogar. Uso: v!banir @membro [motivo]"""
     if membro.id == ctx.author.id:
         await ctx.send("❌ Você não pode banir você mesmo! 🥺🦇", delete_after=8)
         return
@@ -4446,7 +4446,7 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
     @commands.command(name="votobanner", aliases=["apelar", "votoban"])
     @commands.has_permissions(administrator=True)
     async def votobanner(self, ctx: commands.Context, user_id: int, *, motivo: str = "Pedido de retorno."):
-        """Inicia manualmente uma votação de ban appeal. Uso: !votobanner <user_id> [motivo]"""
+        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <user_id> [motivo]"""
         guild    = ctx.guild
         guild_id = guild.id
 
@@ -4545,7 +4545,7 @@ _VM_MSGS = {
     "user_nao_na_call":    "Esse(a) usuário(a) não tá na sua call!! 🤔🦇",
     "ja_dono":             "Você já é o(a) dono(a) dessa call!! 😄🦇",
     "dono_ainda_na_call":  "O dono ainda tá na call!! Só dá pra reivindicar quando ele sair!! 🥺🦇",
-    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use !vm reset pra recriar!! 🤔🦇",
+    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use v!vm reset pra recriar!! 🤔🦇",
 }
 
 def _vm_msg(key: str, **kwargs) -> str:
@@ -5110,7 +5110,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             )
             embed.add_field(
                 name="📋 Comandos",
-                value="`!vm painel` • `!vm reset` • `!vm info`",
+                value="`v!vm painel` • `!vm reset` • `!vm info`",
                 inline=False
             )
             embed.set_footer(text="🦇 Vampy VoiceMaster • Calls com muito amor!!")
@@ -5263,7 +5263,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
     async def vm_group(self, ctx: commands.Context):
         await ctx.send(embed=_vm_embed_info(
             "🎙️ Vampy VoiceMaster",
-            "`!vm setup` • `!vm painel` • `!vm reset` • `!vm info`\n\nOu use os botões no painel de controle!! 🦇"
+            "`v!vm setup` • `!vm painel` • `!vm reset` • `!vm info`\n\nOu use os botões no painel de controle!! 🦇"
         ), delete_after=15)
 
     @vm_group.command(name="setup")
@@ -5847,7 +5847,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     def _embed_fila(self, player: MusicPlayer | None) -> discord.Embed:
         embed = discord.Embed(title="📋 Fila de Músicas — Spotyvampy", color=SV_COR_PRIMARIA, timestamp=datetime.utcnow())
         if not player or (not player.current and not player.queue):
-            embed.description = "😴 A fila está vazia!! Use `!play` pra adicionar músicas!! 🦇"
+            embed.description = "😴 A fila está vazia!! Use `v!play` pra adicionar músicas!! 🦇"
             return embed
         if player.current:
             embed.add_field(name="🎵 Tocando Agora", value=f"**{player.current.title}** `{player.current.duration_fmt}` — {player.current.requester.mention}", inline=False)
@@ -5883,7 +5883,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             embed.add_field(name="📋 Na fila", value=f"`{len(player.queue)}` músicas", inline=True)
             embed.add_field(name="🔊 Volume",  value=f"`{int(player.volume * 100)}%`",   inline=True)
         else:
-            embed.add_field(name="😴 Status", value="Nenhuma música tocando agora!!\nUse `!play <música>` pra começar!! 🦇", inline=False)
+            embed.add_field(name="😴 Status", value="Nenhuma música tocando agora!!\nUse `v!play <música>` pra começar!! 🦇", inline=False)
         embed.set_footer(text="🦇 Spotyvampy • Use os botões ou comandos !play, !pular, !fila...")
         return embed
 
@@ -6017,9 +6017,9 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 timestamp=datetime.utcnow()
             )
             embed.add_field(name="🎵 Comandos Principais",
-                            value="`!play` `!pular` `!parar` `!fila` `!tocando` `!volume` `!loop` `!embaralhar` `!sair`",
+                            value="`v!play` `v!pular` `v!parar` `v!fila` `v!tocando` `v!volume` `v!loop` `v!embaralhar` `v!sair`",
                             inline=False)
-            embed.add_field(name="📖 Ajuda Completa", value="`!sv` ou `!spotyvampy`", inline=False)
+            embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `!spotyvampy`", inline=False)
             embed.set_footer(text="🦇 Spotyvampy • Música com muito amor!!")
             await log_ch.send(embed=embed)
 
@@ -6027,7 +6027,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="play", aliases=["tocar", "p"])
     async def play(self, ctx: commands.Context, *, query: str):
-        """Toca uma música ou playlist do YouTube. Uso: !play <nome ou URL>"""
+        """Toca uma música ou playlist do YouTube. Uso: v!play <nome ou URL>"""
         async with ctx.typing():
             player = await self._get_or_create_player(ctx)
             if not player:
@@ -6063,7 +6063,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="pular", aliases=["skip", "s"])
     async def pular(self, ctx: commands.Context):
-        """Pula para a próxima música. Uso: !pular"""
+        """Pula para a próxima música. Uso: v!pular"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.is_playing():
             return await ctx.send(embed=discord.Embed(
@@ -6075,7 +6075,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="pausar", aliases=["pause"])
     async def pausar(self, ctx: commands.Context):
-        """Pausa ou continua a música. Uso: !pausar"""
+        """Pausa ou continua a música. Uso: v!pausar"""
         player = self.players.get(ctx.guild.id)
         if not player:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
@@ -6088,7 +6088,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="continuar", aliases=["resume", "r"])
     async def continuar(self, ctx: commands.Context):
-        """Continua a música pausada. Uso: !continuar"""
+        """Continua a música pausada. Uso: v!continuar"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.vc.is_paused():
             return await ctx.send(embed=discord.Embed(description="❌ A música não está pausada!! 🦇", color=SV_COR_ERRO))
@@ -6097,7 +6097,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="parar", aliases=["stop"])
     async def parar(self, ctx: commands.Context):
-        """Para a música e limpa a fila. Uso: !parar"""
+        """Para a música e limpa a fila. Uso: v!parar"""
         player = self.players.get(ctx.guild.id)
         if not player:
             return await ctx.send(embed=discord.Embed(description="❌ Não há nada tocando!! 🦇", color=SV_COR_ERRO))
@@ -6110,25 +6110,25 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="fila", aliases=["queue", "q"])
     async def fila(self, ctx: commands.Context):
-        """Mostra a fila de músicas. Uso: !fila"""
+        """Mostra a fila de músicas. Uso: v!fila"""
         player = self.players.get(ctx.guild.id)
         embed  = self._embed_fila(player)
         await ctx.send(embed=embed)
 
     @commands.command(name="tocando", aliases=["nowplaying", "np"])
     async def tocando(self, ctx: commands.Context):
-        """Mostra a música tocando agora. Uso: !tocando"""
+        """Mostra a música tocando agora. Uso: v!tocando"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.current:
             return await ctx.send(embed=discord.Embed(
-                description="❌ Nada tocando agora!! Use `!play <música>` 🦇", color=SV_COR_ERRO))
+                description="❌ Nada tocando agora!! Use `v!play <música>` 🦇", color=SV_COR_ERRO))
         embed = self._embed_nowplaying(player.current, player)
         view  = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
     @commands.command(name="volume", aliases=["vol", "v"])
     async def volume(self, ctx: commands.Context, vol: int):
-        """Ajusta o volume (1-100). Uso: !volume 75"""
+        """Ajusta o volume (1-100). Uso: v!volume 75"""
         if not 1 <= vol <= 100:
             return await ctx.send(embed=discord.Embed(
                 description="❌ Volume deve ser entre **1** e **100**!! 🦇", color=SV_COR_ERRO))
@@ -6144,7 +6144,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="loop")
     async def loop(self, ctx: commands.Context, modo: str = "musica"):
-        """Ativa loop. Modos: musica | fila | off. Uso: !loop fila"""
+        """Ativa loop. Modos: musica | fila | off. Uso: v!loop fila"""
         player = self.players.get(ctx.guild.id)
         if not player:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
@@ -6162,7 +6162,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="embaralhar", aliases=["shuffle"])
     async def embaralhar(self, ctx: commands.Context):
-        """Embaralha a fila. Uso: !embaralhar"""
+        """Embaralha a fila. Uso: v!embaralhar"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
@@ -6174,7 +6174,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="remover", aliases=["remove", "rm"])
     async def remover(self, ctx: commands.Context, pos: int):
-        """Remove uma música da fila pela posição. Uso: !remover 3"""
+        """Remove uma música da fila pela posição. Uso: v!remover 3"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
@@ -6188,7 +6188,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="limparfila", aliases=["clearqueue", "cq"])
     async def limparfila(self, ctx: commands.Context):
-        """Limpa a fila sem parar a música atual. Uso: !limparfila"""
+        """Limpa a fila sem parar a música atual. Uso: v!limparfila"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila já está vazia!! 🦇", color=SV_COR_ERRO))
@@ -6200,7 +6200,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="sair", aliases=["dc", "disconnect", "desconectar"])
     async def sair(self, ctx: commands.Context):
-        """Desconecta o bot do canal de voz. Uso: !sair"""
+        """Desconecta o bot do canal de voz. Uso: v!sair"""
         player = self.players.get(ctx.guild.id)
         if not player or not player.vc.is_connected():
             return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhum canal de voz!! 🦇", color=SV_COR_ERRO))
@@ -6213,7 +6213,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="spotyvampy", aliases=["sv", "musicahelp", "mhelp"])
     async def spotyvampy_help(self, ctx: commands.Context):
-        """Mostra todos os comandos do Spotyvampy. Uso: !sv"""
+        """Mostra todos os comandos do Spotyvampy. Uso: v!sv"""
         embed = discord.Embed(
             title="🎵 Spotyvampy — Comandos de Música",
             description=(
@@ -6227,25 +6227,25 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             color=SV_COR_PRIMARIA,
             timestamp=datetime.utcnow()
         )
-        embed.add_field(name="▶️  Tocar",         value="`!play <nome/URL>` `!p` `!tocar`\nToca música ou playlist do YouTube", inline=False)
-        embed.add_field(name="⏸️  Pausar",        value="`!pausar` `!pause`\nPausa ou continua", inline=True)
-        embed.add_field(name="▶️  Continuar",     value="`!continuar` `!resume` `!r`\nContinua se pausado", inline=True)
-        embed.add_field(name="⏭️  Pular",         value="`!pular` `!skip` `!s`\nPula para a próxima", inline=True)
-        embed.add_field(name="⏹️  Parar",         value="`!parar` `!stop`\nPara e limpa a fila", inline=True)
-        embed.add_field(name="📋  Fila",          value="`!fila` `!queue` `!q`\nMostra a fila", inline=True)
-        embed.add_field(name="🎵  Tocando",       value="`!tocando` `!nowplaying` `!np`\nMúsica atual", inline=True)
-        embed.add_field(name="🔊  Volume",        value="`!volume <1-100>` `!vol`\nAjusta o volume", inline=True)
-        embed.add_field(name="🔁  Loop",          value="`!loop musica` `!loop fila` `!loop off`\nModos de repetição", inline=True)
-        embed.add_field(name="🔀  Embaralhar",    value="`!embaralhar` `!shuffle`\nEmbaralha a fila", inline=True)
-        embed.add_field(name="🗑️  Remover",       value="`!remover <pos>` `!rm`\nRemove da fila", inline=True)
-        embed.add_field(name="🧹  Limpar Fila",   value="`!limparfila` `!cq`\nLimpa sem parar", inline=True)
-        embed.add_field(name="👋  Sair",          value="`!sair` `!dc` `!desconectar`\nDesconecta o bot", inline=True)
+        embed.add_field(name="▶️  Tocar",         value="`v!play <nome/URL>` `v!p` `v!tocar`\nToca música ou playlist do YouTube", inline=False)
+        embed.add_field(name="⏸️  Pausar",        value="`v!pausar` `v!pause`\nPausa ou continua", inline=True)
+        embed.add_field(name="▶️  Continuar",     value="`v!continuar` `v!resume` `v!r`\nContinua se pausado", inline=True)
+        embed.add_field(name="⏭️  Pular",         value="`v!pular` `v!skip` `v!s`\nPula para a próxima", inline=True)
+        embed.add_field(name="⏹️  Parar",         value="`v!parar` `v!stop`\nPara e limpa a fila", inline=True)
+        embed.add_field(name="📋  Fila",          value="`v!fila` `v!queue` `v!q`\nMostra a fila", inline=True)
+        embed.add_field(name="🎵  Tocando",       value="`v!tocando` `v!nowplaying` `v!np`\nMúsica atual", inline=True)
+        embed.add_field(name="🔊  Volume",        value="`v!volume <1-100>` `v!vol`\nAjusta o volume", inline=True)
+        embed.add_field(name="🔁  Loop",          value="`v!loop musica` `v!loop fila` `v!loop off`\nModos de repetição", inline=True)
+        embed.add_field(name="🔀  Embaralhar",    value="`v!embaralhar` `v!shuffle`\nEmbaralha a fila", inline=True)
+        embed.add_field(name="🗑️  Remover",       value="`v!remover <pos>` `v!rm`\nRemove da fila", inline=True)
+        embed.add_field(name="🧹  Limpar Fila",   value="`v!limparfila` `v!cq`\nLimpa sem parar", inline=True)
+        embed.add_field(name="👋  Sair",          value="`v!sair` `v!dc` `v!desconectar`\nDesconecta o bot", inline=True)
         embed.add_field(
             name="💡 Dica",
             value="Use o botão **🎵 Spotyvampy** no painel da sua call pra controlar a música sem sair do painel!! 🦇",
             inline=False
         )
-        embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!! • Use !sv pra ver esse menu")
+        embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!! • Use v!sv pra ver esse menu")
         view = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
