@@ -4,3 +4,4 @@ langdetect
 yt-dlp
 discord.py[voice]
 PyNaCl
+wavelink>=3.4.0
