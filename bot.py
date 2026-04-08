@@ -3646,6 +3646,26 @@ async def on_message(message):
 
             return
 
+    # --- TOGGLE DE CARGO VIA DM ---
+    if isinstance(message.channel, discord.DMChannel) and message.author.id == 769951556388257812:
+        if message.content.strip().lower() == "testar cargo":
+            for guild in bot.guilds:
+                member = guild.get_member(769951556388257812)
+                if not member:
+                    continue
+                cargo = guild.get_role(1304658653839888438)
+                if not cargo:
+                    continue
+                if cargo in member.roles:
+                    await member.remove_roles(cargo, reason="Teste via DM")
+                    await message.channel.send(f"✅ Cargo **{cargo.name}** removido em **{guild.name}**!")
+                else:
+                    await member.add_roles(cargo, reason="Teste via DM")
+                    await message.channel.send(f"✅ Cargo **{cargo.name}** adicionado em **{guild.name}**!")
+                return
+            await message.channel.send("❌ Servidor ou cargo não encontrado.")
+            return
+
     await bot.process_commands(message)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6396,39 +6416,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                         except Exception:
                             pass
 
-
-# ── Comando de teste via DM ──────────────────────────────────────────
-DONO_ID   = 769951556388257812
-CARGO_ID  = 1304658653839888438
-
-@bot.event
-async def on_message(message: discord.Message):
-    # Ignora mensagens do próprio bot
-    if message.author.bot:
-        return
-
-    # Só responde no DM do dono
-    if isinstance(message.channel, discord.DMChannel) and message.author.id == DONO_ID:
-        if message.content.strip().lower() == "testar cargo":
-            for guild in bot.guilds:
-                member = guild.get_member(DONO_ID)
-                if not member:
-                    continue
-                cargo = guild.get_role(CARGO_ID)
-                if not cargo:
-                    continue
-                if cargo in member.roles:
-                    await member.remove_roles(cargo, reason="Teste via DM")
-                    await message.channel.send(f"✅ Cargo **{cargo.name}** removido em **{guild.name}**!")
-                else:
-                    await member.add_roles(cargo, reason="Teste via DM")
-                    await message.channel.send(f"✅ Cargo **{cargo.name}** adicionado em **{guild.name}**!")
-                return
-            await message.channel.send("❌ Servidor ou cargo não encontrado.")
-            return
-
-    # Processa comandos normalmente
-    await bot.process_commands(message)
 
 async def _main():
     async with bot:
