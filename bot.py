@@ -2130,8 +2130,10 @@ class AprovarMembroView(discord.ui.View):
             await interaction.followup.send("❌ Membro não encontrado.", ephemeral=True)
             return
         cargo_membro = discord.utils.get(guild.roles, id=1304658653768581210)
-        if cargo_membro:
-            await membro.add_roles(cargo_membro)
+        cargo_vampy_de = discord.utils.get(guild.roles, id=1432545143285743696)
+        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de] if c]
+        if cargos_para_adicionar:
+            await membro.add_roles(*cargos_para_adicionar)
         try: await membro.send("AAAA 😭🦇💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
         except: pass
         canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
