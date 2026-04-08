@@ -5663,6 +5663,50 @@ SV_COR_AVISO     = 0xffaa00
 SV_VOLUME_PADRAO = 0.5        # 50% (escala 0.0-2.0 para FFmpeg)
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🍪  COOKIES DO YOUTUBE — embutidos no código
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import tempfile, os as _os
+
+_YOUTUBE_COOKIES = """\
+# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file! Do not edit.
+
+.youtube.com	TRUE	/	FALSE	1810225087	SID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUd-0CfdCephyz1pt25kIw5_wACgYKAY4SARUSFQHGX2Mi7mvA1onk8X24mpBqNY8QshoVAUF8yKrCqVgL2-JNRHjWG68F4hJA0076
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdyCLbueF25JQ3MAdeHTyfUAACgYKAUQSARUSFQHGX2MisUzjCSQijdvmqYmz9wD_JxoVAUF8yKqJqD1EusUKwAVYPJOIWLoc0076
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdFZ-cpx07b3-AU6B9-Exg_gACgYKASsSARUSFQHGX2MiNILUjwpdoKD2g8aXlKY9RBoVAUF8yKqLt6vAtU_lQTBbilmNzqij0076
+.youtube.com	TRUE	/	FALSE	1810225087	HSID	AxMAwG2ri6X7fbZL6
+.youtube.com	TRUE	/	TRUE	1810225087	SSID	Ae0QFirWJZMSNV_54
+.youtube.com	TRUE	/	FALSE	1810225087	APISID	S44m028E_uIMhf_N/Au9-QlFrzV4dL6Oon
+.youtube.com	TRUE	/	TRUE	1810225087	SAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225092	LOGIN_INFO	AFmmF2swRAIgCPj6tr7RrjxuUp6xdlWjdP6wQwdsMCTw_4NWZGmXs5gCICU5P2tzImKSyvmAPrsuJD51BiZtK-e5W0518PJkjdft:QUQ3MjNmeHctLWRxaVVvN29xU0d0RG5GMDEzUkZNMVN3Z25YNHdTN2N2SGdOV1Utc3E3dHhLM3lfUHE5RzdVbndlMGZmY1Q2MFphUXp6R20tc2NCeDhQT2RqU2NHLXcyMlpTMnI4V3BfamFqUmNjdWZ6enM0WVdnUEwwR3M3SDBMLVlnanJ0c3BHUFl3aWo4Rm9VMVh5R3YwMHJlc2JSRDVR
+.youtube.com	TRUE	/	TRUE	1791217136	__Secure-BUCKET	CKcD
+.youtube.com	TRUE	/	TRUE	1810225149	PREF	f4=4000000&f6=40000000&tz=America.Sao_Paulo
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
+.youtube.com	TRUE	/	FALSE	1807201151	SIDCC	AKEyXzVF53gBK0xwBsDtNfLDIyXFxQumiirXHzKmtFh0RTsAyIDRw0yDD_loUpxXuTjjOwes
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDCC	AKEyXzWfyfxCWJf_tcWxUQLRcZBhfNSI2py9A5xNdsbrvwpZzVg6EYB2n9jw5QDChcFZ6Cud
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDCC	AKEyXzUZtvl8eVccwKne7wRdI1Wem9AJk1CBaCqUHMnp5bmBXOyXWV8ob6W0wVv_XX7sKon1
+.youtube.com	TRUE	/	TRUE	0	YSC	0iDG-YMgLEA
+.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_INFO1_LIVE	eRD8cRofanc
+.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_PRIVACY_METADATA	CgJCUhIEGgAgKA%3D%3D
+.youtube.com	TRUE	/	TRUE	1791217136	__Secure-YNID	17.YT=hZq4nCwk7m0Atz2APdL6gie0svBfHxHuXz6HJ6gFVOzZ5UmwCNTA6D_skEfNl2YWsntz01XKhwU_JjQtMTTy0PRWTcnvHveZ4caElrSV7hIPN2eMjPUrntB0dt2gzQ_qbE9uhzjPpqYEXLCywWGGDfxozn8l2DoBb9rfeWSVPap037bbs30UboHIGn3rH-sMloV7pFyQ_BWNTWJ9Tug2T1YnmTbhyMuVg6KZvcHJYr9n_Uh91hQEm8LfFlWTi_dRYtyqTeIgN85ed1NPY9ue2X9wof4OrtomBKj-v6FlGdq2IFqFgkO_erBF30c9pgv0V8wsui49c-8h5vlJwKzWtw
+.youtube.com	TRUE	/	TRUE	1791217137	__Secure-ROLLOUT_TOKEN	CLyckO_Z4d7mngEQn6OdjtTekwMYn86zjtTekwM%3D
+"""
+
+def _criar_cookies_tmp() -> str:
+    """Escreve os cookies em um arquivo temporário e retorna o caminho."""
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+    tmp.write(_YOUTUBE_COOKIES)
+    tmp.close()
+    return tmp.name
+
+_COOKIES_TMP_PATH = _criar_cookies_tmp()
+
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
     "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
@@ -5673,9 +5717,10 @@ YTDL_OPTIONS = {
     "source_address":    "0.0.0.0",
     "extractor_retries": 3,
     "socket_timeout":    15,
+    "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "web"],
+            "player_client": ["tv_embedded", "ios", "web"],
         }
     },
 }
