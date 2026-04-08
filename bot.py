@@ -5656,11 +5656,17 @@ _COOKIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookie
 YTDL_OPTIONS = {
     "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist":        False,
-    "quiet":             True,
-    "no_warnings":       True,
+    "quiet":             False,           # False pra erros reais aparecerem no console
+    "no_warnings":       False,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
-    # Usa cookies.txt se existir na mesma pasta do bot
+    # Cliente iOS — ignora verificação de bot do YouTube (funciona em servidor/Docker)
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["ios", "web"],
+        }
+    },
+    # Usa cookies.txt se existir na pasta do bot (reforço extra)
     **({"cookiefile": _COOKIES_PATH} if os.path.isfile(_COOKIES_PATH) else {}),
 }
 
@@ -5906,6 +5912,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     data = ydl.extract_info(query, download=False)
                 return data
             except Exception as e:
+                print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
                 return None
 
         data = await loop.run_in_executor(None, _extract)
