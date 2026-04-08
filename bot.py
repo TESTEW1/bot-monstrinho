@@ -5651,6 +5651,8 @@ SV_COR_AVISO     = 0xffaa00
 SV_VOLUME_PADRAO = 0.5        # 50%
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
+_COOKIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+
 YTDL_OPTIONS = {
     "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist":        False,
@@ -5658,7 +5660,8 @@ YTDL_OPTIONS = {
     "no_warnings":       True,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
-    "cookiefile":        "cookies.txt",
+    # Usa cookies.txt se existir na mesma pasta do bot
+    **({"cookiefile": _COOKIES_PATH} if os.path.isfile(_COOKIES_PATH) else {}),
 }
 
 FFMPEG_OPTIONS = {
