@@ -5659,6 +5659,7 @@ YTDL_OPTIONS = {
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
     "extract_flat":      "in_playlist",
+    "cookiefile":        "cookies.txt",  # Exportar do YouTube com a extensão "Get cookies.txt LOCALLY"
 }
 
 FFMPEG_OPTIONS = {
@@ -5894,21 +5895,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         opts["extract_flat"] = False
         ydl = yt_dlp.YoutubeDL(opts)
 
-        def _resolve_entry(entry: dict) -> dict | None:
-            """Garante que o entry tem o stream de áudio resolvido."""
-            # Se já tem URL de stream (começa com http e não é página do youtube), tá ok
-            url = entry.get("url", "")
-            if url and "youtube.com/watch" not in url and url.startswith("http"):
-                return entry
-            # Caso contrário, força extração completa pelo webpage_url ou id
-            page_url = entry.get("webpage_url") or entry.get("url") or entry.get("id")
-            if not page_url:
-                return None
-            try:
-                return ydl.extract_info(page_url, download=False)
-            except Exception:
-                return None
-
         def _extract():
             try:
                 # URL direta ou busca
@@ -5917,7 +5903,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 else:
                     data = ydl.extract_info(query, download=False)
                 return data
-            except Exception:
+            except Exception as e:
                 return None
 
         data = await loop.run_in_executor(None, _extract)
@@ -5927,12 +5913,8 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         tracks = []
         if "entries" in data:
             for entry in data["entries"]:
-                if not entry:
-                    continue
-                # Resolve stream se necessário (caso youtu.be, playlists, etc.)
-                resolved = await loop.run_in_executor(None, _resolve_entry, entry)
-                if resolved:
-                    tracks.append(Track(resolved, requester))
+                if entry:
+                    tracks.append(Track(entry, requester))
         else:
             tracks.append(Track(data, requester))
         return tracks
