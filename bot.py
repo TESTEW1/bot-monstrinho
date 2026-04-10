@@ -6683,15 +6683,22 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            None,   # DEBUG: aceita qualquer formato disponível
+    "format":            "bestaudio/best",
     "noplaylist":        False,
-    "quiet":             False,
-    "no_warnings":       False,
-    "verbose":           True,
+    "quiet":             True,
+    "no_warnings":       True,
+    "verbose":           False,
     "default_search":    "ytsearch",
     "extractor_retries": 3,
     "socket_timeout":    15,
     "cookiefile":        _COOKIES_TMP_PATH,
+    "extractor_args": {
+        "youtube": {
+            # tv_embedded não usa SABR e não precisa de JS challenge
+            "player_client": ["tv_embedded"],
+            "player_skip":   ["webpage"],
+        }
+    },
 }
 
 # Opções do FFmpeg para stream de áudio
@@ -6939,13 +6946,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 if not info:
                     return []
                 if "entries" in info:
-                    entries = [e for e in info["entries"] if e]
-                    return entries
-                # Log dos formatos disponíveis para debug
-                fmts = info.get("formats", [])
-                print(f"[Spotyvampy DEBUG] Formatos disponíveis para '{info.get('title')}':")
-                for f in fmts:
-                    print(f"  - id={f.get('format_id')} ext={f.get('ext')} acodec={f.get('acodec')} vcodec={f.get('vcodec')} url={'OK' if f.get('url') else 'VAZIO'}")
+                    return [e for e in info["entries"] if e]
                 return [info]
 
         return await loop.run_in_executor(None, _extract)
