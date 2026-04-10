@@ -6680,7 +6680,7 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
+    "format":            "bestaudio/best",
     "noplaylist":        False,
     "quiet":             True,
     "no_warnings":       True,
@@ -6692,10 +6692,10 @@ YTDL_OPTIONS = {
     "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "web", "tv_embedded"],
-            "player_skip":   ["webpage", "js"],
+            "player_client": ["ios", "tv_embedded", "web"],
         }
     },
+    "ignoreerrors":      True,
 }
 
 # Opções do FFmpeg para stream de áudio
