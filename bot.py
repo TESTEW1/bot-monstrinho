@@ -6703,10 +6703,10 @@ YTDL_OPTIONS = {
     "quiet":                True,
     "no_warnings":          True,
     "default_search":       "auto",
-    "cookiefile":           _COOKIES_TMP_PATH,
+    "cookiefile":           "cookies.txt",
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "web"],
+            "player_client": "web",
         }
     },
 }
