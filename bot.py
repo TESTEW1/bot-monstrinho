@@ -4,6 +4,7 @@ import random
 import asyncio
 import os
 import re
+import yt_dlp
 from datetime import timedelta
 from datetime import datetime
 from collections import defaultdict, deque
@@ -26,6 +27,8 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="v!", intents=intents)
 
 DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
+
+id_do_servidor =  # ← Coloque aqui o ID do seu servidor
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
@@ -183,6 +186,13 @@ class VampyCog(commands.Cog, name="VampySecurity"):
     async def on_ready(self):
         """Envia a ficha profissional de inicialização no canal de monitoramento."""
         await asyncio.sleep(3)
+
+        # ── Sync de slash commands (igual ao main.py) ──
+        if not getattr(self.bot, '_tree_synced', False):
+            await self.bot.tree.sync(guild=discord.Object(id=id_do_servidor))
+            self.bot._tree_synced = True
+        print(f"Entramos como {self.bot.user}.")
+
         for guild in self.bot.guilds:
             ch = await self.get_log_channel(guild)
             if not ch:
@@ -7648,14 +7658,120 @@ async def darcargogeral(ctx: commands.Context):
     await ctx.send(embed=embed, view=DarCargoGeralView(ctx.guild))
 
 
+# ══════════════════════════════════════════════════════════════════
+#  🎵  MUSICA COG — baseado no main (2).py (yt_dlp)
+# ══════════════════════════════════════════════════════════════════
+
+# Configurações do yt_dlp — pega o melhor áudio disponível
+YT_DL_OPTIONS = {
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": False,
+    "logtostderr": False,
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "auto",
+    "extractor_args": {"youtube": {"player_client": "web"}}
+}
+
+# Configurações do FFmpeg — processa o áudio com volume em 25%
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn -filter:a "volume=0.25"'
+}
+
+ytdl = yt_dlp.YoutubeDL(YT_DL_OPTIONS)
+
+
+class MusicaCog(commands.Cog, name="Musica"):
+    """🎵 Sistema de música simples com yt_dlp."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.voz_clients: dict[int, discord.VoiceClient] = {}
+        # Dicionário que guarda as conexões de voz por servidor
+
+    # ── v!play ───────────────────────────────────
+
+    @commands.command(name="play", aliases=["tocar", "p"])
+    async def play(self, ctx: commands.Context, *, url: str):
+        """Toca uma música do YouTube. Uso: v!play <link ou nome>"""
+
+        # Reutiliza conexão existente ou conecta ao canal do usuário
+        if ctx.guild.id in self.voz_clients and self.voz_clients[ctx.guild.id].is_connected():
+            voice_client = self.voz_clients[ctx.guild.id]
+        else:
+            if not ctx.author.voice or not ctx.author.voice.channel:
+                return await ctx.send("❌ Você precisa estar em um canal de voz! 🦇")
+            voice_client = await ctx.author.voice.channel.connect()
+            self.voz_clients[ctx.guild.id] = voice_client
+
+        # Extrai informações do áudio em segundo plano (sem travar o bot)
+        await ctx.send(f"🔍 Buscando: `{url}`...")
+        loop = asyncio.get_event_loop()
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+        except Exception as e:
+            return await ctx.send(f"❌ Erro ao buscar a música: `{e}`")
+
+        if not data or "url" not in data:
+            return await ctx.send("❌ Não consegui obter as informações da música.")
+
+        song = data["url"]
+        player = discord.FFmpegOpusAudio(song, **FFMPEG_OPTIONS)
+
+        # Para o que estiver tocando antes de iniciar o novo áudio
+        if voice_client.is_playing():
+            voice_client.stop()
+
+        voice_client.play(player)
+        titulo = data.get("title", "Música desconhecida")
+        await ctx.send(
+            embed=discord.Embed(
+                description=f"🎵 **Tocando agora:** {titulo}",
+                color=0x1db954
+            )
+        )
+
+    # ── v!stop ───────────────────────────────────
+
+    @commands.command(name="stop", aliases=["parar", "dc"])
+    async def stop(self, ctx: commands.Context):
+        """Para a música e desconecta o bot. Uso: v!stop"""
+        if ctx.guild.id in self.voz_clients:
+            vc = self.voz_clients[ctx.guild.id]
+            vc.stop()
+            await vc.disconnect()
+            del self.voz_clients[ctx.guild.id]
+            await ctx.send(
+                embed=discord.Embed(
+                    description="👋 Bot desconectado do canal de voz. 🦇💚",
+                    color=0xff4444
+                )
+            )
+        else:
+            await ctx.send("❌ O bot não está em nenhum canal de voz!")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🦇  SLASH COMMANDS
+# ══════════════════════════════════════════════════════════════════
+
+@bot.tree.command(guild=discord.Object(id=id_do_servidor), name='teste', description='Testando')
+async def slash_teste(interaction: discord.Interaction):
+    await interaction.response.send_message("Estou funcionando! 🦇💚", ephemeral=True)
+
+
 async def _main():
     async with bot:
         await bot.add_cog(VampyCog(bot))
         await bot.add_cog(VoiceMasterCog(bot))
         await bot.add_cog(BanAppealCog(bot))
         await bot.add_cog(SpotyvampyCog(bot))
+        await bot.add_cog(MusicaCog(bot))          # 🎵 yt_dlp music cog
         bot.add_view(BanirMembroView())          # intercepta botões existentes no Discord
         bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
-_asyncio.run(_main())
+asyncio.run(_main())
