@@ -6701,11 +6701,13 @@ class Track:
     def __init__(self, data: dict, requester=None):
         self.title     = data.get("title",    "Desconhecido")
         self.url       = data.get("webpage_url", data.get("url", ""))
-        self.stream    = data.get("url", "")          # URL do stream de áudio
         self.duration  = data.get("duration",  0)     # em segundos
         self.thumbnail = data.get("thumbnail", None)
         self.uploader  = data.get("uploader",  data.get("channel", "Desconhecido"))
         self.requester = requester
+        # Guarda a URL de stream se vier fresca (playlist já extraída),
+        # mas ela pode expirar — _play_track re-extrai se necessário.
+        self._stream_url = data.get("url", "")
 
     def fmt_duration(self) -> str:
         s = int(self.duration or 0)
@@ -6713,10 +6715,11 @@ class Track:
         h, m = divmod(m, 60)
         return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
-    def make_source(self, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
+    def make_source(self, stream_url: str, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
+        """Cria a fonte de áudio a partir de uma URL de stream fresca."""
         opts = dict(FFMPEG_OPTIONS)
         opts["options"] = f"-vn -filter:a volume={volume}"
-        raw = discord.FFmpegPCMAudio(self.stream, **opts)
+        raw = discord.FFmpegPCMAudio(stream_url, **opts)
         return discord.PCMVolumeTransformer(raw, volume=volume)
 
 
@@ -6990,12 +6993,54 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             except Exception:
                 pass
 
+    async def _get_fresh_stream(self, track: Track) -> str:
+        """Re-extrai a URL de stream fresca para a track (URLs expiram em ~6h)."""
+        loop = asyncio.get_event_loop()
+        opts = dict(YTDL_OPTIONS)
+        opts["noplaylist"] = True
+
+        def _extract():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(track.url, download=False)
+                if info and "entries" in info:
+                    info = info["entries"][0]
+                return info.get("url", "") if info else ""
+
+        return await loop.run_in_executor(None, _extract)
+
     async def _play_track(self, gp: GuildPlayer, track: Track):
         """Inicia a reprodução de uma track no VoiceClient."""
         if not gp.connected:
             return
         gp.current = track
-        source = track.make_source(gp.volume)
+
+        # Sempre busca URL de stream fresca para evitar expiração
+        try:
+            stream_url = await self._get_fresh_stream(track)
+        except Exception as e:
+            print(f"[Spotyvampy] Erro ao obter stream de '{track.title}': {e}")
+            if gp.text_channel:
+                try:
+                    await gp.text_channel.send(embed=discord.Embed(
+                        description=f"❌ Não consegui carregar **{track.title}**!! Pulando... 🦇\n`{e}`",
+                        color=SV_COR_ERRO))
+                except Exception:
+                    pass
+            self._play_next(gp.vc.guild.id)
+            return
+
+        if not stream_url:
+            if gp.text_channel:
+                try:
+                    await gp.text_channel.send(embed=discord.Embed(
+                        description=f"❌ Stream indisponível para **{track.title}**!! Pulando... 🦇",
+                        color=SV_COR_ERRO))
+                except Exception:
+                    pass
+            self._play_next(gp.vc.guild.id)
+            return
+
+        source = track.make_source(stream_url, gp.volume)
         after_cb = lambda e: self._play_next(gp.vc.guild.id)
         gp.vc.play(source, after=after_cb)
         # Envia embed de "tocando agora"
