@@ -6680,22 +6680,23 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio*/best",
+    "format":            "bestaudio/best",
     "noplaylist":        False,
-    "quiet":             True,
-    "no_warnings":       True,
-    "verbose":           False,
+    "quiet":             False,
+    "no_warnings":       False,
+    "verbose":           True,
     "default_search":    "ytsearch",
-    # source_address removido — causa erro em ambientes cloud (Railway)
-    "extractor_retries": 5,
-    "socket_timeout":    20,
+    # source_address força IPv4 — funciona em VPS, pode falhar em Railway
+    "source_address":    "0.0.0.0" if not _os.getenv("RAILWAY_ENVIRONMENT") else None,
+    "extractor_retries": 3,
+    "socket_timeout":    15,
     "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "tv_embedded", "web"],
+            "player_client": ["tv_embedded", "ios", "web"],
         }
     },
-    "ignoreerrors":      True,
+    "youtube_include_dash_manifest": False,
 }
 
 # Opções do FFmpeg para stream de áudio
@@ -6938,25 +6939,13 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         opts["ignoreerrors"] = False  # na busca queremos ver o erro real
 
         def _extract():
-            # Tenta com o formato configurado primeiro
-            for fmt in ["bestaudio*/best", "bestaudio/best", "best"]:
-                try:
-                    attempt_opts = dict(opts)
-                    attempt_opts["format"] = fmt
-                    with yt_dlp.YoutubeDL(attempt_opts) as ydl:
-                        info = ydl.extract_info(search_q, download=False)
-                        if not info:
-                            continue
-                        if "entries" in info:
-                            entries = [e for e in info["entries"] if e]
-                            if entries:
-                                return entries
-                            continue
-                        return [info]
-                except Exception as e:
-                    last_err = e
-                    continue
-            raise last_err
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(search_q, download=False)
+                if not info:
+                    return []
+                if "entries" in info:
+                    return [e for e in info["entries"] if e]
+                return [info]
 
         return await loop.run_in_executor(None, _extract)
 
@@ -7032,19 +7021,11 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         base_opts["noplaylist"] = True
 
         def _extract():
-            for fmt in ["bestaudio*/best", "bestaudio/best", "best"]:
-                try:
-                    opts = dict(base_opts)
-                    opts["format"] = fmt
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        info = ydl.extract_info(track.url, download=False)
-                        if info and "entries" in info:
-                            info = info["entries"][0]
-                        if info and info.get("url"):
-                            return info["url"]
-                except Exception:
-                    continue
-            return ""
+            with yt_dlp.YoutubeDL(base_opts) as ydl:
+                info = ydl.extract_info(track.url, download=False)
+                if info and "entries" in info:
+                    info = info["entries"][0]
+                return info.get("url", "") if info else ""
 
         return await loop.run_in_executor(None, _extract)
 
