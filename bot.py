@@ -23,8 +23,6 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="v!", intents=intents)
 
-DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
-
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
 # ║      Sistema completo de segurança integrado ao bot             ║
@@ -1020,7 +1018,7 @@ LISTA_EMOJIS_RAPIDOS = [
 
 PALAVRAS_PROIBIDAS_EXATAS = [
     # palavrões isolados (serão verificados com \b word boundary)
-    "porra", "caralho", "bosta", "viado", "bicha", "piranha",
+    "porra", "caralho", "merda", "bosta", "viado", "bicha", "piranha",
     "arrombado", "buceta", "carai", "karalho",
 ]
 
@@ -2132,11 +2130,7 @@ class AprovarMembroView(discord.ui.View):
             return
         cargo_membro = discord.utils.get(guild.roles, id=1304658653768581210)
         cargo_vampy_de = discord.utils.get(guild.roles, id=1432545143285743696)
-        cargo_reviver = discord.utils.get(guild.roles, name="Reviver chat🧟‍♀️")
-        cargo_call = discord.utils.get(guild.roles, name="Bora call")
-        cargo_cinema = discord.utils.get(guild.roles, name="Cinema")
-        cargo_gravacao = discord.utils.get(guild.roles, name="Gravação")
-        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de, cargo_reviver, cargo_call, cargo_cinema, cargo_gravacao] if c]
+        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de] if c]
         if cargos_para_adicionar:
             await membro.add_roles(*cargos_para_adicionar)
         try: await membro.send("AAAA 😭🦇💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
@@ -3660,12 +3654,13 @@ async def on_message(message):
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║              📩  LINHA INDIRETA — CSI  (Anônimo)                ║
-# ║   Sugestões/Reclamações enviadas anonimamente ao Owner/Líder    ║
+# ║   Sugestões/Reclamações enviadas anonimamente ao Líder (Akeido) ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 LINHA_INDIRETA_CANAL_ID = 1482855537086304446   # 📩・linha-indireta
-AKEIDO_ID               = 445937581566197761    # Owner CSI — recebe a msg anônima
-WLU_ID                  = 940036086074343505    # Líder wlu — recebe a msg anônima
+AKEIDO_ID               = 445937581566197761    # Líder CSI — recebe a msg anônima
+WLU_ID                  = 940036086074343505    # Vice-líder wlu — recebe a msg anônima
+AMBER_ID                = 918222382840291369    # Vice-líder Amber — recebe a msg anônima
 REALITY_ID              = 769951556388257812    # Dono — recebe quem enviou (secreto)
 
 TIPOS_MENSAGEM = [
@@ -3679,14 +3674,16 @@ TIPOS_MENSAGEM = [
 ]
 
 DESTINATARIOS = [
-    discord.SelectOption(label="👑 Akeido (Owner)",   value="akeido", description="Enviar para o Owner da CSI."),
-    discord.SelectOption(label="🥇 wlu (Líder)",      value="wlu",    description="Enviar para o Líder wlu."),
+    discord.SelectOption(label="👑 Akeido (Líder)",       value="akeido", description="Enviar para o Líder da CSI."),
+    discord.SelectOption(label="🥈 wlu (Vice-líder)",     value="wlu",    description="Enviar para o Vice-líder wlu."),
+    discord.SelectOption(label="🥈 Amber (Vice-líder)",   value="amber",  description="Enviar para a Vice-líder Amber."),
 ]
 
 # Mapeamento: valor do select → (ID do usuário, nome de exibição)
 DESTINATARIO_MAP = {
-    "akeido": (AKEIDO_ID, "Akeido (Owner)"),
-    "wlu":    (WLU_ID,    "wlu (Líder)"),
+    "akeido": (AKEIDO_ID, "Akeido (Líder)"),
+    "wlu":    (WLU_ID,    "wlu (Vice-líder)"),
+    "amber":  (AMBER_ID,  "Amber (Vice-líder)"),
 }
 
 
@@ -3695,7 +3692,6 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
 
     tipo_selecionado: str  = "Outro"   # preenchido pela View antes de enviar o modal
     destinatario_key: str  = "akeido"  # preenchido pela View antes de enviar o modal
-    identificar: bool      = False     # preenchido pela View antes de enviar o modal
 
     mensagem = discord.ui.TextInput(
         label="✍️ Sua mensagem",
@@ -3714,17 +3710,9 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
         autor  = interaction.user
 
         # ── Resolve destinatário ──────────────────────────────────────────
-        dest_id, dest_nome = DESTINATARIO_MAP.get(self.destinatario_key, (AKEIDO_ID, "Akeido (Owner)"))
+        dest_id, dest_nome = DESTINATARIO_MAP.get(self.destinatario_key, (AKEIDO_ID, "Akeido (Líder)"))
 
-        # ── Define como o autor aparece no embed ──────────────────────────
-        if self.identificar:
-            autor_display = f"{autor.mention} (`{autor}`)"
-            rodape_autor  = "✅ Identificado"
-        else:
-            autor_display = "`Anônimo`"
-            rodape_autor  = "🔒 Anônimo"
-
-        # ── Embed que vai ao destinatário ─────────────────────────────────
+        # ── Embed que vai ao destinatário (sem revelar o autor) ───────────
         embed_dest = discord.Embed(
             title="📩 Nova mensagem na Linha Indireta — CSI",
             description=texto,
@@ -3732,9 +3720,9 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
             timestamp=datetime.utcnow(),
         )
         embed_dest.add_field(name="📌 Tipo",          value=f"`{tipo}`",      inline=True)
-        embed_dest.add_field(name="👤 Autor",         value=autor_display,    inline=True)
+        embed_dest.add_field(name="🔒 Autor",         value="`Anônimo`",      inline=True)
         embed_dest.add_field(name="📬 Destinatário",  value=f"`{dest_nome}`", inline=True)
-        embed_dest.set_footer(text=f"📩 Linha Indireta CSI • {rodape_autor}")
+        embed_dest.set_footer(text="📩 Linha Indireta CSI • Mensagem anônima")
 
         # ── Embed secreto que vai pro Reality (revela o autor) ────────────
         embed_reality = discord.Embed(
@@ -3766,14 +3754,10 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
 
         # ── Confirmação pro usuário (efêmera) ─────────────────────────────
         if enviado:
-            if self.identificar:
-                id_info = "Sua **identidade foi revelada** ao destinatário conforme sua escolha. 🦇✅"
-            else:
-                id_info = "Sua identidade foi mantida em **sigilo total**. 🦇🔒"
             await interaction.followup.send(
                 f"✅ **Mensagem enviada com sucesso!**\n"
-                f"{id_info}\n"
-                f"**{dest_nome}** recebeu sua mensagem. 🦇",
+                f"Sua identidade foi mantida em **sigilo total**. "
+                f"**{dest_nome}** recebeu sua mensagem anonimamente. 🦇🔒",
                 ephemeral=True,
             )
         else:
@@ -3790,21 +3774,16 @@ class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
 
 
 class LinhaIndiretaSelectView(discord.ui.View):
-    """View com o Select de tipo + Select de destinatário + Select de identificação + botão Continuar."""
+    """View com o Select de tipo + Select de destinatário + botão Continuar."""
 
     def __init__(self):
         super().__init__(timeout=120)
-        self.tipo_escolhido:        str | None  = None
+        self.tipo_escolhido:        str | None = None
         self.destinatario_escolhido: str | None = None
-        self.identificar:           bool | None = None
 
     def _atualizar_botao(self):
-        """Habilita o botão apenas quando tipo, destinatário E identificação estiverem escolhidos."""
-        pronto = (
-            self.tipo_escolhido is not None
-            and self.destinatario_escolhido is not None
-            and self.identificar is not None
-        )
+        """Habilita o botão apenas quando tipo E destinatário estiverem escolhidos."""
+        pronto = self.tipo_escolhido is not None and self.destinatario_escolhido is not None
         for item in self.children:
             if isinstance(item, discord.ui.Button):
                 item.disabled = not pronto
@@ -3812,20 +3791,12 @@ class LinhaIndiretaSelectView(discord.ui.View):
     def _status_text(self) -> str:
         tipo  = f"`{self.tipo_escolhido}`" if self.tipo_escolhido else "*(aguardando...)*"
         dest  = f"`{DESTINATARIO_MAP[self.destinatario_escolhido][1]}`" if self.destinatario_escolhido else "*(aguardando...)*"
-        if self.identificar is None:
-            id_txt = "*(aguardando...)*"
-        elif self.identificar:
-            id_txt = "`✅ Sim, vou me identificar`"
-        else:
-            id_txt = "`🔒 Não, prefiro ser anônimo`"
-        tudo_pronto = (self.tipo_escolhido and self.destinatario_escolhido and self.identificar is not None)
         return (
             f"**Tipo:** {tipo}\n"
-            f"**Destinatário:** {dest}\n"
-            f"**Identificação:** {id_txt}\n\n"
+            f"**Destinatário:** {dest}\n\n"
             "Clique em **✍️ Escrever mensagem** para continuar."
-            if tudo_pronto
-            else f"**Tipo:** {tipo}\n**Destinatário:** {dest}\n**Identificação:** {id_txt}"
+            if (self.tipo_escolhido and self.destinatario_escolhido)
+            else f"**Tipo:** {tipo}\n**Destinatário:** {dest}"
         )
 
     @discord.ui.select(
@@ -3850,26 +3821,11 @@ class LinhaIndiretaSelectView(discord.ui.View):
         self._atualizar_botao()
         await interaction.response.edit_message(content=self._status_text(), view=self)
 
-    @discord.ui.select(
-        placeholder="👤 Deseja se identificar?",
-        options=[
-            discord.SelectOption(label="🔒 Não, prefiro ser anônimo",   value="anonimo",     description="Sua identidade não será revelada ao destinatário."),
-            discord.SelectOption(label="✅ Sim, quero me identificar",   value="identificado", description="Seu nome e menção aparecerão na mensagem enviada."),
-        ],
-        min_values=1,
-        max_values=1,
-    )
-    async def select_identificacao(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.identificar = (select.values[0] == "identificado")
-        self._atualizar_botao()
-        await interaction.response.edit_message(content=self._status_text(), view=self)
-
     @discord.ui.button(label="✍️ Escrever mensagem", style=discord.ButtonStyle.primary, disabled=True, emoji="📝")
     async def abrir_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = LinhaIndiretaModal()
         modal.tipo_selecionado  = self.tipo_escolhido or "Outro"
         modal.destinatario_key  = self.destinatario_escolhido or "akeido"
-        modal.identificar       = self.identificar if self.identificar is not None else False
         await interaction.response.send_modal(modal)
 
 
@@ -3889,12 +3845,11 @@ class LinhaIndiretaInicioView(discord.ui.View):
         view = LinhaIndiretaSelectView()
         await interaction.response.send_message(
             "## 📩 Linha Indireta — CSI\n"
-            "Sua mensagem será entregue ao destinatário escolhido.\n"
-            "**Você decide se quer se identificar ou não.** 🔒\n\n"
+            "Sua mensagem será entregue **anonimamente** ao destinatário escolhido.\n"
+            "**Ninguém saberá que foi você.** 🔒\n\n"
             "**1️⃣** Selecione o **tipo** da sua mensagem.\n"
-            "**2️⃣** Selecione o **destinatário** (Owner ou Líder).\n"
-            "**3️⃣** Escolha se deseja **se identificar** ou permanecer **anônimo**.\n"
-            "**4️⃣** Clique em **Escrever mensagem**, escreva e confirme. ✅",
+            "**2️⃣** Selecione o **destinatário** (Líder ou Vice-líder).\n"
+            "**3️⃣** Clique em **Escrever mensagem**, escreva e confirme. ✅",
             view=view,
             ephemeral=True,
         )
@@ -3914,14 +3869,14 @@ async def setup_linha_indireta(ctx: commands.Context):
         title="📩 Linha Indireta — CSI",
         description=(
             "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Owner ou Líder da CSI**, de forma **anônima ou identificada**.\n\n"
-            "🔒 **Você escolhe se quer se identificar ou não.**\n"
+            "diretamente ao **Líder ou Vice-líder da CSI**, de forma completamente **anônima**.\n\n"
+            "🔒 **Sua identidade nunca será revelada.**\n"
             "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
             "**Tipos disponíveis:**\n"
             "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
             "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
             "**Quem pode receber:**\n"
-            "👑 Akeido (Owner) • 🥇 wlu (Líder)\n\n"
+            "👑 Akeido (Líder) • 🥈 wlu (Vice-líder) • 🥈 Amber (Vice-líder)\n\n"
             "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
         ),
         color=0x5865F2,
@@ -3952,14 +3907,14 @@ async def _setup_linha_indireta():
         title="📩 Linha Indireta — CSI",
         description=(
             "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Owner ou Líder da CSI**, de forma **anônima ou identificada**.\n\n"
-            "🔒 **Você escolhe se quer se identificar ou não.**\n"
+            "diretamente ao **Líder ou Vice-líder da CSI**, de forma completamente **anônima**.\n\n"
+            "🔒 **Sua identidade nunca será revelada.**\n"
             "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
             "**Tipos disponíveis:**\n"
             "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
             "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
             "**Quem pode receber:**\n"
-            "👑 Akeido (Owner) • 🥇 wlu (Líder)\n\n"
+            "👑 Akeido (Líder) • 🥈 wlu (Vice-líder) • 🥈 Amber (Vice-líder)\n\n"
             "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
         ),
         color=0x5865F2,
@@ -4489,17 +4444,9 @@ class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
         )
 
     @commands.command(name="votobanner", aliases=["apelar", "votoban"])
-    async def votobanner(self, ctx: commands.Context, usuario: str, *, motivo: str = "Pedido de retorno."):
-        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <@user ou ID> [motivo]"""
-        # Aceita menção (<@123>) ou ID puro
-        import re as _re
-        match = _re.match(r"<@!?(\d+)>", usuario)
-        try:
-            user_id = int(match.group(1)) if match else int(usuario)
-        except ValueError:
-            await ctx.send("❌ Uso: `v!votobanner <@user ou ID> [motivo]`", delete_after=8)
-            return
-
+    @commands.has_permissions(administrator=True)
+    async def votobanner(self, ctx: commands.Context, user_id: int, *, motivo: str = "Pedido de retorno."):
+        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <user_id> [motivo]"""
         guild    = ctx.guild
         guild_id = guild.id
 
@@ -5072,930 +5019,18 @@ class VMPainelView(discord.ui.View):
 
     # ── Linha 4 — Spotyvampy ─────────────────────
 
-    @discord.ui.button(label="🎮 Jogos de Call", style=discord.ButtonStyle.success, custom_id="vm_jogos_call", row=3)
-    async def btn_jogos_call(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Abre o menu de jogos de call."""
-        user = interaction.user
-        if not user.voice or not user.voice.channel:
-            await interaction.response.send_message(
-                embed=_vm_embed_erro("Você precisa estar em uma call pra usar os jogos!! 🎮🦇"),
-                ephemeral=True)
-            return
-        embed = discord.Embed(
-            title="🎮 Jogos de Call",
-            description=(
-                "Bem-vinda ao modo de jogos de call!! 🦇✨\n"
-                "Escolha um jogo abaixo e a Vampy conduz tudo pra você!!\n\n"
-                "```\n"
-                "╔══════════════════════════════════════╗\n"
-                "║   VAMPY GAMES  🎮  v1.0          ║\n"
-                "║     — Jogos de Call —               ║\n"
-                "╚══════════════════════════════════════╝\n"
-                "```"
-            ),
-            color=0x9b59b6,
-            timestamp=datetime.utcnow()
-        )
-        embed.add_field(
-            name="🌙 A Cidade Dorme",
-            value="Jogo de detetive! Assassinos, Detetive, Anjo e Cidadãos — quem vai vencer?",
-            inline=False
-        )
-        embed.set_footer(text="🦇 Vampy Games • Mais jogos em breve!!")
-        view = JogosCallMenuView(interaction.user.voice.channel, interaction.channel)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
-
     @discord.ui.button(label="🎵 Spotyvampy", style=discord.ButtonStyle.primary, custom_id="vm_spotyvampy", row=3)
     async def btn_spotyvampy(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Abre o painel de música Spotyvampy diretamente do painel da call."""
         sv_cog = interaction.client.cogs.get("SpotyvampyCog")
         if not sv_cog:
-            await interaction.response.send_message(
-                embed=discord.Embed(description="❌ Spotyvampy não está disponível no momento!! 🥺🦇", color=0xff4444),
-                ephemeral=True)
+            await interaction.response.send_message("❌ Spotyvampy não está disponível no momento!! 🥺🦇", ephemeral=True)
             return
         guild  = interaction.guild
-        gp = sv_cog.players.get(guild.id)
-        if gp and gp.current:
-            embed = sv_cog._embed_nowplaying(gp.current, gp)
-        else:
-            embed = discord.Embed(
-                title="🎵 Spotyvampy",
-                description="😴 Nada tocando agora!! Use `v!play <música>` pra começar!! 🦇",
-                color=SV_COR_PRIMARIA
-            )
-            embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp")
-        view = MusicControlView(sv_cog, guild.id)
+        player = sv_cog.players.get(guild.id)
+        embed  = sv_cog._embed_painel(player)
+        view   = MusicControlView(sv_cog, guild.id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║        VAMPY GAMES — A CIDADE DORME  🌙  v1.0              ║
-# ║   Jogo de dedução social para calls de voz • Estilo Mafia  ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-# Estado global de partidas ativas: {guild_id: CidadeDormeJogo}
-_cidade_jogos: dict[int, "CidadeDormeJogo"] = {}
-
-CIDADE_ROLES = {
-    "assassino":  "🔪 Assassino",
-    "anjo":       "😇 Anjo/Médico",
-    "detetive":   "🔎 Detetive",
-    "cidadao":    "🏙️ Cidadão",
-}
-
-class CidadeDormeJogo:
-    """Controla o estado de uma partida de A Cidade Dorme."""
-
-    def __init__(self, guild: discord.Guild, voice_ch: discord.VoiceChannel, text_ch: discord.TextChannel):
-        self.guild      = guild
-        self.voice_ch   = voice_ch
-        self.text_ch    = text_ch
-        self.jogadores: dict[int, str] = {}   # {member_id: role}
-        self.vivos:     set[int]       = set()
-        self.mortos:    set[int]       = set()
-        self.narrador:  int | None     = None  # member_id ou None (bot narra)
-        self.fase       = "inscricao"   # inscricao → noite → dia → fim
-        self.rodada     = 0
-        self.vitima_noite:  int | None = None
-        self.salvo_noite:   int | None = None
-        self.investigado:   int | None = None
-        self.votos_dia: dict[int, int] = {}    # {votante_id: alvo_id}
-
-    def _get_membro(self, uid: int) -> discord.Member | None:
-        return self.guild.get_member(uid)
-
-    def assassinos_vivos(self) -> list[int]:
-        return [uid for uid, role in self.jogadores.items() if role == "assassino" and uid in self.vivos]
-
-    def cidadaos_vivos(self) -> list[int]:
-        return [uid for uid, role in self.jogadores.items() if role != "assassino" and uid in self.vivos]
-
-    def verificar_fim(self) -> str | None:
-        """Retorna 'cidadaos', 'assassinos' ou None."""
-        assassinos = self.assassinos_vivos()
-        cidadaos   = self.cidadaos_vivos()
-        if not assassinos:
-            return "cidadaos"
-        if len(assassinos) >= len(cidadaos):
-            return "assassinos"
-        return None
-
-    def atribuir_roles(self):
-        """Distribui os papéis aleatoriamente entre os jogadores."""
-        ids = list(self.vivos)
-        random.shuffle(ids)
-        roles_a_dar = ["assassino", "anjo", "detetive"] + ["cidadao"] * max(0, len(ids) - 3)
-        self.jogadores = dict(zip(ids, roles_a_dar[:len(ids)]))
-
-    async def mutar_todos(self, mudo: bool):
-        """Server-muta ou desmuta todos os jogadores vivos na call."""
-        for uid in list(self.vivos):
-            m = self._get_membro(uid)
-            if m and m.voice and m.voice.channel == self.voice_ch:
-                try:
-                    await m.edit(mute=mudo)
-                except Exception:
-                    pass
-        # Mortos ficam sempre mutados
-        for uid in self.mortos:
-            m = self._get_membro(uid)
-            if m and m.voice:
-                try:
-                    await m.edit(mute=True)
-                except Exception:
-                    pass
-        # Avisa no chat sobre o estado do mic
-        if self.text_ch:
-            try:
-                if mudo:
-                    await self.text_ch.send(
-                        "🔇 **Microfones desativados!!** — Todos estão sem mic agora. 🌙🦇"
-                    )
-                else:
-                    await self.text_ch.send(
-                        "🎙️ **Microfones liberados!!** — Todos podem falar agora. ☀️🦇"
-                    )
-            except Exception:
-                pass
-
-    async def mutar_exceto(self, uid_acordado: int):
-        """Muta todos, mas desmuta o uid_acordado (para ações de noite)."""
-        await self.mutar_todos(True)
-        m = self._get_membro(uid_acordado)
-        if m and m.voice and m.voice.channel == self.voice_ch:
-            try:
-                await m.edit(mute=False)
-            except Exception:
-                pass
-        # Avisa no chat (sem revelar quem ou o papel)
-        if self.text_ch:
-            try:
-                await self.text_ch.send(
-                    "🌙 **Alguém foi acordado na escuridão...** 👁️ *A cidade continua dormindo...* 🤫🦇"
-                )
-            except Exception:
-                pass
-
-
-# ── Views do jogo ────────────────────────────────────────────────────
-
-class JogosCallMenuView(discord.ui.View):
-    """Menu de seleção de jogo."""
-
-    def __init__(self, voice_ch: discord.VoiceChannel, text_ch):
-        super().__init__(timeout=120)
-        self.voice_ch = voice_ch
-        self.text_ch  = text_ch
-
-    @discord.ui.button(label="🌙 A Cidade Dorme", style=discord.ButtonStyle.primary)
-    async def btn_cidade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        if guild.id in _cidade_jogos:
-            await interaction.response.send_message(
-                "❌ Já tem uma partida de A Cidade Dorme rolando nesse servidor!! 🦇",
-                ephemeral=True)
-            return
-        # Pergunta se terá narrador humano
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Configuração",
-                description=(
-                    "**Terá um narrador humano?**\n\n"
-                    "✅ **Sim** — Uma pessoa vai narrar e terá controles especiais no chat\n"
-                    "🤖 **Não** — A Vampy narra e conduz tudo automaticamente 🦇"
-                ),
-                color=0x2c2f33,
-                timestamp=datetime.utcnow()
-            ),
-            view=CidadeNarradorView(guild, self.voice_ch, interaction.channel),
-            ephemeral=False
-        )
-        self.stop()
-
-
-class CidadeNarradorView(discord.ui.View):
-    """Pergunta se terá narrador humano ou bot."""
-
-    def __init__(self, guild, voice_ch, text_ch):
-        super().__init__(timeout=60)
-        self.guild    = guild
-        self.voice_ch = voice_ch
-        self.text_ch  = text_ch
-
-    @discord.ui.button(label="✅ Sim, terá narrador humano", style=discord.ButtonStyle.success)
-    async def btn_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        jogo = CidadeDormeJogo(self.guild, self.voice_ch, interaction.channel)
-        jogo.narrador = interaction.user.id
-        _cidade_jogos[self.guild.id] = jogo
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Narrador definido!",
-                description=(
-                    f"**{interaction.user.display_name}** será o(a) narrador(a)!! 🦇\n\n"
-                    "Agora vamos ver quem vai participar!!\n"
-                    "Clique em **✅ Sim, vou jogar!** pra entrar na partida."
-                ),
-                color=0x9b59b6,
-                timestamp=datetime.utcnow()
-            ),
-            view=None
-        )
-        await _iniciar_inscricao(interaction.channel, jogo, interaction.user)
-        self.stop()
-
-    @discord.ui.button(label="🤖 Não, a Vampy narra", style=discord.ButtonStyle.primary)
-    async def btn_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        jogo = CidadeDormeJogo(self.guild, self.voice_ch, interaction.channel)
-        jogo.narrador = None
-        _cidade_jogos[self.guild.id] = jogo
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Vampy é a narradora!",
-                description=(
-                    "A Vampy vai narrar tudo automaticamente!! 🦇✨\n\n"
-                    "Vamos ver quem vai participar!!\n"
-                    "Clique em **✅ Sim, vou jogar!** pra entrar na partida."
-                ),
-                color=0x9b59b6,
-                timestamp=datetime.utcnow()
-            ),
-            view=None
-        )
-        await _iniciar_inscricao(interaction.channel, jogo, interaction.user)
-        self.stop()
-
-
-class CidadeInscricaoView(discord.ui.View):
-    """Votação de inscrição para A Cidade Dorme."""
-
-    def __init__(self, jogo: CidadeDormeJogo, inscritos: set[int]):
-        super().__init__(timeout=60)
-        self.jogo      = jogo
-        self.inscritos = inscritos  # referência mutável
-        self.forcar_inicio = False  # sinaliza "Iniciar Agora"
-
-    @discord.ui.button(label="✅ Sim, vou jogar!", style=discord.ButtonStyle.success, emoji="✋")
-    async def btn_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        uid = interaction.user.id
-        if uid == self.jogo.narrador:
-            await interaction.response.send_message(
-                "Você é o narrador, não pode jogar!! 🦇", ephemeral=True)
-            return
-        self.inscritos.add(uid)
-        await interaction.response.send_message(
-            f"✅ **{interaction.user.display_name}** entrou na partida!! 🦇", ephemeral=True)
-
-    @discord.ui.button(label="❌ Não vou", style=discord.ButtonStyle.danger)
-    async def btn_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.inscritos.discard(interaction.user.id)
-        await interaction.response.send_message("Ok!! Quem sabe na próxima!! 🦇", ephemeral=True)
-
-    @discord.ui.button(label="⚡ Iniciar Agora!", style=discord.ButtonStyle.secondary, row=1)
-    async def btn_iniciar_agora(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Apenas donos autorizados podem forçar início
-        if interaction.user.id not in DONOS_AUTORIZADOS:
-            await interaction.response.send_message(
-                "❌ Só os donos podem forçar o início!! 🦇", ephemeral=True)
-            return
-        if len(self.inscritos) < 4:
-            await interaction.response.send_message(
-                f"❌ Precisa de pelo menos 4 jogadores!! Tem apenas **{len(self.inscritos)}** inscrito(s). 🦇",
-                ephemeral=True)
-            return
-        await interaction.response.send_message(
-            "⚡ Iniciando agora!! 🦇", ephemeral=True)
-        self.forcar_inicio = True
-        self.stop()
-
-
-class CidadeVotoDiaView(discord.ui.View):
-    """Seleção de quem eliminar durante o dia."""
-
-    def __init__(self, jogo: CidadeDormeJogo, opcoes: list[discord.Member]):
-        super().__init__(timeout=90)
-        self.jogo = jogo
-        self.votos: dict[int, int] = {}  # votante → alvo
-        for m in opcoes:
-            self.add_item(CidadeVotoDiaBotao(m))
-
-
-class CidadeVotoDiaBotao(discord.ui.Button):
-    def __init__(self, alvo: discord.Member):
-        super().__init__(label=alvo.display_name[:80], style=discord.ButtonStyle.danger)
-        self.alvo_id = alvo.id
-
-    async def callback(self, interaction: discord.Interaction):
-        uid = interaction.user.id
-        jogo = self.view.jogo
-        if uid not in jogo.vivos:
-            await interaction.response.send_message(
-                "Só quem está vivo pode votar!! 🦇", ephemeral=True)
-            return
-        if uid == self.alvo_id:
-            await interaction.response.send_message(
-                "Você não pode votar em si mesmo!! 🥺🦇", ephemeral=True)
-            return
-        self.view.votos[uid] = self.alvo_id
-        alvo = interaction.guild.get_member(self.alvo_id)
-        await interaction.response.send_message(
-            f"🗳️ Você votou em **{alvo.display_name if alvo else '???'}**!! 🦇",
-            ephemeral=True)
-
-
-class CidadeNarradorControlView(discord.ui.View):
-    """Painel de controle para o narrador humano — enviado via DM."""
-
-    def __init__(self, jogo: CidadeDormeJogo):
-        super().__init__(timeout=None)
-        self.jogo = jogo
-
-    # ── Instrução: toda ação do narrador é anunciada no chat ──────────
-    # ROTEIRO DO NARRADOR:
-    # 1. Clique [🌙 Iniciar Noite] → todos são mutados, diga "A cidade dorme..."
-    # 2. Clique [🔪 Acordar Assassino] → só o assassino pode falar; pergunte a vítima no PV
-    # 3. Clique [😇 Acordar Anjo] → só o anjo pode falar; pergunte quem quer salvar no PV
-    # 4. Clique [🔎 Acordar Detetive] → só o detetive pode falar; responda se é assassino no PV
-    # 5. Clique [☀️ Iniciar Dia] → todos desmutados; narre o que aconteceu na noite
-    # 6. Aguarde a votação; anuncie o eliminado e revele o papel
-    # 7. Repita do passo 1 até o fim do jogo
-    # ─────────────────────────────────────────────────────────────────
-
-    @discord.ui.button(label="🌙 Iniciar Noite (mutar todos)", style=discord.ButtonStyle.danger)
-    async def btn_noite(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.jogo.mutar_todos(True)
-        await self.jogo.text_ch.send(embed=discord.Embed(
-            title="🌙 A Cidade Adormece...",
-            description="O narrador iniciou a **NOITE**!! Todos os microfones foram desativados!! 🔇🦇\n\n*Fiquem quietos... a escuridão age agora...* 🤫",
-            color=0x1a1a2e, timestamp=datetime.utcnow()
-        ))
-        await interaction.response.send_message("🌙 Todos mutados! A noite começou!!", ephemeral=True)
-
-    @discord.ui.button(label="☀️ Iniciar Dia (desmutar todos)", style=discord.ButtonStyle.success)
-    async def btn_dia(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.jogo.mutar_todos(False)
-        await self.jogo.text_ch.send(embed=discord.Embed(
-            title="☀️ A Cidade Desperta!",
-            description="O narrador iniciou o **DIA**!! Microfones liberados!! 🎙️🦇\n\nDiscutam entre si e descubram quem é o assassino!! 🕵️",
-            color=0xf39c12, timestamp=datetime.utcnow()
-        ))
-        await interaction.response.send_message("☀️ Todos desmutados! O dia começou!!", ephemeral=True)
-
-    @discord.ui.button(label="🔪 Acordar Assassino", style=discord.ButtonStyle.danger, row=1)
-    async def btn_acordar_assassino(self, interaction: discord.Interaction, button: discord.ui.Button):
-        assassinos = self.jogo.assassinos_vivos()
-        if not assassinos:
-            await interaction.response.send_message("Nenhum assassino vivo!! 🦇", ephemeral=True)
-            return
-        for uid in assassinos:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "🔪 *Uma sombra se move na escuridão...* 👁️ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"🔪 Assassino(s) acordado(s): {', '.join(f'<@{{u}}>' for u in assassinos)}\n\n📌 **Instrução:** Pergunte no PV do assassino quem ele quer eliminar. Quando terminar, clique em [☀️ Iniciar Dia] ou [😇 Acordar Anjo].", ephemeral=True)
-
-    @discord.ui.button(label="😇 Acordar Anjo", style=discord.ButtonStyle.success, row=1)
-    async def btn_acordar_anjo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        anjos = [uid for uid, r in self.jogo.jogadores.items() if r == "anjo" and uid in self.jogo.vivos]
-        if not anjos:
-            await interaction.response.send_message("Anjo foi eliminado!! 🦇", ephemeral=True)
-            return
-        for uid in anjos:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "😇 *Uma luz suave brilha na noite...* ✨ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"😇 Anjo acordado: <@{anjos[0]}>\n\n📌 **Instrução:** Pergunte no PV do anjo quem ele quer salvar. Quando terminar, clique em [🔎 Acordar Detetive] ou [☀️ Iniciar Dia].", ephemeral=True)
-
-    @discord.ui.button(label="🔎 Acordar Detetive", style=discord.ButtonStyle.primary, row=1)
-    async def btn_acordar_detetive(self, interaction: discord.Interaction, button: discord.ui.Button):
-        dets = [uid for uid, r in self.jogo.jogadores.items() if r == "detetive" and uid in self.jogo.vivos]
-        if not dets:
-            await interaction.response.send_message("Detetive foi eliminado!! 🦇", ephemeral=True)
-            return
-        for uid in dets:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "🔎 *Olhos atentos farejam a escuridão...* 🕵️ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"🔎 Detetive acordado: <@{dets[0]}>\n\n📌 **Instrução:** Pergunte no PV do detetive quem ele quer investigar. Responda se essa pessoa é ou não o assassino. Quando terminar, clique em [☀️ Iniciar Dia].", ephemeral=True)
-
-    @discord.ui.button(label="🛑 Encerrar Jogo", style=discord.ButtonStyle.secondary, row=2)
-    async def btn_encerrar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild_id = self.jogo.guild.id
-        _cidade_jogos.pop(guild_id, None)
-        await self.jogo.mutar_todos(False)
-        await self.jogo.text_ch.send(
-            embed=discord.Embed(
-                title="🛑 Jogo Encerrado",
-                description="O narrador encerrou o jogo!! 🦇",
-                color=0xff4444,
-                timestamp=datetime.utcnow()
-            )
-        )
-        await interaction.response.send_message("✅ Jogo encerrado!!", ephemeral=True)
-        self.stop()
-
-
-# ── Funções auxiliares do jogo ───────────────────────────────────────
-
-async def _iniciar_inscricao(channel, jogo: CidadeDormeJogo, iniciador: discord.Member):
-    """Envia a mensagem de inscrição e aguarda os jogadores."""
-    inscritos: set[int] = set()
-    view = CidadeInscricaoView(jogo, inscritos)
-
-    embed = discord.Embed(
-        title="🌙 A Cidade Dorme — Inscrições Abertas!!",
-        description=(
-            f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme**!! 🦇\n\n"
-            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
-            "Vocês têm **60 segundos** pra se inscrever!!\n\n"
-            "**Personagens:**\n"
-            "🔪 Assassino — mata uma pessoa por noite\n"
-            "😇 Anjo/Médico — salva uma pessoa por noite\n"
-            "🔎 Detetive — investiga uma pessoa por noite\n"
-            "🏙️ Cidadão — tenta descobrir o assassino de dia"
-        ),
-        color=0x2c2f33,
-        timestamp=datetime.utcnow()
-    )
-    embed.set_footer(text="🦇 Vampy Games • A Cidade Dorme v1.0")
-
-    msg = await channel.send(embed=embed, view=view)
-
-    # Envia DM pra todos os membros do servidor avisando da partida
-    embed_dm_aviso = discord.Embed(
-        title="🌙 A Cidade Dorme — Inscrições Abertas!!",
-        description=(
-            f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme** "
-            f"no servidor **{channel.guild.name}**!! 🦇\n\n"
-            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
-            "Vocês têm **60 segundos** pra se inscrever!!\n\n"
-            f"👉 Vá até o canal {channel.mention} e clique no botão!!"
-        ),
-        color=0x9b59b6,
-        timestamp=datetime.utcnow()
-    )
-    embed_dm_aviso.set_footer(text="🦇 Vampy Games • A Cidade Dorme")
-    for membro in channel.guild.members:
-        if membro.bot:
-            continue
-        if membro.id == iniciador.id:
-            continue
-        if membro.id == jogo.narrador:
-            continue
-        try:
-            await membro.send(embed=embed_dm_aviso)
-        except Exception:
-            pass  # PV fechado — ignora silenciosamente
-
-    # Aguarda 60s ou "Iniciar Agora"
-    waited = 0
-    while waited < 60 and not view.forcar_inicio:
-        await asyncio.sleep(1)
-        waited += 1
-    view.stop()
-
-    # Desabilita botões
-    for item in view.children:
-        item.disabled = True
-    try:
-        await msg.edit(view=view)
-    except Exception:
-        pass
-
-    if len(inscritos) < 4:
-        _cidade_jogos.pop(jogo.guild.id, None)
-        await channel.send(embed=discord.Embed(
-            title="❌ Partida Cancelada",
-            description=f"Poucos jogadores!! Mínimo necessário: **4**. Inscreveram-se: **{len(inscritos)}**. 🥺🦇",
-            color=0xff4444
-        ))
-        return
-
-    # Confirma inscrições
-    jogo.vivos = set(inscritos)
-    jogo.atribuir_roles()
-
-    membros_str = "\n".join(
-        f"• {channel.guild.get_member(uid).display_name if channel.guild.get_member(uid) else uid}"
-        for uid in inscritos
-    )
-    await channel.send(embed=discord.Embed(
-        title=f"✅ {len(inscritos)} jogadores confirmados!!",
-        description=f"{membros_str}\n\n**A Vampy está distribuindo os papéis secretamente...** 🦇🃏",
-        color=0x9b59b6,
-        timestamp=datetime.utcnow()
-    ))
-
-    await asyncio.sleep(2)
-
-    # Envia papel secreto via DM pra cada jogador
-    for uid, role in jogo.jogadores.items():
-        m = channel.guild.get_member(uid)
-        if not m:
-            continue
-        nome_role = CIDADE_ROLES.get(role, role)
-        instrucoes = {
-            "assassino": (
-                "🔪 Você é o **Assassino**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer eliminar.\n"
-                "Mantenha sua identidade em segredo durante o dia!! 🤫"
-            ),
-            "anjo": (
-                "😇 Você é o **Anjo/Médico**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer salvar.\n"
-                "Você pode salvar você mesmo! Mas mantenha segredo!! 🤫"
-            ),
-            "detetive": (
-                "🔎 Você é o **Detetive**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer investigar.\n"
-                "A Vampy vai te dizer secretamente se ele é ou não o assassino!! 🤫"
-            ),
-            "cidadao": (
-                "🏙️ Você é um **Cidadão**!!\n\n"
-                "Durante o dia, discuta com os outros jogadores e vote em quem você acha que é o assassino.\n"
-                "Ajude os cidadãos a descobrirem o assassino antes que seja tarde!! 🏙️"
-            ),
-        }
-        try:
-            embed_dm = discord.Embed(
-                title=f"🦇 Seu papel: {nome_role}",
-                description=instrucoes.get(role, ""),
-                color=0xff4444 if role == "assassino" else 0x9b59b6,
-                timestamp=datetime.utcnow()
-            )
-            embed_dm.set_footer(text="🦇 Vampy — A Cidade Dorme • Não revele seu papel pra ninguém!!")
-            await m.send(embed=embed_dm)
-        except Exception:
-            pass
-
-    # Envia painel de controle pro narrador humano (se houver)
-    if jogo.narrador:
-        narrador_m = channel.guild.get_member(jogo.narrador)
-        if narrador_m:
-            # Manda lista de jogadores e papéis pro narrador
-            lista_roles = "\n".join(
-                f"• **{channel.guild.get_member(uid).display_name if channel.guild.get_member(uid) else uid}** — {CIDADE_ROLES.get(r, r)}"
-                for uid, r in jogo.jogadores.items()
-            )
-            embed_narr = discord.Embed(
-                title="👑 Painel do Narrador — A Cidade Dorme",
-                description=(
-                    "Aqui está a lista completa de jogadores e seus papéis secretos!! 🦇\n\n"
-                    f"{lista_roles}\n\n"
-                    "Use os botões abaixo pra controlar o jogo!!"
-                ),
-                color=0xf1c40f,
-                timestamp=datetime.utcnow()
-            )
-            embed_narr.set_footer(text="🦇 Vampy — Painel do Narrador • Não mostre isso pra ninguém!!")
-            try:
-                await narrador_m.send(embed=embed_narr, view=CidadeNarradorControlView(jogo))
-            except Exception:
-                pass
-        await channel.send(embed=discord.Embed(
-            title="🌙 Jogo iniciado com narrador humano!!",
-            description=(
-                f"**{narrador_m.display_name if narrador_m else 'Narrador'}** vai conduzir o jogo!!\n"
-                "O(A) narrador(a) recebeu os controles no privado!! 🦇\n\n"
-                "**Sigam as instruções do narrador(a)!!** 🎭"
-            ),
-            color=0x2c2f33,
-            timestamp=datetime.utcnow()
-        ))
-    else:
-        # Bot conduz o jogo automaticamente
-        await channel.send(embed=discord.Embed(
-            title="🌙 Papéis distribuídos!! O jogo vai começar...",
-            description=(
-                "Todos receberam seus papéis secretamente no privado!! 🦇\n\n"
-                "A primeira noite vai começar em **10 segundos**...\n"
-                "**Preparem-se!!** 🌙"
-            ),
-            color=0x2c2f33,
-            timestamp=datetime.utcnow()
-        ))
-        await asyncio.sleep(10)
-        # Inicia o loop do jogo automaticamente
-        bot.loop.create_task(_loop_cidade_dorme(jogo))
-
-
-async def _loop_cidade_dorme(jogo: CidadeDormeJogo):
-    """Loop principal do jogo quando a Vampy é narradora."""
-    guild_id = jogo.guild.id
-    ch = jogo.text_ch
-
-    while guild_id in _cidade_jogos:
-        jogo.rodada += 1
-        jogo.vitima_noite = None
-        jogo.salvo_noite  = None
-        jogo.investigado  = None
-
-        # ── NOITE ────────────────────────────────────────────────────────
-        await ch.send(embed=discord.Embed(
-            title=f"🌙 Noite {jogo.rodada} — A cidade adormece...",
-            description=(
-                "**Todos fechem os olhos!** 🌙😴\n"
-                "*(A Vampy vai acordar cada pessoa secretamente pelo privado)*\n\n"
-                "Silêncio total enquanto a noite passa... 🤫"
-            ),
-            color=0x1a1a2e,
-            timestamp=datetime.utcnow()
-        ))
-        await jogo.mutar_todos(True)
-        await asyncio.sleep(3)
-
-        vivos_list = list(jogo.vivos)
-        nomes_vivos = {uid: (jogo.guild.get_member(uid).display_name if jogo.guild.get_member(uid) else str(uid)) for uid in vivos_list}
-
-        # Assassino age
-        assassinos = jogo.assassinos_vivos()
-        if assassinos:
-            ass_uid = assassinos[0]
-            ass_m   = jogo.guild.get_member(ass_uid)
-            alvos_possiveis = [uid for uid in vivos_list if uid != ass_uid]
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in alvos_possiveis)
-            try:
-                await ass_m.send(embed=discord.Embed(
-                    title="🔪 É a sua vez, Assassino!!",
-                    description=(
-                        f"Escolha quem eliminar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que deseja eliminar no chat!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0xff0000,
-                    timestamp=datetime.utcnow()
-                ))
-                # Espera resposta via DM
-                def check_ass(m):
-                    if m.author.id != ass_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in alvos_possiveis)
-                try:
-                    resp = await bot.wait_for("message", check=check_ass, timeout=45)
-                    # Encontra o UID pelo nome
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower() and uid != ass_uid:
-                            jogo.vitima_noite = uid
-                            await ass_m.send(f"✅ Você escolheu eliminar **{nome}**!! 🔪")
-                            await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
-                            break
-                except asyncio.TimeoutError:
-                    # Escolhe aleatoriamente
-                    jogo.vitima_noite = random.choice(alvos_possiveis)
-                    nome_escolhido = nomes_vivos.get(jogo.vitima_noite, "???")
-                    await ass_m.send(f"⏰ Tempo esgotado! A Vampy escolheu **{nome_escolhido}** pra você!! 🔪")
-                    await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
-            except Exception:
-                if alvos_possiveis:
-                    jogo.vitima_noite = random.choice(alvos_possiveis)
-
-        # Anjo age
-        anjos = [uid for uid, r in jogo.jogadores.items() if r == "anjo" and uid in jogo.vivos]
-        if anjos:
-            anjo_uid = anjos[0]
-            anjo_m   = jogo.guild.get_member(anjo_uid)
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in vivos_list)
-            try:
-                await anjo_m.send(embed=discord.Embed(
-                    title="😇 É a sua vez, Anjo!!",
-                    description=(
-                        f"Escolha quem salvar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que deseja proteger!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0x00ff99,
-                    timestamp=datetime.utcnow()
-                ))
-                def check_anjo(m):
-                    if m.author.id != anjo_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in vivos_list)
-                try:
-                    resp = await bot.wait_for("message", check=check_anjo, timeout=45)
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower():
-                            jogo.salvo_noite = uid
-                            await anjo_m.send(f"✅ Você escolheu proteger **{nome}**!! 😇")
-                            await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
-                            break
-                except asyncio.TimeoutError:
-                    jogo.salvo_noite = anjo_uid
-                    await anjo_m.send("⏰ Tempo esgotado! A Vampy te escolheu pra você salvar a si mesmo!! 😇")
-                    await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
-            except Exception:
-                pass
-
-        # Detetive age
-        dets = [uid for uid, r in jogo.jogadores.items() if r == "detetive" and uid in jogo.vivos]
-        if dets:
-            det_uid = dets[0]
-            det_m   = jogo.guild.get_member(det_uid)
-            alvos_det = [uid for uid in vivos_list if uid != det_uid]
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in alvos_det)
-            try:
-                await det_m.send(embed=discord.Embed(
-                    title="🔎 É a sua vez, Detetive!!",
-                    description=(
-                        f"Escolha quem investigar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que quer investigar!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0x3498db,
-                    timestamp=datetime.utcnow()
-                ))
-                def check_det(m):
-                    if m.author.id != det_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in alvos_det)
-                try:
-                    resp = await bot.wait_for("message", check=check_det, timeout=45)
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower() and uid != det_uid:
-                            jogo.investigado = uid
-                            role_inv = jogo.jogadores.get(uid, "cidadao")
-                            eh_assassino = role_inv == "assassino"
-                            await det_m.send(embed=discord.Embed(
-                                title=f"🔎 Investigação de {nome}",
-                                description=(
-                                    f"**{nome}** é {'🔪 **O ASSASSINO!!** ⚠️' if eh_assassino else '✅ **Inocente** — não é o assassino'}!!"
-                                ),
-                                color=0xff0000 if eh_assassino else 0x00ff99
-                            ))
-                            await ch.send("🔎 *O detetive farejou a escuridão e obteve uma pista...* 🕵️🦇")
-                            break
-                except asyncio.TimeoutError:
-                    await det_m.send("⏰ Tempo esgotado! Nenhuma investigação esta noite.")
-                    await ch.send("🔎 *O detetive não conseguiu investigar esta noite...* 😴🦇")
-            except Exception:
-                pass
-
-        await asyncio.sleep(3)
-
-        # ── DIA ──────────────────────────────────────────────────────────
-        # Resolve a noite
-        foi_eliminado = None
-        if jogo.vitima_noite and jogo.vitima_noite != jogo.salvo_noite:
-            foi_eliminado = jogo.vitima_noite
-            jogo.vivos.discard(foi_eliminado)
-            jogo.mortos.add(foi_eliminado)
-            # Muta o morto permanentemente
-            m_morto = jogo.guild.get_member(foi_eliminado)
-            if m_morto and m_morto.voice:
-                try:
-                    await m_morto.edit(mute=True)
-                except Exception:
-                    pass
-
-        await jogo.mutar_todos(False)
-
-        if foi_eliminado:
-            m_elim = jogo.guild.get_member(foi_eliminado)
-            nome_elim = m_elim.display_name if m_elim else "???"
-            role_elim = CIDADE_ROLES.get(jogo.jogadores.get(foi_eliminado, "cidadao"), "???")
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    f"A cidade acorda e descobre que **{nome_elim}** foi encontrado(a) sem vida!! 😱🦇\n\n"
-                    f"**Papel revelado:** {role_elim}\n\n"
-                    f"*{nome_elim} está eliminado(a) e não pode mais falar durante o jogo.*\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0xf39c12,
-                timestamp=datetime.utcnow()
-            ))
-        elif jogo.vitima_noite and jogo.vitima_noite == jogo.salvo_noite:
-            salvo_m = jogo.guild.get_member(jogo.salvo_noite)
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    "A cidade acorda e... **ninguém morreu esta noite!!** 😇✨\n\n"
-                    "O Anjo salvou alguém a tempo!!\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0x00ff99,
-                timestamp=datetime.utcnow()
-            ))
-        else:
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    "A cidade acorda e **ninguém foi eliminado esta noite!!** 🦇\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0xf39c12,
-                timestamp=datetime.utcnow()
-            ))
-
-        # Checa fim após eliminação da noite
-        resultado = jogo.verificar_fim()
-        if resultado:
-            await _encerrar_cidade_dorme(jogo, resultado)
-            return
-
-        # Votação do dia
-        membros_vivos = [jogo.guild.get_member(uid) for uid in jogo.vivos if jogo.guild.get_member(uid)]
-        membros_vivos = [m for m in membros_vivos if m]
-        if membros_vivos:
-            view_voto = CidadeVotoDiaView(jogo, membros_vivos)
-            msg_voto = await ch.send(
-                "🗳️ **Votem em quem querem eliminar:** *(Clique no botão com o nome da pessoa)*",
-                view=view_voto
-            )
-            await asyncio.sleep(90)
-            view_voto.stop()
-            for item in view_voto.children:
-                item.disabled = True
-            try:
-                await msg_voto.edit(view=view_voto)
-            except Exception:
-                pass
-
-            # Conta votos
-            if view_voto.votos:
-                from collections import Counter
-                contagem = Counter(view_voto.votos.values())
-                eliminado_uid = contagem.most_common(1)[0][0]
-                jogo.vivos.discard(eliminado_uid)
-                jogo.mortos.add(eliminado_uid)
-                m_elim = jogo.guild.get_member(eliminado_uid)
-                if m_elim and m_elim.voice:
-                    try:
-                        await m_elim.edit(mute=True)
-                    except Exception:
-                        pass
-                nome_elim = m_elim.display_name if m_elim else "???"
-                role_elim = CIDADE_ROLES.get(jogo.jogadores.get(eliminado_uid, "cidadao"), "???")
-                await ch.send(embed=discord.Embed(
-                    title="🗳️ Votação encerrada!!",
-                    description=(
-                        f"A cidade votou e **{nome_elim}** foi eliminado(a)!! 🦇\n\n"
-                        f"**Papel revelado:** {role_elim}"
-                    ),
-                    color=0xe74c3c,
-                    timestamp=datetime.utcnow()
-                ))
-            else:
-                await ch.send("⏰ Ninguém votou! A cidade não eliminou ninguém hoje... 🦇")
-
-        # Checa fim após votação do dia
-        resultado = jogo.verificar_fim()
-        if resultado:
-            await _encerrar_cidade_dorme(jogo, resultado)
-            return
-
-        await ch.send(embed=discord.Embed(
-            title="🌙 A noite está chegando novamente...",
-            description="A próxima noite começa em **10 segundos**!! Preparem-se!! 😴🦇",
-            color=0x1a1a2e,
-            timestamp=datetime.utcnow()
-        ))
-        await asyncio.sleep(10)
-
-    # Se saiu do loop sem encerrar formalmente
-    await jogo.mutar_todos(False)
-
-
-async def _encerrar_cidade_dorme(jogo: CidadeDormeJogo, vencedor: str):
-    """Anuncia o vencedor e encerra o jogo."""
-    ch = jogo.text_ch
-    _cidade_jogos.pop(jogo.guild.id, None)
-    await jogo.mutar_todos(False)
-
-    if vencedor == "cidadaos":
-        titulo = "🏆 OS CIDADÃOS VENCERAM!!"
-        desc   = "Os cidadãos conseguiram eliminar todos os assassinos!! Parabéns!! 🦇🎉"
-        cor    = 0x00ff99
-    else:
-        titulo = "🔪 OS ASSASSINOS VENCERAM!!"
-        desc   = "Os assassinos dominaram a cidade... melhor sorte na próxima!! 🦇💀"
-        cor    = 0xff0000
-
-    # Revela todos os papéis
-    lista_final = "\n".join(
-        f"• **{jogo.guild.get_member(uid).display_name if jogo.guild.get_member(uid) else uid}** — {CIDADE_ROLES.get(r, r)} {'💀' if uid in jogo.mortos else '✅'}"
-        for uid, r in jogo.jogadores.items()
-    )
-
-    await ch.send(embed=discord.Embed(
-        title=titulo,
-        description=f"{desc}\n\n**Papéis revelados:**\n{lista_final}",
-        color=cor,
-        timestamp=datetime.utcnow()
-    ))
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6154,7 +5189,6 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
                     ("📊 Info",        "Mostra detalhes da call"),
                     ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
                     ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
-                    ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
                 ]
                 for titulo, desc in campos_call:
                     embed_call.add_field(name=titulo, value=desc, inline=True)
@@ -6216,7 +5250,6 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
             ("📝 Status",      "Define o status/tema da call"),
             ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
-            ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
         ]
         for titulo, desc in campos:
             embed.add_field(name=titulo, value=desc, inline=True)
@@ -6600,14 +5633,12 @@ async def clonar_canal_error(ctx: commands.Context, error: Exception):
 # ══════════════════════════════════════════════════════════════════
 
 
-
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║          🎵 SPOTYVAMPY — SISTEMA DE MÚSICA v3.0             ║
-# ║   Powered by yt-dlp + FFmpeg — Sem servidor externo!!          ║
+# ║          🎵 SPOTYVAMPY — SISTEMA DE MÚSICA v1.0             ║
+# ║      Player completo integrado ao bot + VoiceMaster             ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-import yt_dlp          # pip install yt-dlp
-import asyncio
+import yt_dlp                        # pip install yt-dlp
 import functools
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6617,146 +5648,85 @@ import functools
 SV_COR_PRIMARIA  = 0x1db954   # verde spotify
 SV_COR_ERRO      = 0xff4444
 SV_COR_AVISO     = 0xffaa00
-SV_VOLUME_PADRAO = 0.5        # 50% (escala 0.0-2.0 para FFmpeg)
+SV_VOLUME_PADRAO = 0.5        # 50%
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🍪  COOKIES DO YOUTUBE — embutidos no código
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-import tempfile, os as _os
-
-_YOUTUBE_COOKIES = """\
-# Netscape HTTP Cookie File
-# https://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file! Do not edit.
-
-.youtube.com	TRUE	/	FALSE	1810225087	SID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUd-0CfdCephyz1pt25kIw5_wACgYKAY4SARUSFQHGX2Mi7mvA1onk8X24mpBqNY8QshoVAUF8yKrCqVgL2-JNRHjWG68F4hJA0076
-.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdyCLbueF25JQ3MAdeHTyfUAACgYKAUQSARUSFQHGX2MisUzjCSQijdvmqYmz9wD_JxoVAUF8yKqJqD1EusUKwAVYPJOIWLoc0076
-.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdFZ-cpx07b3-AU6B9-Exg_gACgYKASsSARUSFQHGX2MiNILUjwpdoKD2g8aXlKY9RBoVAUF8yKqLt6vAtU_lQTBbilmNzqij0076
-.youtube.com	TRUE	/	FALSE	1810225087	HSID	AxMAwG2ri6X7fbZL6
-.youtube.com	TRUE	/	TRUE	1810225087	SSID	Ae0QFirWJZMSNV_54
-.youtube.com	TRUE	/	FALSE	1810225087	APISID	S44m028E_uIMhf_N/Au9-QlFrzV4dL6Oon
-.youtube.com	TRUE	/	TRUE	1810225087	SAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
-.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
-.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
-.youtube.com	TRUE	/	TRUE	1810225092	LOGIN_INFO	AFmmF2swRAIgCPj6tr7RrjxuUp6xdlWjdP6wQwdsMCTw_4NWZGmXs5gCICU5P2tzImKSyvmAPrsuJD51BiZtK-e5W0518PJkjdft:QUQ3MjNmeHctLWRxaVVvN29xU0d0RG5GMDEzUkZNMVN3Z25YNHdTN2N2SGdOV1Utc3E3dHhLM3lfUHE5RzdVbndlMGZmY1Q2MFphUXp6R20tc2NCeDhQT2RqU2NHLXcyMlpTMnI4V3BfamFqUmNjdWZ6enM0WVdnUEwwR3M3SDBMLVlnanJ0c3BHUFl3aWo4Rm9VMVh5R3YwMHJlc2JSRDVR
-.youtube.com	TRUE	/	TRUE	1791217136	__Secure-BUCKET	CKcD
-.youtube.com	TRUE	/	TRUE	1810225149	PREF	f4=4000000&f6=40000000&tz=America.Sao_Paulo
-.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
-.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
-.youtube.com	TRUE	/	FALSE	1807201151	SIDCC	AKEyXzVF53gBK0xwBsDtNfLDIyXFxQumiirXHzKmtFh0RTsAyIDRw0yDD_loUpxXuTjjOwes
-.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDCC	AKEyXzWfyfxCWJf_tcWxUQLRcZBhfNSI2py9A5xNdsbrvwpZzVg6EYB2n9jw5QDChcFZ6Cud
-.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDCC	AKEyXzUZtvl8eVccwKne7wRdI1Wem9AJk1CBaCqUHMnp5bmBXOyXWV8ob6W0wVv_XX7sKon1
-.youtube.com	TRUE	/	TRUE	0	YSC	0iDG-YMgLEA
-.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_INFO1_LIVE	eRD8cRofanc
-.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_PRIVACY_METADATA	CgJCUhIEGgAgKA%3D%3D
-.youtube.com	TRUE	/	TRUE	1791217136	__Secure-YNID	17.YT=hZq4nCwk7m0Atz2APdL6gie0svBfHxHuXz6HJ6gFVOzZ5UmwCNTA6D_skEfNl2YWsntz01XKhwU_JjQtMTTy0PRWTcnvHveZ4caElrSV7hIPN2eMjPUrntB0dt2gzQ_qbE9uhzjPpqYEXLCywWGGDfxozn8l2DoBb9rfeWSVPap037bbs30UboHIGn3rH-sMloV7pFyQ_BWNTWJ9Tug2T1YnmTbhyMuVg6KZvcHJYr9n_Uh91hQEm8LfFlWTi_dRYtyqTeIgN85ed1NPY9ue2X9wof4OrtomBKj-v6FlGdq2IFqFgkO_erBF30c9pgv0V8wsui49c-8h5vlJwKzWtw
-.youtube.com	TRUE	/	TRUE	1791217137	__Secure-ROLLOUT_TOKEN	CLyckO_Z4d7mngEQn6OdjtTekwMYn86zjtTekwM%3D
-"""
-
-def _criar_cookies_tmp() -> str:
-    """Escreve os cookies em um arquivo temporário e retorna o caminho."""
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
-    tmp.write(_YOUTUBE_COOKIES)
-    tmp.close()
-    return tmp.name
-
-_COOKIES_TMP_PATH = _criar_cookies_tmp()
-
-# Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
+    "format":            "bestaudio/best",
     "noplaylist":        False,
     "quiet":             True,
     "no_warnings":       True,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
-    "extractor_retries": 3,
-    "socket_timeout":    15,
-    "cookiefile":        _COOKIES_TMP_PATH,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["tv_embedded", "ios", "web"],
-        }
-    },
+    "extract_flat":      "in_playlist",
 }
 
-# Opções do FFmpeg para stream de áudio
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options":        "-vn -filter:a volume=0.5",
+    "options":        "-vn",
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎵  TRACK — representa uma música
+# 🎵  MODELO — TRACK
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class Track:
-    """Representa uma faixa de áudio extraída pelo yt-dlp."""
-    def __init__(self, data: dict, requester=None):
-        self.title     = data.get("title",    "Desconhecido")
-        self.url       = data.get("webpage_url", data.get("url", ""))
-        self.stream    = data.get("url", "")          # URL do stream de áudio
-        self.duration  = data.get("duration",  0)     # em segundos
-        self.thumbnail = data.get("thumbnail", None)
-        self.uploader  = data.get("uploader",  data.get("channel", "Desconhecido"))
-        self.requester = requester
+    """Representa uma faixa de áudio."""
+    def __init__(self, data: dict, requester: discord.Member):
+        self.title:     str            = data.get("title", "Desconhecido")
+        self.url:       str            = data.get("url") or data.get("webpage_url", "")
+        self.stream:    str            = data.get("url", "")
+        self.duration:  int            = data.get("duration") or 0
+        self.thumbnail: str            = data.get("thumbnail", "")
+        self.uploader:  str            = data.get("uploader", "Desconhecido")
+        self.requester: discord.Member = requester
 
-    def fmt_duration(self) -> str:
-        s = int(self.duration or 0)
-        m, s = divmod(s, 60)
+    @property
+    def duration_fmt(self) -> str:
+        if not self.duration:
+            return "∞"
+        m, s = divmod(self.duration, 60)
         h, m = divmod(m, 60)
         return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
-    def make_source(self, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
-        opts = dict(FFMPEG_OPTIONS)
-        opts["options"] = f"-vn -filter:a volume={volume}"
-        raw = discord.FFmpegPCMAudio(self.stream, **opts)
-        return discord.PCMVolumeTransformer(raw, volume=volume)
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🧠  GUILD PLAYER — estado de música por servidor
+# 🎛️  MODELO — MUSICPLAYER (por guild)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-class GuildPlayer:
-    """Mantém o estado de reprodução de um servidor."""
+class MusicPlayer:
+    """Player de música por servidor."""
 
-    LOOP_OFF  = "off"
-    LOOP_ONE  = "one"
-    LOOP_ALL  = "all"
+    def __init__(self, guild: discord.Guild, voice_client: discord.VoiceClient, text_channel: discord.TextChannel):
+        self.guild:         discord.Guild       = guild
+        self.vc:            discord.VoiceClient = voice_client
+        self.text_channel:  discord.TextChannel = text_channel
+        self.queue:         list[Track]         = []
+        self.current:       Track | None        = None
+        self.loop:          bool                = False
+        self.loop_queue:    bool                = False
+        self.volume:        float               = SV_VOLUME_PADRAO
+        self.paused:        bool                = False
+        self._task:         asyncio.Task | None = None
 
-    def __init__(self, vc: discord.VoiceClient, text_channel):
-        self.vc:           discord.VoiceClient = vc
-        self.text_channel                      = text_channel
-        self.queue:        list[Track]         = []
-        self.current:      Track | None        = None
-        self.loop_mode:    str                 = self.LOOP_OFF
-        self.volume:       float               = SV_VOLUME_PADRAO
-        self._play_lock                        = asyncio.Lock()
+    def _after(self, error, cog: "SpotyvampyCog"):
+        if error:
+            print(f"[Spotyvampy] Erro no player: {error}")
+        asyncio.run_coroutine_threadsafe(cog._avancar(self.guild.id), cog.bot.loop)
 
-    @property
-    def connected(self) -> bool:
-        return self.vc and self.vc.is_connected()
+    def play_track(self, track: Track, cog: "SpotyvampyCog"):
+        source = discord.PCMVolumeTransformer(
+            discord.FFmpegPCMAudio(track.stream, **FFMPEG_OPTIONS),
+            volume=self.volume
+        )
+        self.vc.play(source, after=lambda e: self._after(e, cog))
+        self.paused = False
 
-    @property
-    def playing(self) -> bool:
-        return self.vc and self.vc.is_playing()
-
-    @property
-    def paused(self) -> bool:
-        return self.vc and self.vc.is_paused()
-
-    def clear_queue(self):
-        self.queue.clear()
-
-    def shuffle_queue(self):
-        import random
-        random.shuffle(self.queue)
+    def is_playing(self) -> bool:
+        return self.vc.is_playing() or self.vc.is_paused()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6771,78 +5741,75 @@ class MusicControlView(discord.ui.View):
         self.cog      = cog
         self.guild_id = guild_id
 
-    def _gp(self) -> "GuildPlayer | None":
+    def _player(self) -> MusicPlayer | None:
         return self.cog.players.get(self.guild_id)
 
     @discord.ui.button(emoji="⏸️", label="Pausar", style=discord.ButtonStyle.secondary, row=0)
     async def btn_pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp or not gp.connected:
+        p = self._player()
+        if not p or not p.vc.is_connected():
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        if gp.paused:
-            gp.vc.resume()
+        if p.vc.is_paused():
+            p.vc.resume(); p.paused = False
             button.label = "Pausar"; button.emoji = "⏸️"
+            await interaction.response.edit_message(view=self)
         else:
-            gp.vc.pause()
+            p.vc.pause(); p.paused = True
             button.label = "Continuar"; button.emoji = "▶️"
-        await interaction.response.edit_message(view=self)
+            await interaction.response.edit_message(view=self)
 
     @discord.ui.button(emoji="⏭️", label="Pular", style=discord.ButtonStyle.primary, row=0)
     async def btn_pular(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp or not gp.playing:
+        p = self._player()
+        if not p or not p.is_playing():
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        gp.vc.stop()
+        p.vc.stop()
         await interaction.response.send_message(embed=discord.Embed(
             description="⏭️ Pulei a música!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="⏹️", label="Parar", style=discord.ButtonStyle.danger, row=0)
     async def btn_parar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp:
+        p = self._player()
+        if not p:
             return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
-        gp.clear_queue()
-        gp.loop_mode = GuildPlayer.LOOP_OFF
-        gp.current   = None
-        gp.vc.stop()
+        p.queue.clear(); p.loop = False; p.loop_queue = False
+        if p.vc.is_connected():
+            p.vc.stop()
         await interaction.response.send_message(embed=discord.Embed(
             description="⏹️ Música parada e fila limpa!! 🦇", color=SV_COR_ERRO), ephemeral=True)
 
     @discord.ui.button(emoji="🔁", label="Loop", style=discord.ButtonStyle.secondary, row=0)
     async def btn_loop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp:
+        p = self._player()
+        if not p:
             return await interaction.response.send_message("❌ Não há player ativo!!", ephemeral=True)
-        if gp.loop_mode == GuildPlayer.LOOP_ONE:
-            gp.loop_mode = GuildPlayer.LOOP_OFF
-            status = "❌ desativado"
-        else:
-            gp.loop_mode = GuildPlayer.LOOP_ONE
-            status = "✅ ativado (música)"
+        p.loop = not p.loop
+        status = "✅ ativado" if p.loop else "❌ desativado"
         await interaction.response.send_message(embed=discord.Embed(
             description=f"🔁 Loop {status}!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="📋", label="Fila", style=discord.ButtonStyle.secondary, row=1)
     async def btn_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        embed = self.cog._embed_fila(gp)
+        p = self._player()
+        embed = self.cog._embed_fila(p)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(emoji="🔀", label="Embaralhar", style=discord.ButtonStyle.secondary, row=1)
     async def btn_shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp or not gp.queue:
+        p = self._player()
+        if not p or not p.queue:
             return await interaction.response.send_message("❌ A fila está vazia!!", ephemeral=True)
-        gp.shuffle_queue()
+        import random as _random
+        _random.shuffle(p.queue)
         await interaction.response.send_message(embed=discord.Embed(
-            description=f"🔀 Fila embaralhada com `{len(gp.queue)}` músicas!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
+            description=f"🔀 Fila embaralhada com `{len(p.queue)}` músicas!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
 
     @discord.ui.button(emoji="🎵", label="Tocando Agora", style=discord.ButtonStyle.primary, row=1)
     async def btn_nowplaying(self, interaction: discord.Interaction, button: discord.ui.Button):
-        gp = self._gp()
-        if not gp or not gp.current:
+        p = self._player()
+        if not p or not p.current:
             return await interaction.response.send_message("❌ Nada tocando agora!!", ephemeral=True)
-        embed = self.cog._embed_nowplaying(gp.current, gp)
+        embed = self.cog._embed_nowplaying(p.current, p)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -6851,166 +5818,205 @@ class MusicControlView(discord.ui.View):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
-    """🎵 SPOTYVAMPY — Sistema de Música v3.0 powered by yt-dlp 🦇"""
+    """🎵 SPOTYVAMPY — Sistema de Música v1.0 🦇"""
 
     def __init__(self, bot: commands.Bot):
         self.bot     = bot
-        self.players: dict[int, GuildPlayer] = {}   # guild_id → GuildPlayer
+        self.players: dict[int, MusicPlayer] = {}   # guild_id → MusicPlayer
 
     # ── Helpers ──────────────────────────────────
 
-    def _embed_nowplaying(self, track: Track, gp: GuildPlayer) -> discord.Embed:
-        loop_labels = {GuildPlayer.LOOP_OFF: "❌ Off", GuildPlayer.LOOP_ONE: "🔂 Música", GuildPlayer.LOOP_ALL: "🔁 Fila"}
+    def _embed_nowplaying(self, track: Track, player: MusicPlayer) -> discord.Embed:
         embed = discord.Embed(
             title="🎵 Tocando Agora",
             description=f"**[{track.title}]({track.url})**",
             color=SV_COR_PRIMARIA,
             timestamp=datetime.utcnow()
         )
-        embed.add_field(name="⏱️ Duração",    value=f"`{track.fmt_duration()}`",                    inline=True)
-        embed.add_field(name="🎤 Artista",    value=f"`{track.uploader}`",                           inline=True)
-        embed.add_field(name="👤 Pedido por", value=track.requester.mention if track.requester else "—", inline=True)
-        embed.add_field(name="🔁 Loop",    value=loop_labels.get(gp.loop_mode, "❌ Off"),            inline=True)
-        embed.add_field(name="🔊 Volume",  value=f"`{int(gp.volume * 100)}%`",                       inline=True)
-        embed.add_field(name="📋 Na fila", value=f"`{len(gp.queue)}` músicas",                       inline=True)
+        embed.add_field(name="⏱️ Duração",    value=f"`{track.duration_fmt}`",         inline=True)
+        embed.add_field(name="🎤 Canal",      value=f"`{track.uploader}`",             inline=True)
+        embed.add_field(name="👤 Pedido por", value=track.requester.mention,           inline=True)
+        embed.add_field(name="🔁 Loop",       value="✅ Sim" if player.loop else "❌ Não",  inline=True)
+        embed.add_field(name="🔊 Volume",     value=f"`{int(player.volume * 100)}%`",  inline=True)
+        embed.add_field(name="📋 Na fila",    value=f"`{len(player.queue)}` músicas",  inline=True)
         if track.thumbnail:
             embed.set_thumbnail(url=track.thumbnail)
-        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Feito com muito amor!!")
+        embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!!")
         return embed
 
-    def _embed_fila(self, gp: "GuildPlayer | None") -> discord.Embed:
+    def _embed_fila(self, player: MusicPlayer | None) -> discord.Embed:
         embed = discord.Embed(title="📋 Fila de Músicas — Spotyvampy", color=SV_COR_PRIMARIA, timestamp=datetime.utcnow())
-        if not gp or (not gp.current and not gp.queue):
+        if not player or (not player.current and not player.queue):
             embed.description = "😴 A fila está vazia!! Use `v!play` pra adicionar músicas!! 🦇"
             return embed
-        if gp.current:
-            embed.add_field(
-                name="🎵 Tocando Agora",
-                value=f"**{gp.current.title}** `{gp.current.fmt_duration()}`",
-                inline=False
-            )
-        if gp.queue:
+        if player.current:
+            embed.add_field(name="🎵 Tocando Agora", value=f"**{player.current.title}** `{player.current.duration_fmt}` — {player.current.requester.mention}", inline=False)
+        if player.queue:
             linhas = []
-            for i, t in enumerate(gp.queue[:10], 1):
-                linhas.append(f"`{i}.` **{t.title}** `{t.fmt_duration()}`")
-            if len(gp.queue) > 10:
-                linhas.append(f"... e mais `{len(gp.queue) - 10}` músicas")
-            embed.add_field(name=f"📋 Próximas ({len(gp.queue)})", value="\n".join(linhas), inline=False)
+            for i, t in enumerate(player.queue[:10], 1):
+                linhas.append(f"`{i}.` **{t.title}** `{t.duration_fmt}` — {t.requester.mention}")
+            if len(player.queue) > 10:
+                linhas.append(f"... e mais `{len(player.queue) - 10}` músicas")
+            embed.add_field(name=f"📋 Próximas ({len(player.queue)})", value="\n".join(linhas), inline=False)
         else:
             embed.add_field(name="📋 Fila", value="Sem próximas músicas na fila!!", inline=False)
         embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!!")
         return embed
 
-    # ── Busca assíncrona via yt-dlp ──────────────
+    def _embed_painel(self, player: MusicPlayer | None) -> discord.Embed:
+        embed = discord.Embed(
+            title="🎵 Spotyvampy — Painel de Música",
+            description=(
+                "```\n"
+                "╔══════════════════════════════════════╗\n"
+                "║   SPOTYVAMPY  🦇  v1.0           ║\n"
+                "║     — Música com muito amor! —      ║\n"
+                "╚══════════════════════════════════════╝\n"
+                "```"
+            ),
+            color=SV_COR_PRIMARIA,
+            timestamp=datetime.utcnow()
+        )
+        if player and player.current:
+            embed.add_field(name="🎵 Tocando", value=f"**{player.current.title}**", inline=False)
+            embed.add_field(name="⏱️ Duração", value=f"`{player.current.duration_fmt}`", inline=True)
+            embed.add_field(name="📋 Na fila", value=f"`{len(player.queue)}` músicas", inline=True)
+            embed.add_field(name="🔊 Volume",  value=f"`{int(player.volume * 100)}%`",   inline=True)
+        else:
+            embed.add_field(name="😴 Status", value="Nenhuma música tocando agora!!\nUse `v!play <música>` pra começar!! 🦇", inline=False)
+        embed.set_footer(text="🦇 Spotyvampy • Use os botões ou comandos !play, !pular, !fila...")
+        return embed
 
-    async def _search(self, query: str) -> list[dict]:
-        """Busca/extrai info de áudio via yt-dlp em thread separada."""
+    async def _fetch_track(self, query: str, requester: discord.Member) -> list[Track]:
+        """Busca uma ou mais tracks via yt-dlp em uma thread separada."""
         loop = asyncio.get_event_loop()
-        is_url = query.lower().startswith("http://") or query.lower().startswith("https://")
-        search_q = query if is_url else f"ytsearch5:{query}"
-
         opts = dict(YTDL_OPTIONS)
-        opts["noplaylist"] = False
+        opts["extract_flat"] = False
+        ydl = yt_dlp.YoutubeDL(opts)
+
+        def _resolve_entry(entry: dict) -> dict | None:
+            """Garante que o entry tem o stream de áudio resolvido."""
+            # Se já tem URL de stream (começa com http e não é página do youtube), tá ok
+            url = entry.get("url", "")
+            if url and "youtube.com/watch" not in url and url.startswith("http"):
+                return entry
+            # Caso contrário, força extração completa pelo webpage_url ou id
+            page_url = entry.get("webpage_url") or entry.get("url") or entry.get("id")
+            if not page_url:
+                return None
+            try:
+                return ydl.extract_info(page_url, download=False)
+            except Exception:
+                return None
 
         def _extract():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(search_q, download=False)
-                if not info:
-                    return []
-                # playlist ou resultado de busca
-                if "entries" in info:
-                    return [e for e in info["entries"] if e]
-                return [info]
+            try:
+                # URL direta ou busca
+                if not query.startswith("http"):
+                    data = ydl.extract_info(f"ytsearch5:{query}", download=False)
+                else:
+                    data = ydl.extract_info(query, download=False)
+                return data
+            except Exception:
+                return None
 
-        return await loop.run_in_executor(None, _extract)
+        data = await loop.run_in_executor(None, _extract)
+        if not data:
+            return []
 
-    # ── Gerenciar player ─────────────────────────
+        tracks = []
+        if "entries" in data:
+            for entry in data["entries"]:
+                if not entry:
+                    continue
+                # Resolve stream se necessário (caso youtu.be, playlists, etc.)
+                resolved = await loop.run_in_executor(None, _resolve_entry, entry)
+                if resolved:
+                    tracks.append(Track(resolved, requester))
+        else:
+            tracks.append(Track(data, requester))
+        return tracks
 
-    async def _get_or_create_player(self, ctx: commands.Context) -> "GuildPlayer | None":
+    async def _avancar(self, guild_id: int):
+        """Avança para a próxima música da fila."""
+        player = self.players.get(guild_id)
+        if not player:
+            return
+
+        if player.loop and player.current:
+            # Re-busca o stream pra evitar expirar URL
+            tracks = await self._fetch_track(player.current.url, player.current.requester)
+            if tracks:
+                player.current = tracks[0]
+            player.play_track(player.current, self)
+            return
+
+        if player.loop_queue and player.current:
+            player.queue.append(player.current)
+
+        if not player.queue:
+            player.current = None
+            embed = discord.Embed(
+                description="📭 A fila acabou!! Obrigada por usar o Spotyvampy!! 🦇💚",
+                color=SV_COR_PRIMARIA
+            )
+            try:
+                await player.text_channel.send(embed=embed)
+            except Exception:
+                pass
+            return
+
+        next_track = player.queue.pop(0)
+        player.current = next_track
+        player.play_track(next_track, self)
+
+        embed = self._embed_nowplaying(next_track, player)
+        view  = MusicControlView(self, guild_id)
+        try:
+            await player.text_channel.send(embed=embed, view=view)
+        except Exception:
+            pass
+
+    async def _get_or_create_player(self, ctx: commands.Context) -> MusicPlayer | None:
+        """Garante que o bot está na call do usuário e retorna o player."""
+        guild = ctx.guild
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send(embed=discord.Embed(
                 description="❌ Você precisa estar em um canal de voz pra usar o Spotyvampy!! 🦇",
                 color=SV_COR_ERRO))
             return None
 
-        gid = ctx.guild.id
-        gp  = self.players.get(gid)
+        voice_channel = ctx.author.voice.channel
 
-        if gp and gp.connected:
-            gp.text_channel = ctx.channel
-            return gp
+        if guild.id in self.players:
+            player = self.players[guild.id]
+            if not player.vc.is_connected():
+                del self.players[guild.id]
+            else:
+                player.text_channel = ctx.channel
+                return player
 
-        # Desconectar player morto se existir
-        if gp and not gp.connected:
-            del self.players[gid]
-
+        # Conectar ao canal de voz
         try:
-            vc = await ctx.author.voice.channel.connect()
-            gp = GuildPlayer(vc, ctx.channel)
-            self.players[gid] = gp
-            return gp
-        except Exception as e:
-            print(f"[Spotyvampy] Erro ao conectar: {e}")
-            await ctx.send(embed=discord.Embed(
-                description=f"❌ Não consegui entrar na call!! 😢🦇\n`{e}`",
-                color=SV_COR_ERRO))
-            return None
+            vc = await voice_channel.connect()
+        except discord.ClientException:
+            # Já conectado em outro canal — mover
+            vc = guild.voice_client
+            if vc:
+                await vc.move_to(voice_channel)
+            else:
+                await ctx.send(embed=discord.Embed(description="❌ Não consegui entrar na call!! 😢🦇", color=SV_COR_ERRO))
+                return None
 
-    def _play_next(self, guild_id: int):
-        """Callback chamado quando uma música termina. Agenda a próxima."""
-        gp = self.players.get(guild_id)
-        if not gp or not gp.connected:
-            return
-
-        if gp.loop_mode == GuildPlayer.LOOP_ONE and gp.current:
-            # Replay da música atual
-            asyncio.run_coroutine_threadsafe(
-                self._play_track(gp, gp.current), self.bot.loop)
-            return
-
-        if gp.loop_mode == GuildPlayer.LOOP_ALL and gp.current:
-            gp.queue.append(gp.current)
-
-        if gp.queue:
-            next_track = gp.queue.pop(0)
-            asyncio.run_coroutine_threadsafe(
-                self._play_track(gp, next_track), self.bot.loop)
-        else:
-            gp.current = None
-            asyncio.run_coroutine_threadsafe(
-                self._send_queue_ended(gp), self.bot.loop)
-
-    async def _send_queue_ended(self, gp: GuildPlayer):
-        if gp.text_channel:
-            try:
-                await gp.text_channel.send(embed=discord.Embed(
-                    description="📭 A fila acabou!! Obrigada por usar o Spotyvampy!! 🦇💚",
-                    color=SV_COR_PRIMARIA))
-            except Exception:
-                pass
-
-    async def _play_track(self, gp: GuildPlayer, track: Track):
-        """Inicia a reprodução de uma track no VoiceClient."""
-        if not gp.connected:
-            return
-        gp.current = track
-        source = track.make_source(gp.volume)
-        after_cb = lambda e: self._play_next(gp.vc.guild.id)
-        gp.vc.play(source, after=after_cb)
-        # Envia embed de "tocando agora"
-        if gp.text_channel:
-            try:
-                embed = self._embed_nowplaying(track, gp)
-                view  = MusicControlView(self, gp.vc.guild.id)
-                await gp.text_channel.send(embed=embed, view=view)
-            except Exception:
-                pass
+        player = MusicPlayer(guild, vc, ctx.channel)
+        self.players[guild.id] = player
+        return player
 
     # ── 🟢 Boot ───────────────────────────────────
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await asyncio.sleep(3)
+        await asyncio.sleep(8)
         for guild in self.bot.guilds:
             log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
             if not log_ch:
@@ -7020,8 +6026,8 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 description=(
                     "```\n"
                     "╔══════════════════════════════════════╗\n"
-                    "║   SPOTYVAMPY  🦇  v3.0           ║\n"
-                    "║    — Powered by yt-dlp —            ║\n"
+                    "║   SPOTYVAMPY  🦇  v1.0           ║\n"
+                    "║    — Sistema de Música —            ║\n"
                     "║       ✅  ONLINE  ✅                 ║\n"
                     "╚══════════════════════════════════════╝\n"
                     "```"
@@ -7029,153 +6035,128 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 color=SV_COR_PRIMARIA,
                 timestamp=datetime.utcnow()
             )
-            embed.add_field(name="🎵 Comandos",
+            embed.add_field(name="🎵 Comandos Principais",
                             value="`v!play` `v!pular` `v!parar` `v!fila` `v!tocando` `v!volume` `v!loop` `v!embaralhar` `v!sair`",
                             inline=False)
-            embed.add_field(name="🎧 Fontes Suportadas",
-                            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
-                            inline=False)
-            embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `v!spotyvampy`", inline=False)
-            embed.set_footer(text="🦇 Spotyvampy v3.0 • Sem servidor externo!!")
+            embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `!spotyvampy`", inline=False)
+            embed.set_footer(text="🦇 Spotyvampy • Música com muito amor!!")
             await log_ch.send(embed=embed)
 
     # ── 🎵 COMANDOS ───────────────────────────────
 
     @commands.command(name="play", aliases=["tocar", "p"])
     async def play(self, ctx: commands.Context, *, query: str):
-        """Toca música do YouTube/SoundCloud/etc. Uso: v!play <nome ou URL>"""
+        """Toca uma música ou playlist do YouTube. Uso: v!play <nome ou URL>"""
         async with ctx.typing():
-            gp = await self._get_or_create_player(ctx)
-            if not gp:
+            player = await self._get_or_create_player(ctx)
+            if not player:
                 return
 
             msg_busca = await ctx.send(embed=discord.Embed(
                 description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
 
-            try:
-                resultados = await self._search(query)
-            except Exception as e:
-                print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
-                return await msg_busca.edit(embed=discord.Embed(
-                    description=f"❌ Erro ao buscar!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
-
-            if not resultados:
+            tracks = await self._fetch_track(query, ctx.author)
+            if not tracks:
                 return await msg_busca.edit(embed=discord.Embed(
                     description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
 
-            adicionadas   = 0
-            tocando_antes = gp.playing or gp.paused
-
-            # Playlist ou múltiplos resultados de URL → adiciona todos
-            is_url  = query.lower().startswith("http")
-            is_list = is_url and len(resultados) > 1
-
-            if is_list:
-                for data in resultados:
-                    if len(gp.queue) >= SV_FILA_MAX:
-                        break
-                    gp.queue.append(Track(data, requester=ctx.author))
-                    adicionadas += 1
-                await msg_busca.edit(embed=discord.Embed(
-                    description=f"📋 Playlist adicionada com **{adicionadas}** músicas!! 🦇",
-                    color=SV_COR_PRIMARIA))
-            else:
-                track = Track(resultados[0], requester=ctx.author)
-                if len(gp.queue) >= SV_FILA_MAX:
-                    return await msg_busca.edit(embed=discord.Embed(
-                        description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
-                        color=SV_COR_ERRO))
-                gp.queue.append(track)
-                adicionadas = 1
-                if tocando_antes:
-                    await msg_busca.edit(embed=discord.Embed(
-                        description=f"📋 **{track.title}** adicionada à fila!! 🦇",
-                        color=SV_COR_PRIMARIA))
+            adicionadas = 0
+            for track in tracks:
+                if len(player.queue) >= SV_FILA_MAX:
+                    break
+                if not player.is_playing() and player.current is None and adicionadas == 0:
+                    player.current = track
+                    player.play_track(track, self)
+                    embed = self._embed_nowplaying(track, player)
+                    view  = MusicControlView(self, ctx.guild.id)
+                    await msg_busca.edit(embed=embed, view=view)
                 else:
-                    await msg_busca.delete()
+                    player.queue.append(track)
+                    adicionadas += 1
 
-            # Iniciar reprodução se não estava tocando
-            if not tocando_antes and gp.queue:
-                next_track = gp.queue.pop(0)
-                await self._play_track(gp, next_track)
-
-    @commands.command(name="pausar", aliases=["pause"])
-    async def pausar(self, ctx: commands.Context):
-        """Pausa ou continua a música. Uso: v!pausar"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.connected:
-            return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
-        if gp.paused:
-            gp.vc.resume()
-            desc = "▶️ Música continuada!! 🦇"
-        else:
-            gp.vc.pause()
-            desc = "⏸️ Música pausada!! 🦇"
-        await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=8)
-
-    @commands.command(name="continuar", aliases=["resume", "r"])
-    async def continuar(self, ctx: commands.Context):
-        """Continua a música se estiver pausada. Uso: v!continuar"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.paused:
-            return await ctx.send(embed=discord.Embed(description="❌ A música não está pausada!! 🦇", color=SV_COR_ERRO))
-        gp.vc.resume()
-        await ctx.send(embed=discord.Embed(description="▶️ Música continuada!! 🦇", color=SV_COR_PRIMARIA), delete_after=8)
+            if adicionadas > 0:
+                embed_add = discord.Embed(
+                    description=f"📋 **{adicionadas}** música(s) adicionada(s) à fila!! 🦇",
+                    color=SV_COR_PRIMARIA)
+                await ctx.send(embed=embed_add, delete_after=8)
 
     @commands.command(name="pular", aliases=["skip", "s"])
     async def pular(self, ctx: commands.Context):
         """Pula para a próxima música. Uso: v!pular"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.playing:
-            return await ctx.send(embed=discord.Embed(description="❌ Não há nada tocando!! 🦇", color=SV_COR_ERRO))
-        gp.vc.stop()  # dispara o after_cb → _play_next
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.is_playing():
+            return await ctx.send(embed=discord.Embed(
+                description="❌ Não há nada tocando agora!! 🦇", color=SV_COR_ERRO))
+        player.vc.stop()
         await ctx.send(embed=discord.Embed(
-            description=f"⏭️ Pulei!! 🦇 — pedido por {ctx.author.mention}",
+            description=f"⏭️ **{player.current.title if player.current else 'Música'}** pulada por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="pausar", aliases=["pause"])
+    async def pausar(self, ctx: commands.Context):
+        """Pausa ou continua a música. Uso: v!pausar"""
+        player = self.players.get(ctx.guild.id)
+        if not player:
+            return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
+        if player.vc.is_paused():
+            player.vc.resume(); player.paused = False
+            await ctx.send(embed=discord.Embed(description="▶️ Música continuada!! 🦇", color=SV_COR_PRIMARIA), delete_after=8)
+        elif player.vc.is_playing():
+            player.vc.pause(); player.paused = True
+            await ctx.send(embed=discord.Embed(description="⏸️ Música pausada!! 🦇", color=SV_COR_AVISO), delete_after=8)
+
+    @commands.command(name="continuar", aliases=["resume", "r"])
+    async def continuar(self, ctx: commands.Context):
+        """Continua a música pausada. Uso: v!continuar"""
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.vc.is_paused():
+            return await ctx.send(embed=discord.Embed(description="❌ A música não está pausada!! 🦇", color=SV_COR_ERRO))
+        player.vc.resume(); player.paused = False
+        await ctx.send(embed=discord.Embed(description="▶️ Música continuada!! 🦇", color=SV_COR_PRIMARIA), delete_after=8)
 
     @commands.command(name="parar", aliases=["stop"])
     async def parar(self, ctx: commands.Context):
         """Para a música e limpa a fila. Uso: v!parar"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp:
-            return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
-        gp.clear_queue()
-        gp.loop_mode = GuildPlayer.LOOP_OFF
-        gp.current   = None
-        gp.vc.stop()
+        player = self.players.get(ctx.guild.id)
+        if not player:
+            return await ctx.send(embed=discord.Embed(description="❌ Não há nada tocando!! 🦇", color=SV_COR_ERRO))
+        player.queue.clear(); player.loop = False; player.loop_queue = False
+        if player.vc.is_playing() or player.vc.is_paused():
+            player.vc.stop()
         await ctx.send(embed=discord.Embed(
-            description=f"⏹️ Música parada e fila limpa por {ctx.author.mention}!! 🦇",
+            description="⏹️ Música parada e fila limpa por " + ctx.author.mention + "!! 🦇",
             color=SV_COR_ERRO))
 
     @commands.command(name="fila", aliases=["queue", "q"])
     async def fila(self, ctx: commands.Context):
         """Mostra a fila de músicas. Uso: v!fila"""
-        gp = self.players.get(ctx.guild.id)
-        embed = self._embed_fila(gp)
+        player = self.players.get(ctx.guild.id)
+        embed  = self._embed_fila(player)
         await ctx.send(embed=embed)
 
     @commands.command(name="tocando", aliases=["nowplaying", "np"])
     async def tocando(self, ctx: commands.Context):
         """Mostra a música tocando agora. Uso: v!tocando"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.current:
-            return await ctx.send(embed=discord.Embed(description="❌ Nada tocando agora!! 🦇", color=SV_COR_ERRO))
-        embed = self._embed_nowplaying(gp.current, gp)
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.current:
+            return await ctx.send(embed=discord.Embed(
+                description="❌ Nada tocando agora!! Use `v!play <música>` 🦇", color=SV_COR_ERRO))
+        embed = self._embed_nowplaying(player.current, player)
         view  = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
-    @commands.command(name="volume", aliases=["vol"])
+    @commands.command(name="volume", aliases=["vol", "v"])
     async def volume(self, ctx: commands.Context, vol: int):
-        """Ajusta o volume (1-100). Uso: v!volume 80"""
+        """Ajusta o volume (1-100). Uso: v!volume 75"""
         if not 1 <= vol <= 100:
             return await ctx.send(embed=discord.Embed(
                 description="❌ Volume deve ser entre **1** e **100**!! 🦇", color=SV_COR_ERRO))
-        gp = self.players.get(ctx.guild.id)
-        if not gp:
+        player = self.players.get(ctx.guild.id)
+        if not player:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
-        gp.volume = vol / 100
-        if gp.vc.source and isinstance(gp.vc.source, discord.PCMVolumeTransformer):
-            gp.vc.source.volume = gp.volume
+        player.volume = vol / 100
+        if player.vc.source:
+            player.vc.source.volume = player.volume
         await ctx.send(embed=discord.Embed(
             description=f"🔊 Volume ajustado para **{vol}%** por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -7183,42 +6164,43 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="loop")
     async def loop(self, ctx: commands.Context, modo: str = "musica"):
         """Ativa loop. Modos: musica | fila | off. Uso: v!loop fila"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp:
+        player = self.players.get(ctx.guild.id)
+        if not player:
             return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
         modo = modo.lower()
         if modo in ("off", "desligar", "0"):
-            gp.loop_mode = GuildPlayer.LOOP_OFF
+            player.loop = False; player.loop_queue = False
             desc = "🔁 Loop **desativado**!! 🦇"
         elif modo in ("fila", "queue", "all"):
-            gp.loop_mode = GuildPlayer.LOOP_ALL
-            desc = "🔁 Loop de **fila** ativado!! 🦇"
+            player.loop = False; player.loop_queue = True
+            desc = "🔁 Loop de **fila** ativado!! Todas as músicas vão repetir!! 🦇"
         else:
-            gp.loop_mode = GuildPlayer.LOOP_ONE
-            desc = "🔂 Loop de **música** ativado!! 🦇"
+            player.loop = True; player.loop_queue = False
+            desc = "🔂 Loop de **música** ativado!! A música vai repetir!! 🦇"
         await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=10)
 
     @commands.command(name="embaralhar", aliases=["shuffle"])
     async def embaralhar(self, ctx: commands.Context):
         """Embaralha a fila. Uso: v!embaralhar"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.queue:
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
-        gp.shuffle_queue()
+        import random as _random
+        _random.shuffle(player.queue)
         await ctx.send(embed=discord.Embed(
-            description=f"🔀 Fila embaralhada com **{len(gp.queue)}** músicas por {ctx.author.mention}!! 🦇",
+            description=f"🔀 Fila embaralhada com **{len(player.queue)}** músicas por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
 
     @commands.command(name="remover", aliases=["remove", "rm"])
     async def remover(self, ctx: commands.Context, pos: int):
         """Remove uma música da fila pela posição. Uso: v!remover 3"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.queue:
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
-        if not 1 <= pos <= len(gp.queue):
+        if not 1 <= pos <= len(player.queue):
             return await ctx.send(embed=discord.Embed(
-                description=f"❌ Posição inválida!! A fila tem **{len(gp.queue)}** músicas!! 🦇", color=SV_COR_ERRO))
-        removida = gp.queue.pop(pos - 1)
+                description=f"❌ Posição inválida!! A fila tem **{len(player.queue)}** músicas!! 🦇", color=SV_COR_ERRO))
+        removida = player.queue.pop(pos - 1)
         await ctx.send(embed=discord.Embed(
             description=f"🗑️ **{removida.title}** removida da fila por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -7226,11 +6208,11 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="limparfila", aliases=["clearqueue", "cq"])
     async def limparfila(self, ctx: commands.Context):
         """Limpa a fila sem parar a música atual. Uso: v!limparfila"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.queue:
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.queue:
             return await ctx.send(embed=discord.Embed(description="❌ A fila já está vazia!! 🦇", color=SV_COR_ERRO))
-        qtd = len(gp.queue)
-        gp.clear_queue()
+        qtd = len(player.queue)
+        player.queue.clear()
         await ctx.send(embed=discord.Embed(
             description=f"🧹 **{qtd}** músicas removidas da fila por {ctx.author.mention}!! 🦇",
             color=SV_COR_PRIMARIA), delete_after=8)
@@ -7238,12 +6220,11 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.command(name="sair", aliases=["dc", "disconnect", "desconectar"])
     async def sair(self, ctx: commands.Context):
         """Desconecta o bot do canal de voz. Uso: v!sair"""
-        gp = self.players.get(ctx.guild.id)
-        if not gp or not gp.connected:
+        player = self.players.get(ctx.guild.id)
+        if not player or not player.vc.is_connected():
             return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhum canal de voz!! 🦇", color=SV_COR_ERRO))
-        gp.clear_queue()
-        gp.current = None
-        await gp.vc.disconnect()
+        player.queue.clear(); player.current = None
+        await player.vc.disconnect()
         del self.players[ctx.guild.id]
         await ctx.send(embed=discord.Embed(
             description=f"👋 Saí do canal de voz!! Tchau tchau, {ctx.author.mention}!! 🦇💚",
@@ -7257,33 +6238,33 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             description=(
                 "```\n"
                 "╔══════════════════════════════════════╗\n"
-                "║   SPOTYVAMPY  🦇  v3.0           ║\n"
-                "║    — Powered by yt-dlp! —           ║\n"
+                "║   SPOTYVAMPY  🦇  v1.0           ║\n"
+                "║    — Música com muito amor! —       ║\n"
                 "╚══════════════════════════════════════╝\n"
                 "```"
             ),
             color=SV_COR_PRIMARIA,
             timestamp=datetime.utcnow()
         )
-        embed.add_field(name="▶️  Tocar",       value="`v!play <nome/URL>` `v!p` `v!tocar`\nYouTube, SoundCloud, Bandcamp, Vimeo...", inline=False)
-        embed.add_field(name="⏸️  Pausar",      value="`v!pausar` `v!pause`",        inline=True)
-        embed.add_field(name="▶️  Continuar",   value="`v!continuar` `v!resume`",    inline=True)
-        embed.add_field(name="⏭️  Pular",       value="`v!pular` `v!skip`",          inline=True)
-        embed.add_field(name="⏹️  Parar",       value="`v!parar` `v!stop`",          inline=True)
-        embed.add_field(name="📋  Fila",        value="`v!fila` `v!queue`",          inline=True)
-        embed.add_field(name="🎵  Tocando",     value="`v!tocando` `v!np`",          inline=True)
-        embed.add_field(name="🔊  Volume",      value="`v!volume <1-100>`",          inline=True)
-        embed.add_field(name="🔁  Loop",        value="`v!loop musica/fila/off`",    inline=True)
-        embed.add_field(name="🔀  Embaralhar",  value="`v!embaralhar` `v!shuffle`",  inline=True)
-        embed.add_field(name="🗑️  Remover",     value="`v!remover <pos>`",           inline=True)
-        embed.add_field(name="🧹  Limpar Fila", value="`v!limparfila` `v!cq`",       inline=True)
-        embed.add_field(name="👋  Sair",        value="`v!sair` `v!dc`",             inline=True)
+        embed.add_field(name="▶️  Tocar",         value="`v!play <nome/URL>` `v!p` `v!tocar`\nToca música ou playlist do YouTube", inline=False)
+        embed.add_field(name="⏸️  Pausar",        value="`v!pausar` `v!pause`\nPausa ou continua", inline=True)
+        embed.add_field(name="▶️  Continuar",     value="`v!continuar` `v!resume` `v!r`\nContinua se pausado", inline=True)
+        embed.add_field(name="⏭️  Pular",         value="`v!pular` `v!skip` `v!s`\nPula para a próxima", inline=True)
+        embed.add_field(name="⏹️  Parar",         value="`v!parar` `v!stop`\nPara e limpa a fila", inline=True)
+        embed.add_field(name="📋  Fila",          value="`v!fila` `v!queue` `v!q`\nMostra a fila", inline=True)
+        embed.add_field(name="🎵  Tocando",       value="`v!tocando` `v!nowplaying` `v!np`\nMúsica atual", inline=True)
+        embed.add_field(name="🔊  Volume",        value="`v!volume <1-100>` `v!vol`\nAjusta o volume", inline=True)
+        embed.add_field(name="🔁  Loop",          value="`v!loop musica` `v!loop fila` `v!loop off`\nModos de repetição", inline=True)
+        embed.add_field(name="🔀  Embaralhar",    value="`v!embaralhar` `v!shuffle`\nEmbaralha a fila", inline=True)
+        embed.add_field(name="🗑️  Remover",       value="`v!remover <pos>` `v!rm`\nRemove da fila", inline=True)
+        embed.add_field(name="🧹  Limpar Fila",   value="`v!limparfila` `v!cq`\nLimpa sem parar", inline=True)
+        embed.add_field(name="👋  Sair",          value="`v!sair` `v!dc` `v!desconectar`\nDesconecta o bot", inline=True)
         embed.add_field(
-            name="🎧 Fontes Suportadas",
-            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
+            name="💡 Dica",
+            value="Use o botão **🎵 Spotyvampy** no painel da sua call pra controlar a música sem sair do painel!! 🦇",
             inline=False
         )
-        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Use v!sv pra ver esse menu")
+        embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!! • Use v!sv pra ver esse menu")
         view = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
 
@@ -7293,136 +6274,33 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.bot:
             return
-        gp = self.players.get(member.guild.id)
-        if not gp or not gp.connected:
+        guild  = member.guild
+        player = self.players.get(guild.id)
+        if not player or not player.vc.is_connected():
             return
-        vc_channel = gp.vc.channel
+        # Se o canal do bot ficou vazio (só o bot), desconectar após 60s
+        vc_channel = player.vc.channel
         if vc_channel and len([m for m in vc_channel.members if not m.bot]) == 0:
             await asyncio.sleep(60)
-            gp = self.players.get(member.guild.id)
-            if gp and gp.connected:
-                if len([m for m in gp.vc.channel.members if not m.bot]) == 0:
-                    gp.clear_queue()
-                    gp.current = None
-                    await gp.vc.disconnect()
-                    del self.players[member.guild.id]
-                    if gp.text_channel:
-                        try:
-                            await gp.text_channel.send(embed=discord.Embed(
-                                description="👋 Saí do canal de voz por inatividade!! 🦇💚",
-                                color=SV_COR_AVISO))
-                        except Exception:
-                            pass
-
-
+            # checar novamente após o sleep
+            player = self.players.get(guild.id)
+            if player and player.vc.is_connected():
+                vc_channel = player.vc.channel
+                if vc_channel and len([m for m in vc_channel.members if not m.bot]) == 0:
+                    player.queue.clear(); player.current = None
+                    await player.vc.disconnect()
+                    del self.players[guild.id]
+                    try:
+                        await player.text_channel.send(embed=discord.Embed(
+                            description="👋 Saí do canal de voz por inatividade!! 🦇💚",
+                            color=SV_COR_AVISO))
+                    except Exception:
+                        pass
 
 
 # ══════════════════════════════════════════════════════════════════
-#  🦇  COMANDOS FOFOS — Amber Edition
+# FIM DO CLONAR CANAL
 # ══════════════════════════════════════════════════════════════════
-
-AMBER_ID = 918222382840291369
-CARGOS_GERAL_NOMES = ["Reviver chat", "Bora call", "Cinema", "Gravação"]
-
-def _achar_cargo(guild: discord.Guild, nome: str):
-    """Busca cargo por nome exato ou parcial (ignora emojis no final)."""
-    for role in guild.roles:
-        if role.name == nome or role.name.startswith(nome):
-            return role
-    return None
-
-class DarCargoGeralView(discord.ui.View):
-    def __init__(self, guild: discord.Guild):
-        super().__init__(timeout=60)
-        self.guild = guild
-        for nome in CARGOS_GERAL_NOMES:
-            self.add_item(DarCargoBtn(nome, False))
-        self.add_item(DarCargoBtn("✨ Todos", True))
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-
-class DarCargoBtn(discord.ui.Button):
-    def __init__(self, label: str, todos: bool):
-        cor = discord.ButtonStyle.success if todos else discord.ButtonStyle.primary
-        super().__init__(label=label, style=cor)
-        self.todos = todos
-        self.nome_cargo = label
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        membros = [m for m in guild.members if not m.bot]
-
-        if self.todos:
-            nomes = CARGOS_GERAL_NOMES
-        else:
-            nomes = [self.nome_cargo]
-
-        cargos = [_achar_cargo(guild, n) for n in nomes]
-        cargos = [c for c in cargos if c]
-
-        if not cargos:
-            await interaction.followup.send("❌ Nenhum cargo encontrado!", ephemeral=True)
-            return
-
-        count = 0
-        erros = 0
-        for membro in membros:
-            faltam = [c for c in cargos if c not in membro.roles]
-            if faltam:
-                try:
-                    await membro.add_roles(*faltam, reason="v!darcargogeral pela Amber/dono")
-                    count += 1
-                    await asyncio.sleep(0.5)
-                except Exception:
-                    erros += 1
-
-        nomes_str = " + ".join([c.name for c in cargos])
-        eh_amber = interaction.user.id == AMBER_ID
-        if eh_amber:
-            msg = f"feito Amberzinha!! 🦇💚 dei **{nomes_str}** pra **{count}** membros!! tá tudo certinho ✨🫶"
-        else:
-            msg = f"✅ Cargo(s) **{nomes_str}** dado(s) pra **{count}** membros!!"
-        await interaction.followup.send(msg, ephemeral=True)
-        for item in self.view.children:
-            item.disabled = True
-        await interaction.message.edit(view=self.view)
-
-@bot.command(name="fecharticket", aliases=["fechart", "closet"])
-async def fecharticket(ctx: commands.Context):
-    """Fecha (deleta) o canal de ticket atual. Uso: v!fecharticket"""
-    canal = ctx.channel
-    if "ticket" not in canal.name.lower():
-        return await ctx.send("❌ Esse canal não parece ser um ticket! 🦇", delete_after=5)
-    await ctx.send("🔒 Fechando ticket em 3 segundos... 🦇💚")
-    await asyncio.sleep(3)
-    await canal.delete(reason=f"Ticket fechado por {ctx.author}")
-
-
-@bot.command(name="darcargogeral")
-async def darcargogeral(ctx: commands.Context):
-    """Dá um cargo de notificação pra todos os membros do servidor."""
-    eh_amber = ctx.author.id == AMBER_ID
-    if eh_amber:
-        embed = discord.Embed(
-            title="🦇💚 oi Amberzinha!!",
-            description=(
-                "aaaa que bom que você apareceu!! 🥺✨\n\n"
-                "qual carguinho você quer dar pra galera toda??\n"
-                "é só escolher aqui embaixo que eu já mando pra todo mundo!! 🦇💖"
-            ),
-            color=0x9b59b6
-        )
-    else:
-        embed = discord.Embed(
-            title="🦇 Dar cargo geral",
-            description="Escolha qual cargo dar pra todos os membros do servidor:",
-            color=0x7c3aed
-        )
-    embed.set_footer(text="🦇 Vampy • expira em 60s")
-    await ctx.send(embed=embed, view=DarCargoGeralView(ctx.guild))
 
 
 async def _main():
