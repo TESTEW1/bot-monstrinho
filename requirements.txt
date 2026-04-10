@@ -2,7 +2,7 @@ discord.py
 discord.py[voice]
 deep-translator
 langdetect
-yt-dlp
+yt-dlp>=2025.1.1
 PyNaCl
 wavelink>=3.4.0
 spotipy
