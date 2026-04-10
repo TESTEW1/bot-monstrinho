@@ -7,8 +7,6 @@ import re
 from datetime import timedelta
 from datetime import datetime
 from collections import defaultdict, deque
-from dotenv import load_dotenv
-load_dotenv()
 try:
     from deep_translator import GoogleTranslator
     from langdetect import detect as detectar_idioma
@@ -6612,16 +6610,6 @@ import yt_dlp          # pip install yt-dlp
 import asyncio
 import functools
 
-try:
-    import spotipy
-    from spotipy.oauth2 import SpotifyClientCredentials
-    SPOTIPY_DISPONIVEL = True
-except ImportError:
-    SPOTIPY_DISPONIVEL = False
-
-SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID", "")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ⚙️  CONFIGURAÇÕES DO PLAYER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6695,18 +6683,18 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":               "bestaudio/best",
-    "noplaylist":           True,
-    "nocheckcertificate":   True,
-    "ignoreerrors":         False,
-    "logtostderr":          False,
-    "quiet":                True,
-    "no_warnings":          True,
-    "default_search":       "auto",
+    "format":               "bestaudio/best",  # Pega o melhor formato de áudio disponível
+    "noplaylist":           True,              # Impede tocar playlists inteiras, só uma música por vez
+    "nocheckcertificate":   True,              # Ignora erros de certificado SSL
+    "ignoreerrors":         False,             # Interrompe se ocorrer erro ao baixar informações
+    "logtostderr":          False,             # Não mostra logs no terminal
+    "quiet":                True,              # Modo silencioso
+    "no_warnings":          True,              # Oculta avisos do yt_dlp
+    "default_search":       "auto",            # Pesquisa no YouTube se não for link
     "cookiefile":           _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": "web",
+            "player_client": "web",            # Age como um player de música
         }
     },
 }
@@ -6933,50 +6921,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!!")
         return embed
 
-    # ── Spotify → YouTube ────────────────────────
-
-    def _spotify_client(self):
-        if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
-            return None
-        try:
-            return spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-                client_id=SPOTIFY_CLIENT_ID,
-                client_secret=SPOTIFY_CLIENT_SECRET
-            ))
-        except Exception:
-            return None
-
-    async def _resolve_spotify(self, url: str) -> list[str]:
-        """Spotify URL → lista de 'Artista - Título' para buscar no YouTube."""
-        sp = self._spotify_client()
-        if not sp:
-            return []
-        loop = asyncio.get_event_loop()
-        def _fetch():
-            termos = []
-            if "/track/" in url:
-                tid = re.search(r"/track/([A-Za-z0-9]+)", url)
-                if not tid: return termos
-                t = sp.track(tid.group(1))
-                artista = t["artists"][0]["name"] if t.get("artists") else ""
-                termos.append(f"{artista} - {t['name']}")
-            elif "/playlist/" in url:
-                pid = re.search(r"/playlist/([A-Za-z0-9]+)", url)
-                if not pid: return termos
-                for item in sp.playlist_items(pid.group(1), limit=SV_FILA_MAX).get("items", []):
-                    t = item.get("track")
-                    if not t: continue
-                    artista = t["artists"][0]["name"] if t.get("artists") else ""
-                    termos.append(f"{artista} - {t['name']}")
-            elif "/album/" in url:
-                aid = re.search(r"/album/([A-Za-z0-9]+)", url)
-                if not aid: return termos
-                for t in sp.album_tracks(aid.group(1), limit=SV_FILA_MAX).get("items", []):
-                    artista = t["artists"][0]["name"] if t.get("artists") else ""
-                    termos.append(f"{artista} - {t['name']}")
-            return termos
-        return await loop.run_in_executor(None, _fetch)
-
     # ── Busca assíncrona via yt-dlp ──────────────
 
     async def _search(self, query: str) -> list[dict]:
@@ -7156,7 +7100,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                             value="`v!play` `v!pular` `v!parar` `v!fila` `v!tocando` `v!volume` `v!loop` `v!embaralhar` `v!sair`",
                             inline=False)
             embed.add_field(name="🎧 Fontes Suportadas",
-                            value="YouTube • Spotify • SoundCloud • Bandcamp • Vimeo • Rádio Online",
+                            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
                             inline=False)
             embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `v!spotyvampy`", inline=False)
             embed.set_footer(text="🦇 Spotyvampy v3.0 • Sem servidor externo!!")
@@ -7166,98 +7110,30 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.command(name="play", aliases=["tocar", "p"])
     async def play(self, ctx: commands.Context, *, query: str):
-        """Toca música do YouTube/SoundCloud/Spotify. Uso: v!play <nome ou URL>"""
-        await self._processar_musica(ctx, query)
-
-    async def _processar_musica(self, ctx: commands.Context, query: str, silencioso: bool = False):
-        """Lógica central de play — usada pelo comando e pelo auto-link."""
+        """Toca música do YouTube/SoundCloud/etc. Uso: v!play <nome ou URL>"""
         async with ctx.typing():
             gp = await self._get_or_create_player(ctx)
             if not gp:
                 return
 
-            # ── Spotify ──────────────────────────────
-            if "open.spotify.com" in query:
-                if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
-                    return await ctx.send(embed=discord.Embed(
-                        description=(
-                            "❌ Spotify não configurado!! 🦇\n"
-                            "Configure `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` nas variáveis de ambiente."
-                        ), color=SV_COR_ERRO))
-
-                msg_busca = await ctx.send(embed=discord.Embed(
-                    description="🎵 Resolvendo link do Spotify... 🦇", color=SV_COR_AVISO))
-
-                termos = await self._resolve_spotify(query)
-                if not termos:
-                    return await msg_busca.edit(embed=discord.Embed(
-                        description="❌ Não consegui resolver esse link do Spotify!! 😢🦇",
-                        color=SV_COR_ERRO))
-
-                tocando_antes = gp.playing or gp.paused
-                adicionadas   = 0
-
-                if len(termos) > 1:
-                    await msg_busca.edit(embed=discord.Embed(
-                        description=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇",
-                        color=SV_COR_AVISO))
-                    for termo in termos:
-                        if len(gp.queue) >= SV_FILA_MAX:
-                            break
-                        try:
-                            res = await self._search(termo)
-                            if res:
-                                gp.queue.append(Track(res[0], requester=ctx.author))
-                                adicionadas += 1
-                        except Exception:
-                            pass
-                    await msg_busca.edit(embed=discord.Embed(
-                        description=f"📋 Playlist do Spotify adicionada com **{adicionadas}** músicas!! 🦇",
-                        color=SV_COR_PRIMARIA))
-                else:
-                    try:
-                        res = await self._search(termos[0])
-                    except Exception as e:
-                        return await msg_busca.edit(embed=discord.Embed(
-                            description=f"❌ Erro ao buscar no YouTube!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
-                    if not res:
-                        return await msg_busca.edit(embed=discord.Embed(
-                            description="❌ Não encontrei essa música no YouTube!! 😢🦇", color=SV_COR_ERRO))
-                    track = Track(res[0], requester=ctx.author)
-                    gp.queue.append(track)
-                    adicionadas = 1
-                    if tocando_antes:
-                        await msg_busca.edit(embed=discord.Embed(
-                            description=f"📋 **{track.title}** adicionada à fila!! 🦇",
-                            color=SV_COR_PRIMARIA))
-                    else:
-                        await msg_busca.delete()
-
-                if not tocando_antes and gp.queue:
-                    await self._play_track(gp, gp.queue.pop(0))
-                return
-
-            # ── YouTube / texto / outros links ───────
-            msg_busca = None if silencioso else await ctx.send(embed=discord.Embed(
+            msg_busca = await ctx.send(embed=discord.Embed(
                 description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
 
             try:
                 resultados = await self._search(query)
             except Exception as e:
                 print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
-                if msg_busca:
-                    return await msg_busca.edit(embed=discord.Embed(
-                        description=f"❌ Erro ao buscar!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
-                return
+                return await msg_busca.edit(embed=discord.Embed(
+                    description=f"❌ Erro ao buscar!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
 
             if not resultados:
-                if msg_busca:
-                    return await msg_busca.edit(embed=discord.Embed(
-                        description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
-                return
+                return await msg_busca.edit(embed=discord.Embed(
+                    description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
 
             adicionadas   = 0
             tocando_antes = gp.playing or gp.paused
+
+            # Playlist ou múltiplos resultados de URL → adiciona todos
             is_url  = query.lower().startswith("http")
             is_list = is_url and len(resultados) > 1
 
@@ -7267,31 +7143,28 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                         break
                     gp.queue.append(Track(data, requester=ctx.author))
                     adicionadas += 1
-                if msg_busca:
-                    await msg_busca.edit(embed=discord.Embed(
-                        description=f"📋 Playlist adicionada com **{adicionadas}** músicas!! 🦇",
-                        color=SV_COR_PRIMARIA))
+                await msg_busca.edit(embed=discord.Embed(
+                    description=f"📋 Playlist adicionada com **{adicionadas}** músicas!! 🦇",
+                    color=SV_COR_PRIMARIA))
             else:
                 track = Track(resultados[0], requester=ctx.author)
                 if len(gp.queue) >= SV_FILA_MAX:
-                    if msg_busca:
-                        return await msg_busca.edit(embed=discord.Embed(
-                            description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
-                            color=SV_COR_ERRO))
-                    return
+                    return await msg_busca.edit(embed=discord.Embed(
+                        description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
+                        color=SV_COR_ERRO))
                 gp.queue.append(track)
                 adicionadas = 1
                 if tocando_antes:
-                    if msg_busca:
-                        await msg_busca.edit(embed=discord.Embed(
-                            description=f"📋 **{track.title}** adicionada à fila!! 🦇",
-                            color=SV_COR_PRIMARIA))
+                    await msg_busca.edit(embed=discord.Embed(
+                        description=f"📋 **{track.title}** adicionada à fila!! 🦇",
+                        color=SV_COR_PRIMARIA))
                 else:
-                    if msg_busca:
-                        await msg_busca.delete()
+                    await msg_busca.delete()
 
+            # Iniciar reprodução se não estava tocando
             if not tocando_antes and gp.queue:
-                await self._play_track(gp, gp.queue.pop(0))
+                next_track = gp.queue.pop(0)
+                await self._play_track(gp, next_track)
 
     @commands.command(name="pausar", aliases=["pause"])
     async def pausar(self, ctx: commands.Context):
@@ -7480,35 +7353,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Use v!sv pra ver esse menu")
         view = MusicControlView(self, ctx.guild.id)
         await ctx.send(embed=embed, view=view)
-
-    # ── 🔗 Auto-link: adiciona música sem v!play ──
-
-    _MUSIC_URL_RE = re.compile(
-        r"https?://"
-        r"(?:(?:www\.)?youtube\.com/watch\?[^\s]*v=[\w-]+|"
-        r"youtu\.be/[\w-]+|"
-        r"(?:www\.)?youtube\.com/playlist\?[^\s]*list=[\w-]+|"
-        r"open\.spotify\.com/(?:track|playlist|album)/[^\s]+|"
-        r"(?:www\.)?soundcloud\.com/[^\s]+)",
-        re.IGNORECASE
-    )
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """Detecta links de música no chat e adiciona à fila automaticamente."""
-        if message.author.bot or not message.guild:
-            return
-        if message.content.startswith("v!") or message.content.startswith("!"):
-            return
-        match = self._MUSIC_URL_RE.search(message.content)
-        if not match:
-            return
-        if not message.author.voice or not message.author.voice.channel:
-            return
-        ctx = await self.bot.get_context(message)
-        if not ctx:
-            return
-        await self._processar_musica(ctx, match.group(0), silencioso=True)
 
     # ── Auto-desconectar se canal vazio ──────────
 
