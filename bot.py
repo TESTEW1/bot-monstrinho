@@ -6706,7 +6706,7 @@ YTDL_OPTIONS = {
     "cookiefile":           _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": "web",
+            "player_client": ["ios", "web"],
         }
     },
 }
@@ -6909,7 +6909,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             "quiet": True,
             "no_warnings": True,
             "default_search": "auto",
-            "extractor_args": {"youtube": {"player_client": "web"}},
+            "extractor_args": {"youtube": {"player_client": ["ios", "web"]}},
             "cookiefile": _COOKIES_TMP_PATH,
         }
 
