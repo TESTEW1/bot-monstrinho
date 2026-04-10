@@ -6656,21 +6656,24 @@ _YOUTUBE_COOKIES = """\
 """
 
 def _criar_cookies_tmp() -> str:
-    """Usa variável de ambiente ou arquivo local para os cookies."""
-    # Tenta pegar dos env vars primeiro (Railway/VPS)
+    """Carrega cookies do arquivo local (copiado junto com o projeto no deploy)."""
+    # 1. arquivo cookies.txt na mesma pasta do bot.py (recomendado)
+    local = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "cookies.txt")
+    if _os.path.exists(local):
+        print(f"[Spotyvampy] Usando cookies de: {local}")
+        return local
+
+    # 2. variável de ambiente (fallback para quando o arquivo não está disponível)
     cookies_env = _os.getenv("YOUTUBE_COOKIES", "")
     if cookies_env:
+        print("[Spotyvampy] Usando cookies da variável de ambiente YOUTUBE_COOKIES")
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
         tmp.write(cookies_env)
         tmp.close()
         return tmp.name
 
-    # Fallback: arquivo local (desenvolvimento)
-    local = _os.path.join(_os.path.dirname(__file__), "cookies.txt")
-    if _os.path.exists(local):
-        return local
-
-    # Último recurso: cookies embutidos no código
+    # 3. último recurso: cookies embutidos no código (podem estar expirados)
+    print("[Spotyvampy] ⚠️ Usando cookies embutidos no código — podem estar expirados!")
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
     tmp.write(_YOUTUBE_COOKIES)
     tmp.close()
@@ -6686,17 +6689,9 @@ YTDL_OPTIONS = {
     "no_warnings":       False,
     "verbose":           True,
     "default_search":    "ytsearch",
-    # source_address força IPv4 — funciona em VPS, pode falhar em Railway
-    "source_address":    "0.0.0.0" if not _os.getenv("RAILWAY_ENVIRONMENT") else None,
     "extractor_retries": 3,
     "socket_timeout":    15,
     "cookiefile":        _COOKIES_TMP_PATH,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["tv_embedded", "ios", "web"],
-        }
-    },
-    "youtube_include_dash_manifest": False,
 }
 
 # Opções do FFmpeg para stream de áudio
