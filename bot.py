@@ -6656,24 +6656,7 @@ _YOUTUBE_COOKIES = """\
 """
 
 def _criar_cookies_tmp() -> str:
-    """Carrega cookies do arquivo local (copiado junto com o projeto no deploy)."""
-    # 1. arquivo cookies.txt na mesma pasta do bot.py (recomendado)
-    local = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "cookies.txt")
-    if _os.path.exists(local):
-        print(f"[Spotyvampy] Usando cookies de: {local}")
-        return local
-
-    # 2. variável de ambiente (fallback para quando o arquivo não está disponível)
-    cookies_env = _os.getenv("YOUTUBE_COOKIES", "")
-    if cookies_env:
-        print("[Spotyvampy] Usando cookies da variável de ambiente YOUTUBE_COOKIES")
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
-        tmp.write(cookies_env)
-        tmp.close()
-        return tmp.name
-
-    # 3. último recurso: cookies embutidos no código (podem estar expirados)
-    print("[Spotyvampy] ⚠️ Usando cookies embutidos no código — podem estar expirados!")
+    """Escreve os cookies em um arquivo temporário e retorna o caminho."""
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
     tmp.write(_YOUTUBE_COOKIES)
     tmp.close()
@@ -6683,18 +6666,19 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":               "bestaudio/best",  # Pega o melhor formato de áudio disponível
-    "noplaylist":           True,              # Impede tocar playlists inteiras, só uma música por vez
-    "nocheckcertificate":   True,              # Ignora erros de certificado SSL
-    "ignoreerrors":         False,             # Interrompe se ocorrer erro ao baixar informações
-    "logtostderr":          False,             # Não mostra logs no terminal
-    "quiet":                True,              # Modo silencioso
-    "no_warnings":          True,              # Oculta avisos do yt_dlp
-    "default_search":       "auto",            # Pesquisa no YouTube se não for link
-    "cookiefile":           _COOKIES_TMP_PATH,
+    "format":            "bestaudio/best",
+    "noplaylist":        False,
+    "quiet":             False,
+    "no_warnings":       False,
+    "verbose":           True,
+    "default_search":    "ytsearch",
+    "source_address":    "0.0.0.0",
+    "extractor_retries": 3,
+    "socket_timeout":    15,
+    "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": "web",            # Age como um player de música
+            "player_client": ["tv_embedded", "ios", "web"],
         }
     },
 }
@@ -6702,7 +6686,7 @@ YTDL_OPTIONS = {
 # Opções do FFmpeg para stream de áudio
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options":        '-vn -filter:a "volume=0.25"',
+    "options":        "-vn -filter:a volume=0.5",
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
@@ -6717,13 +6701,11 @@ class Track:
     def __init__(self, data: dict, requester=None):
         self.title     = data.get("title",    "Desconhecido")
         self.url       = data.get("webpage_url", data.get("url", ""))
+        self.stream    = data.get("url", "")          # URL do stream de áudio
         self.duration  = data.get("duration",  0)     # em segundos
         self.thumbnail = data.get("thumbnail", None)
         self.uploader  = data.get("uploader",  data.get("channel", "Desconhecido"))
         self.requester = requester
-        # Guarda a URL de stream se vier fresca (playlist já extraída),
-        # mas ela pode expirar — _play_track re-extrai se necessário.
-        self._stream_url = data.get("url", "")
 
     def fmt_duration(self) -> str:
         s = int(self.duration or 0)
@@ -6731,11 +6713,10 @@ class Track:
         h, m = divmod(m, 60)
         return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
-    def make_source(self, stream_url: str, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
-        """Cria a fonte de áudio a partir de uma URL de stream fresca."""
+    def make_source(self, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
         opts = dict(FFMPEG_OPTIONS)
         opts["options"] = f"-vn -filter:a volume={volume}"
-        raw = discord.FFmpegPCMAudio(stream_url, **opts)
+        raw = discord.FFmpegPCMAudio(self.stream, **opts)
         return discord.PCMVolumeTransformer(raw, volume=volume)
 
 
@@ -6927,22 +6908,17 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         """Busca/extrai info de áudio via yt-dlp em thread separada."""
         loop = asyncio.get_event_loop()
         is_url = query.lower().startswith("http://") or query.lower().startswith("https://")
-        # Limpa parâmetros de tracking do YouTube (?si=, &pp=, etc) que podem causar erro
-        if is_url:
-            import re as _re
-            search_q = _re.sub(r"[?&](si|pp|feature|ab_channel)=[^&]*", "", query).rstrip("?&")
-        else:
-            search_q = f"ytsearch5:{query}"
+        search_q = query if is_url else f"ytsearch5:{query}"
 
         opts = dict(YTDL_OPTIONS)
         opts["noplaylist"] = False
-        opts["ignoreerrors"] = False  # na busca queremos ver o erro real
 
         def _extract():
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(search_q, download=False)
                 if not info:
                     return []
+                # playlist ou resultado de busca
                 if "entries" in info:
                     return [e for e in info["entries"] if e]
                 return [info]
@@ -7014,54 +6990,12 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             except Exception:
                 pass
 
-    async def _get_fresh_stream(self, track: Track) -> str:
-        """Re-extrai a URL de stream fresca para a track (URLs expiram em ~6h)."""
-        loop = asyncio.get_event_loop()
-        base_opts = dict(YTDL_OPTIONS)
-        base_opts["noplaylist"] = True
-
-        def _extract():
-            with yt_dlp.YoutubeDL(base_opts) as ydl:
-                info = ydl.extract_info(track.url, download=False)
-                if info and "entries" in info:
-                    info = info["entries"][0]
-                return info.get("url", "") if info else ""
-
-        return await loop.run_in_executor(None, _extract)
-
     async def _play_track(self, gp: GuildPlayer, track: Track):
         """Inicia a reprodução de uma track no VoiceClient."""
         if not gp.connected:
             return
         gp.current = track
-
-        # Sempre busca URL de stream fresca para evitar expiração
-        try:
-            stream_url = await self._get_fresh_stream(track)
-        except Exception as e:
-            print(f"[Spotyvampy] Erro ao obter stream de '{track.title}': {e}")
-            if gp.text_channel:
-                try:
-                    await gp.text_channel.send(embed=discord.Embed(
-                        description=f"❌ Não consegui carregar **{track.title}**!! Pulando... 🦇\n`{e}`",
-                        color=SV_COR_ERRO))
-                except Exception:
-                    pass
-            self._play_next(gp.vc.guild.id)
-            return
-
-        if not stream_url:
-            if gp.text_channel:
-                try:
-                    await gp.text_channel.send(embed=discord.Embed(
-                        description=f"❌ Stream indisponível para **{track.title}**!! Pulando... 🦇",
-                        color=SV_COR_ERRO))
-                except Exception:
-                    pass
-            self._play_next(gp.vc.guild.id)
-            return
-
-        source = track.make_source(stream_url, gp.volume)
+        source = track.make_source(gp.volume)
         after_cb = lambda e: self._play_next(gp.vc.guild.id)
         gp.vc.play(source, after=after_cb)
         # Envia embed de "tocando agora"
