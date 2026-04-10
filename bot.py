@@ -6680,7 +6680,7 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio/best",
+    "format":            "bestaudio*/best",
     "noplaylist":        False,
     "quiet":             True,
     "no_warnings":       True,
@@ -6938,14 +6938,25 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         opts["ignoreerrors"] = False  # na busca queremos ver o erro real
 
         def _extract():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(search_q, download=False)
-                if not info:
-                    return []
-                # playlist ou resultado de busca
-                if "entries" in info:
-                    return [e for e in info["entries"] if e]
-                return [info]
+            # Tenta com o formato configurado primeiro
+            for fmt in ["bestaudio*/best", "bestaudio/best", "best"]:
+                try:
+                    attempt_opts = dict(opts)
+                    attempt_opts["format"] = fmt
+                    with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                        info = ydl.extract_info(search_q, download=False)
+                        if not info:
+                            continue
+                        if "entries" in info:
+                            entries = [e for e in info["entries"] if e]
+                            if entries:
+                                return entries
+                            continue
+                        return [info]
+                except Exception as e:
+                    last_err = e
+                    continue
+            raise last_err
 
         return await loop.run_in_executor(None, _extract)
 
@@ -7017,15 +7028,23 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     async def _get_fresh_stream(self, track: Track) -> str:
         """Re-extrai a URL de stream fresca para a track (URLs expiram em ~6h)."""
         loop = asyncio.get_event_loop()
-        opts = dict(YTDL_OPTIONS)
-        opts["noplaylist"] = True
+        base_opts = dict(YTDL_OPTIONS)
+        base_opts["noplaylist"] = True
 
         def _extract():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(track.url, download=False)
-                if info and "entries" in info:
-                    info = info["entries"][0]
-                return info.get("url", "") if info else ""
+            for fmt in ["bestaudio*/best", "bestaudio/best", "best"]:
+                try:
+                    opts = dict(base_opts)
+                    opts["format"] = fmt
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(track.url, download=False)
+                        if info and "entries" in info:
+                            info = info["entries"][0]
+                        if info and info.get("url"):
+                            return info["url"]
+                except Exception:
+                    continue
+            return ""
 
         return await loop.run_in_executor(None, _extract)
 
