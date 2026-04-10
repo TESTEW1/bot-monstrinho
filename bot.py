@@ -5209,6 +5209,19 @@ class CidadeDormeJogo:
                     await m.edit(mute=True)
                 except Exception:
                     pass
+        # Avisa no chat sobre o estado do mic
+        if self.text_ch:
+            try:
+                if mudo:
+                    await self.text_ch.send(
+                        "🔇 **Microfones desativados!!** — Todos estão sem mic agora. 🌙🦇"
+                    )
+                else:
+                    await self.text_ch.send(
+                        "🎙️ **Microfones liberados!!** — Todos podem falar agora. ☀️🦇"
+                    )
+            except Exception:
+                pass
 
     async def mutar_exceto(self, uid_acordado: int):
         """Muta todos, mas desmuta o uid_acordado (para ações de noite)."""
@@ -5217,6 +5230,14 @@ class CidadeDormeJogo:
         if m and m.voice and m.voice.channel == self.voice_ch:
             try:
                 await m.edit(mute=False)
+            except Exception:
+                pass
+        # Avisa no chat (sem revelar quem ou o papel)
+        if self.text_ch:
+            try:
+                await self.text_ch.send(
+                    "🌙 **Alguém foi acordado na escuridão...** 👁️ *A cidade continua dormindo...* 🤫🦇"
+                )
             except Exception:
                 pass
 
@@ -5314,8 +5335,9 @@ class CidadeInscricaoView(discord.ui.View):
 
     def __init__(self, jogo: CidadeDormeJogo, inscritos: set[int]):
         super().__init__(timeout=60)
-        self.jogo     = jogo
+        self.jogo      = jogo
         self.inscritos = inscritos  # referência mutável
+        self.forcar_inicio = False  # sinaliza "Iniciar Agora"
 
     @discord.ui.button(label="✅ Sim, vou jogar!", style=discord.ButtonStyle.success, emoji="✋")
     async def btn_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -5332,6 +5354,23 @@ class CidadeInscricaoView(discord.ui.View):
     async def btn_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.inscritos.discard(interaction.user.id)
         await interaction.response.send_message("Ok!! Quem sabe na próxima!! 🦇", ephemeral=True)
+
+    @discord.ui.button(label="⚡ Iniciar Agora!", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_iniciar_agora(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Apenas donos autorizados podem forçar início
+        if interaction.user.id not in DONOS_AUTORIZADOS:
+            await interaction.response.send_message(
+                "❌ Só os donos podem forçar o início!! 🦇", ephemeral=True)
+            return
+        if len(self.inscritos) < 4:
+            await interaction.response.send_message(
+                f"❌ Precisa de pelo menos 4 jogadores!! Tem apenas **{len(self.inscritos)}** inscrito(s). 🦇",
+                ephemeral=True)
+            return
+        await interaction.response.send_message(
+            "⚡ Iniciando agora!! 🦇", ephemeral=True)
+        self.forcar_inicio = True
+        self.stop()
 
 
 class CidadeVotoDiaView(discord.ui.View):
@@ -5375,14 +5414,35 @@ class CidadeNarradorControlView(discord.ui.View):
         super().__init__(timeout=None)
         self.jogo = jogo
 
+    # ── Instrução: toda ação do narrador é anunciada no chat ──────────
+    # ROTEIRO DO NARRADOR:
+    # 1. Clique [🌙 Iniciar Noite] → todos são mutados, diga "A cidade dorme..."
+    # 2. Clique [🔪 Acordar Assassino] → só o assassino pode falar; pergunte a vítima no PV
+    # 3. Clique [😇 Acordar Anjo] → só o anjo pode falar; pergunte quem quer salvar no PV
+    # 4. Clique [🔎 Acordar Detetive] → só o detetive pode falar; responda se é assassino no PV
+    # 5. Clique [☀️ Iniciar Dia] → todos desmutados; narre o que aconteceu na noite
+    # 6. Aguarde a votação; anuncie o eliminado e revele o papel
+    # 7. Repita do passo 1 até o fim do jogo
+    # ─────────────────────────────────────────────────────────────────
+
     @discord.ui.button(label="🌙 Iniciar Noite (mutar todos)", style=discord.ButtonStyle.danger)
     async def btn_noite(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.jogo.mutar_todos(True)
+        await self.jogo.text_ch.send(embed=discord.Embed(
+            title="🌙 A Cidade Adormece...",
+            description="O narrador iniciou a **NOITE**!! Todos os microfones foram desativados!! 🔇🦇\n\n*Fiquem quietos... a escuridão age agora...* 🤫",
+            color=0x1a1a2e, timestamp=datetime.utcnow()
+        ))
         await interaction.response.send_message("🌙 Todos mutados! A noite começou!!", ephemeral=True)
 
     @discord.ui.button(label="☀️ Iniciar Dia (desmutar todos)", style=discord.ButtonStyle.success)
     async def btn_dia(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.jogo.mutar_todos(False)
+        await self.jogo.text_ch.send(embed=discord.Embed(
+            title="☀️ A Cidade Desperta!",
+            description="O narrador iniciou o **DIA**!! Microfones liberados!! 🎙️🦇\n\nDiscutam entre si e descubram quem é o assassino!! 🕵️",
+            color=0xf39c12, timestamp=datetime.utcnow()
+        ))
         await interaction.response.send_message("☀️ Todos desmutados! O dia começou!!", ephemeral=True)
 
     @discord.ui.button(label="🔪 Acordar Assassino", style=discord.ButtonStyle.danger, row=1)
@@ -5393,8 +5453,11 @@ class CidadeNarradorControlView(discord.ui.View):
             return
         for uid in assassinos:
             await self.jogo.mutar_exceto(uid)
+        await self.jogo.text_ch.send(
+            "🔪 *Uma sombra se move na escuridão...* 👁️ *Alguém foi acordado...* 🌙🦇"
+        )
         await interaction.response.send_message(
-            f"🔪 Assassino(s) acordado(s): {', '.join(f'<@{u}>' for u in assassinos)}", ephemeral=True)
+            f"🔪 Assassino(s) acordado(s): {', '.join(f'<@{{u}}>' for u in assassinos)}\n\n📌 **Instrução:** Pergunte no PV do assassino quem ele quer eliminar. Quando terminar, clique em [☀️ Iniciar Dia] ou [😇 Acordar Anjo].", ephemeral=True)
 
     @discord.ui.button(label="😇 Acordar Anjo", style=discord.ButtonStyle.success, row=1)
     async def btn_acordar_anjo(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -5404,8 +5467,11 @@ class CidadeNarradorControlView(discord.ui.View):
             return
         for uid in anjos:
             await self.jogo.mutar_exceto(uid)
+        await self.jogo.text_ch.send(
+            "😇 *Uma luz suave brilha na noite...* ✨ *Alguém foi acordado...* 🌙🦇"
+        )
         await interaction.response.send_message(
-            f"😇 Anjo acordado: <@{anjos[0]}>", ephemeral=True)
+            f"😇 Anjo acordado: <@{anjos[0]}>\n\n📌 **Instrução:** Pergunte no PV do anjo quem ele quer salvar. Quando terminar, clique em [🔎 Acordar Detetive] ou [☀️ Iniciar Dia].", ephemeral=True)
 
     @discord.ui.button(label="🔎 Acordar Detetive", style=discord.ButtonStyle.primary, row=1)
     async def btn_acordar_detetive(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -5415,8 +5481,11 @@ class CidadeNarradorControlView(discord.ui.View):
             return
         for uid in dets:
             await self.jogo.mutar_exceto(uid)
+        await self.jogo.text_ch.send(
+            "🔎 *Olhos atentos farejam a escuridão...* 🕵️ *Alguém foi acordado...* 🌙🦇"
+        )
         await interaction.response.send_message(
-            f"🔎 Detetive acordado: <@{dets[0]}>", ephemeral=True)
+            f"🔎 Detetive acordado: <@{dets[0]}>\n\n📌 **Instrução:** Pergunte no PV do detetive quem ele quer investigar. Responda se essa pessoa é ou não o assassino. Quando terminar, clique em [☀️ Iniciar Dia].", ephemeral=True)
 
     @discord.ui.button(label="🛑 Encerrar Jogo", style=discord.ButtonStyle.secondary, row=2)
     async def btn_encerrar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -5446,7 +5515,7 @@ async def _iniciar_inscricao(channel, jogo: CidadeDormeJogo, iniciador: discord.
         title="🌙 A Cidade Dorme — Inscrições Abertas!!",
         description=(
             f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme**!! 🦇\n\n"
-            "Clique em **✅ Sim, vou jogar!** pra entrar na partida!!\n"
+            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
             "Vocês têm **60 segundos** pra se inscrever!!\n\n"
             "**Personagens:**\n"
             "🔪 Assassino — mata uma pessoa por noite\n"
@@ -5461,7 +5530,37 @@ async def _iniciar_inscricao(channel, jogo: CidadeDormeJogo, iniciador: discord.
 
     msg = await channel.send(embed=embed, view=view)
 
-    await asyncio.sleep(60)
+    # Envia DM pra todos os membros do servidor avisando da partida
+    embed_dm_aviso = discord.Embed(
+        title="🌙 A Cidade Dorme — Inscrições Abertas!!",
+        description=(
+            f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme** "
+            f"no servidor **{channel.guild.name}**!! 🦇\n\n"
+            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
+            "Vocês têm **60 segundos** pra se inscrever!!\n\n"
+            f"👉 Vá até o canal {channel.mention} e clique no botão!!"
+        ),
+        color=0x9b59b6,
+        timestamp=datetime.utcnow()
+    )
+    embed_dm_aviso.set_footer(text="🦇 Vampy Games • A Cidade Dorme")
+    for membro in channel.guild.members:
+        if membro.bot:
+            continue
+        if membro.id == iniciador.id:
+            continue
+        if membro.id == jogo.narrador:
+            continue
+        try:
+            await membro.send(embed=embed_dm_aviso)
+        except Exception:
+            pass  # PV fechado — ignora silenciosamente
+
+    # Aguarda 60s ou "Iniciar Agora"
+    waited = 0
+    while waited < 60 and not view.forcar_inicio:
+        await asyncio.sleep(1)
+        waited += 1
     view.stop()
 
     # Desabilita botões
@@ -5651,12 +5750,14 @@ async def _loop_cidade_dorme(jogo: CidadeDormeJogo):
                         if nome.lower() == resp.content.lower() and uid != ass_uid:
                             jogo.vitima_noite = uid
                             await ass_m.send(f"✅ Você escolheu eliminar **{nome}**!! 🔪")
+                            await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
                             break
                 except asyncio.TimeoutError:
                     # Escolhe aleatoriamente
                     jogo.vitima_noite = random.choice(alvos_possiveis)
                     nome_escolhido = nomes_vivos.get(jogo.vitima_noite, "???")
                     await ass_m.send(f"⏰ Tempo esgotado! A Vampy escolheu **{nome_escolhido}** pra você!! 🔪")
+                    await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
             except Exception:
                 if alvos_possiveis:
                     jogo.vitima_noite = random.choice(alvos_possiveis)
@@ -5689,10 +5790,12 @@ async def _loop_cidade_dorme(jogo: CidadeDormeJogo):
                         if nome.lower() == resp.content.lower():
                             jogo.salvo_noite = uid
                             await anjo_m.send(f"✅ Você escolheu proteger **{nome}**!! 😇")
+                            await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
                             break
                 except asyncio.TimeoutError:
                     jogo.salvo_noite = anjo_uid
                     await anjo_m.send("⏰ Tempo esgotado! A Vampy te escolheu pra você salvar a si mesmo!! 😇")
+                    await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
             except Exception:
                 pass
 
@@ -5733,9 +5836,11 @@ async def _loop_cidade_dorme(jogo: CidadeDormeJogo):
                                 ),
                                 color=0xff0000 if eh_assassino else 0x00ff99
                             ))
+                            await ch.send("🔎 *O detetive farejou a escuridão e obteve uma pista...* 🕵️🦇")
                             break
                 except asyncio.TimeoutError:
                     await det_m.send("⏰ Tempo esgotado! Nenhuma investigação esta noite.")
+                    await ch.send("🔎 *O detetive não conseguiu investigar esta noite...* 😴🦇")
             except Exception:
                 pass
 
