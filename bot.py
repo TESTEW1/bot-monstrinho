@@ -6706,7 +6706,7 @@ YTDL_OPTIONS = {
     "cookiefile":           _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "web"],
+            "player_client": "web",
         }
     },
 }
@@ -6900,23 +6900,28 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         self.canais_texto = {}
         """ CANAL DE TEXTO POR SERVIDOR — para mandar mensagens da fila """
 
+        # Configurações do yt_dlp, que é usado para pegar o áudio do YouTube
         self.yt_dl_options = {
-            "format": "bestaudio/best",
-            "noplaylist": False,   # PERMITE PLAYLISTS INTEIRAS DO YOUTUBE E SPOTIFY
-            "nocheckcertificate": True,
-            "ignoreerrors": False,
-            "logtostderr": False,
-            "quiet": True,
-            "no_warnings": True,
-            "default_search": "auto",
-            "extractor_args": {"youtube": {"player_client": ["ios", "web"]}},
-            "cookiefile": _COOKIES_TMP_PATH,
+            "format": "bestaudio/best",  # Pega o melhor formato de áudio disponível
+            "noplaylist": True,          # Impede tocar playlists inteiras, só uma música por vez
+            "nocheckcertificate": True,  # Ignora erros de certificado SSL (conexão insegura)
+            "ignoreerrors": False, #off  # Interrompe se ocorrer erro ao baixar informações
+            "logtostderr": False, #off   # Não mostra logs no terminal
+            "quiet": True,               # Modo silencioso (sem mostrar mensagens no terminal enquanto busca o áudio)
+            "no_warnings": True,         # Oculta avisos do yt_dlp
+            "default_search": "auto",    # Se o usuário não mandar link, o yt_dlp pesquisa no YouTube
+            "extractor_args": {"youtube": {"player_client": "web"}}  # Define o tipo de cliente usado pra extrair o áudio
+            #""" ISSO FAZ COM QUE O YT_DLP AJA COMO UM PLAYER DE MUSICA """
         }
 
+        # Cria o objeto responsável por lidar com downloads e extrações do YouTube
         self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
 
+        # Configurações do FFmpeg, que processa o áudio
         self.ffmpeg_options = {
+            # Antes de tocar, tenta reconectar automaticamente se o stream cair
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            # Remove o vídeo (-vn) e deixa o volume em 25% do original
             'options': '-vn -filter:a "volume=0.25"'
         }
 
@@ -7654,29 +7659,28 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """Lógica idêntica ao main (2).py + auto-link de URLs no chat."""
 
         # Ignora mensagens enviadas por outros bots (incluindo ele mesmo)
         if message.author.bot:
             return
-
-        # ── Comando !play ────────────────────────────────────────────────────
+        
+        # --- Comando !play ---
         if message.content.startswith("!play"):
             # Verifica se o bot já está conectado em um canal de voz neste servidor
             """ Verifica se o servidor já está na lista e se o bot ainda está conectado nela. """
             if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
-
+                
                 # Se já estiver conectado, ela vai reaproveitar essa conexão
                 voice_client = self.voz_clients[message.guild.id]
             else:
                 # Se o autor da mensagem não for bot e estiver em um canal de voz
-                """ Se o autor não for um bot, estiver em um canal de voz e o canal
+                """ Se o autor não for um bot, estiver em um canal de voz e o canal 
                 existir. """
                 if not message.author.bot and message.author.voice and message.author.voice.channel:
-
+                    
                     # Conecta o bot ao canal de voz do autor
                     voice_client = await message.author.voice.channel.connect()
-                    """ O AWAIT SERVE PRA ELE ESPERAR ESSA PARTE TERMINAR ANTES DE CONTINUAR,
+                    """ O AWAIT SERVE PRA ELE ESPERAR ESSA PARTE TERMINAR ANTES DE CONTINUAR, 
                     MAS SEM TRAVAR O BOT."""
 
                     # Guarda a conexão de voz desse servidor no dicionário
@@ -7686,20 +7690,46 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     await message.channel.send("Você precisa estar em um canal de voz!")
                     return
 
-            # Guarda o canal de texto para mandar mensagens da fila
-            self.canais_texto[message.guild.id] = message.channel
-
             # Pega o link da música (o segundo elemento depois do "!play")
-            url = message.content.split()[1]
-            print(f"URL: {url}")
+            url = message.content.split()[1] 
+            print(f"URL: {url}")   
 
-            # Delega para o helper que suporta música única E playlist
-            await self._adicionar_na_fila(url, message.guild.id, message.channel, voice_client)
-            return
+            # Cria um loop assíncrono para rodar o yt_dlp sem travar o bot
+            loop = asyncio.get_event_loop()
+            """ PEGO O LOOP QUE CONTROLA AS FUNÇÕES ASSÍNCRONAS, PARA RODAR TAREDAS EM SEGUNDO PLANO
+            SEM TRAVAR """
 
-        # ── Comando !stop ────────────────────────────────────────────────────
+            # Extrai informações do vídeo (como título e URL do áudio)
+            data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
+            """ RUN_IN_EXECUTOR FAZ RODAR EM SEGUNDO PLANO """
+            """ LAMBDA É UMA FUNÇÃO ANÔNIMA SERVE PARA COLOCAR UMA FUNÇÃO SEM NOME QUE RODA 
+            EM UMA UNICA LINHA """
+
+            # Se não conseguir obter informações, avisa o usuário
+            """ Se não tiver data ou url não estiver em data """
+            if not data or "url" not in data:
+                await message.channel.send("Erro ao obter as informações da música.")
+                return
+            
+            # Pega a URL direta do áudio para o FFmpeg reproduzir
+            song = data['url'] 
+
+            # Cria o player de áudio com as opções definidas
+            player = discord.FFmpegOpusAudio(song, **self.ffmpeg_options)
+
+            # Se já estiver tocando algo, para antes de iniciar a nova música
+            if voice_client.is_playing():
+                voice_client.stop()
+
+            # Começa a tocar o áudio
+            voice_client.play(player)
+
+            # Envia no chat o nome da música que está tocando
+            await message.channel.send(f"Tocando agora: {data.get('title', 'Música desconhecida')}")
+
+        # --- Comando !stop ---
         if message.content.startswith("!stop"):
-
+            
             # Verifica se o bot está conectado neste servidor
             """ Se o ID do servidor estiver em voz_clients,
             no caso conectado ao servidor """
@@ -7711,36 +7741,9 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
                 # Remove a conexão da lista de conexões
                 del self.voz_clients[message.guild.id]
-                """ SERVE PARA NÃO FICAR GUARDANDO CONEXÕES ANTIGAS E ENCHER A LISTA """
-
+                """ SERVE PARA NÃO FICA QUARDANDO CONEXÕES ANTIGAS E ENCHER A LISTA """
+                
                 await message.channel.send("Bot desconectado do canal de voz.")
-            return
-
-        # ── Auto-link: qualquer link de música colado no chat vai direto pra fila ──
-        if not message.guild:
-            return
-        if message.content.startswith("v!") or message.content.startswith("!"):
-            return
-        match = self._MUSIC_URL_RE.search(message.content)
-        if not match:
-            return
-
-        # O usuário precisa estar em um canal de voz
-        if not message.author.voice or not message.author.voice.channel:
-            return
-
-        # Se o bot ainda não estiver conectado neste servidor, entra no canal do usuário
-        if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
-            voice_client = self.voz_clients[message.guild.id]
-        else:
-            voice_client = await message.author.voice.channel.connect()
-            self.voz_clients[message.guild.id] = voice_client
-
-        # Guarda o canal de texto onde o link foi mandado
-        self.canais_texto[message.guild.id] = message.channel
-
-        # Adiciona na fila (suporta música única E playlist)
-        await self._adicionar_na_fila(match.group(0), message.guild.id, message.channel, voice_client)
 
     # ── Auto-desconectar se canal vazio ──────────
 
