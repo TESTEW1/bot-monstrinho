@@ -6894,9 +6894,15 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         """ DICIONÁRIO QUE GUARDA AS CONEXÕES DO BOT NOS SERVIDORES 
         CASO ELE ESTEJA EM 2 SERVIDORES ELE IRÁ SALVAR A CONEXÃO NOS 2 """
 
+        self.filas = {}
+        """ FILA DE MÚSICAS POR SERVIDOR — guild_id → lista de (stream_url, título) """
+
+        self.canais_texto = {}
+        """ CANAL DE TEXTO POR SERVIDOR — para mandar mensagens da fila """
+
         self.yt_dl_options = {
             "format": "bestaudio/best",
-            "noplaylist": True,
+            "noplaylist": False,   # PERMITE PLAYLISTS INTEIRAS DO YOUTUBE E SPOTIFY
             "nocheckcertificate": True,
             "ignoreerrors": False,
             "logtostderr": False,
@@ -6913,6 +6919,134 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
             'options': '-vn -filter:a "volume=0.25"'
         }
+
+    # ── Helper: toca próxima da fila ─────────────
+    async def _tocar_proximo(self, guild_id: int):
+        """Pega a próxima música da fila e toca. Chama a si mesmo via after= quando terminar."""
+        voice_client = self.voz_clients.get(guild_id)
+        text_channel  = self.canais_texto.get(guild_id)
+
+        if not voice_client or not voice_client.is_connected():
+            return
+
+        fila = self.filas.get(guild_id, [])
+        if not fila:
+            if text_channel:
+                await text_channel.send("✅ Fila finalizada! 🦇")
+            return
+
+        # Pega a próxima música da fila
+        stream_url, titulo = fila.pop(0)
+
+        # Cria o player e toca
+        player = discord.FFmpegOpusAudio(stream_url, **self.ffmpeg_options)
+
+        def after_play(error):
+            """ Depois que a música terminar, chama o próximo da fila """
+            asyncio.run_coroutine_threadsafe(
+                self._tocar_proximo(guild_id),
+                self.bot.loop
+            )
+
+        voice_client.play(player, after=after_play)
+
+        if text_channel:
+            restantes = len(self.filas.get(guild_id, []))
+            await text_channel.send(
+                f"🎵 Tocando agora: **{titulo}**"
+                + (f" | ⏭️ {restantes} na fila" if restantes else "")
+            )
+
+    # ── Helper: adiciona link/playlist à fila ─────
+    async def _adicionar_na_fila(self, url: str, guild_id: int, text_channel, voice_client):
+        """Extrai info (suporta música única, playlist do YouTube e Spotify) e adiciona tudo na fila."""
+
+        # ── É um link do SPOTIFY (track, playlist ou album) ─────────────────
+        if "open.spotify.com" in url:
+            if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
+                await text_channel.send(
+                    "❌ Spotify não configurado!! Configure `SPOTIFY_CLIENT_ID` e "
+                    "`SPOTIFY_CLIENT_SECRET` nas variáveis de ambiente. 🦇"
+                )
+                return
+
+            msg = await text_channel.send("🎵 Resolvendo link do Spotify... 🦇")
+            termos = await self._resolve_spotify(url)
+
+            if not termos:
+                await msg.edit(content="❌ Não consegui resolver esse link do Spotify!! 😢🦇")
+                return
+
+            if len(termos) > 1:
+                await msg.edit(content=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇")
+
+            adicionadas = 0
+            for termo in termos:
+                try:
+                    loop = asyncio.get_event_loop()
+                    opts = dict(self.yt_dl_options)
+                    opts["noplaylist"] = True
+                    opts["default_search"] = "ytsearch"
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        res = await loop.run_in_executor(None, lambda t=termo: ydl.extract_info(f"ytsearch:{t}", download=False))
+                    entries = res.get("entries", [res]) if res else []
+                    if entries and entries[0] and "url" in entries[0]:
+                        e = entries[0]
+                        self.filas.setdefault(guild_id, []).append(
+                            (e["url"], e.get("title", termo))
+                        )
+                        adicionadas += 1
+                except Exception:
+                    pass
+
+            await msg.edit(content=f"📋 **{adicionadas}** músicas do Spotify adicionadas na fila! 🦇")
+
+            if not voice_client.is_playing():
+                await self._tocar_proximo(guild_id)
+            return
+
+        # ── YouTube / outros links / busca por texto ─────────────────────────
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
+
+        if not data:
+            await text_channel.send("❌ Erro ao obter as informações da música.")
+            return
+
+        # ── É uma PLAYLIST do YouTube ────────────────
+        if "entries" in data:
+            entries = [e for e in data["entries"] if e and "url" in e]
+            if not entries:
+                await text_channel.send("❌ Playlist vazia ou sem vídeos acessíveis.")
+                return
+
+            for entry in entries:
+                self.filas.setdefault(guild_id, []).append(
+                    (entry["url"], entry.get("title", "Desconhecido"))
+                )
+
+            await text_channel.send(
+                f"📋 Playlist **{data.get('title', 'sem título')}** adicionada! "
+                f"**{len(entries)}** músicas na fila. 🦇"
+            )
+
+        # ── É uma MÚSICA ÚNICA ───────────────────────
+        else:
+            if "url" not in data:
+                await text_channel.send("❌ Erro ao obter as informações da música.")
+                return
+            self.filas.setdefault(guild_id, []).append(
+                (data["url"], data.get("title", "Desconhecido"))
+            )
+            fila_pos = len(self.filas[guild_id])
+            if fila_pos > 1 or voice_client.is_playing():
+                await text_channel.send(
+                    f"➕ **{data.get('title', 'Música')}** adicionada na posição {fila_pos} da fila! 🦇"
+                )
+
+        # Se não estiver tocando nada, começa
+        if not voice_client.is_playing():
+            await self._tocar_proximo(guild_id)
 
     # ── Helpers ──────────────────────────────────
 
@@ -7552,42 +7686,15 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     await message.channel.send("Você precisa estar em um canal de voz!")
                     return
 
+            # Guarda o canal de texto para mandar mensagens da fila
+            self.canais_texto[message.guild.id] = message.channel
+
             # Pega o link da música (o segundo elemento depois do "!play")
             url = message.content.split()[1]
             print(f"URL: {url}")
 
-            # Cria um loop assíncrono para rodar o yt_dlp sem travar o bot
-            loop = asyncio.get_event_loop()
-            """ PEGO O LOOP QUE CONTROLA AS FUNÇÕES ASSÍNCRONAS, PARA RODAR TAREFAS EM SEGUNDO PLANO
-            SEM TRAVAR """
-
-            # Extrai informações do vídeo (como título e URL do áudio)
-            data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
-            """ RUN_IN_EXECUTOR FAZ RODAR EM SEGUNDO PLANO """
-            """ LAMBDA É UMA FUNÇÃO ANÔNIMA SERVE PARA COLOCAR UMA FUNÇÃO SEM NOME QUE RODA
-            EM UMA UNICA LINHA """
-
-            # Se não conseguir obter informações, avisa o usuário
-            """ Se não tiver data ou url não estiver em data """
-            if not data or "url" not in data:
-                await message.channel.send("Erro ao obter as informações da música.")
-                return
-
-            # Pega a URL direta do áudio para o FFmpeg reproduzir
-            song = data['url']
-
-            # Cria o player de áudio com as opções definidas
-            player = discord.FFmpegOpusAudio(song, **self.ffmpeg_options)
-
-            # Se já estiver tocando algo, para antes de iniciar a nova música
-            if voice_client.is_playing():
-                voice_client.stop()
-
-            # Começa a tocar o áudio
-            voice_client.play(player)
-
-            # Envia no chat o nome da música que está tocando
-            await message.channel.send(f"Tocando agora: {data.get('title', 'Música desconhecida')}")
+            # Delega para o helper que suporta música única E playlist
+            await self._adicionar_na_fila(url, message.guild.id, message.channel, voice_client)
             return
 
         # ── Comando !stop ────────────────────────────────────────────────────
@@ -7609,7 +7716,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 await message.channel.send("Bot desconectado do canal de voz.")
             return
 
-        # ── Auto-link: adiciona música sem v!play (URLs coladas no chat) ─────
+        # ── Auto-link: qualquer link de música colado no chat vai direto pra fila ──
         if not message.guild:
             return
         if message.content.startswith("v!") or message.content.startswith("!"):
@@ -7617,12 +7724,23 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         match = self._MUSIC_URL_RE.search(message.content)
         if not match:
             return
+
+        # O usuário precisa estar em um canal de voz
         if not message.author.voice or not message.author.voice.channel:
             return
-        ctx = await self.bot.get_context(message)
-        if not ctx:
-            return
-        await self._processar_musica(ctx, match.group(0), silencioso=True)
+
+        # Se o bot ainda não estiver conectado neste servidor, entra no canal do usuário
+        if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
+            voice_client = self.voz_clients[message.guild.id]
+        else:
+            voice_client = await message.author.voice.channel.connect()
+            self.voz_clients[message.guild.id] = voice_client
+
+        # Guarda o canal de texto onde o link foi mandado
+        self.canais_texto[message.guild.id] = message.channel
+
+        # Adiciona na fila (suporta música única E playlist)
+        await self._adicionar_na_fila(match.group(0), message.guild.id, message.channel, voice_client)
 
     # ── Auto-desconectar se canal vazio ──────────
 
