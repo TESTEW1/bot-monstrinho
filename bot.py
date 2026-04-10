@@ -8,7 +8,7 @@ from datetime import timedelta
 from datetime import datetime
 from collections import defaultdict, deque
 from dotenv import load_dotenv
-load_dotenv()  # lê o .env automaticamente
+load_dotenv()
 try:
     from deep_translator import GoogleTranslator
     from langdetect import detect as detectar_idioma
@@ -6619,8 +6619,6 @@ try:
 except ImportError:
     SPOTIPY_DISPONIVEL = False
 
-# Credenciais do Spotify — coloque no .env
-# Crie seu app em: https://developer.spotify.com/dashboard
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 
@@ -6697,18 +6695,20 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":               "bestaudio/best",  # Pega o melhor formato de áudio disponível
-    "noplaylist":           True,              # Impede tocar playlists inteiras, só uma música por vez
-    "nocheckcertificate":   True,              # Ignora erros de certificado SSL
-    "ignoreerrors":         False,             # Interrompe se ocorrer erro ao baixar informações
-    "logtostderr":          False,             # Não mostra logs no terminal
-    "quiet":                True,              # Modo silencioso
-    "no_warnings":          True,              # Oculta avisos do yt_dlp
-    "default_search":       "auto",            # Pesquisa no YouTube se não for link
-    "cookiefile":           _COOKIES_TMP_PATH,
+    "format":            "bestaudio/best",
+    "noplaylist":        False,            # False = aceita playlists
+    "quiet":             True,
+    "no_warnings":       True,
+    "verbose":           False,
+    "default_search":    "ytsearch",
+    "extractor_retries": 3,
+    "socket_timeout":    15,
+    "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": "web",            # Age como um player de música
+            # tv_embedded não exige autenticação nem PO token
+            "player_client": ["tv_embedded"],
+            "player_skip":   ["webpage"],
         }
     },
 }
@@ -6938,7 +6938,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     # ── Spotify → YouTube ────────────────────────
 
     def _spotify_client(self):
-        """Retorna cliente Spotify ou None se não configurado."""
         if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
             return None
         try:
@@ -6949,52 +6948,35 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         except Exception:
             return None
 
-    async def _resolve_spotify(self, url: str, requester=None) -> list[str]:
-        """
-        Recebe uma URL do Spotify e retorna uma lista de strings
-        'Artista - Título' para buscar no YouTube.
-        Suporta: track, playlist, album.
-        """
+    async def _resolve_spotify(self, url: str) -> list[str]:
+        """Spotify URL → lista de 'Artista - Título' para buscar no YouTube."""
         sp = self._spotify_client()
         if not sp:
             return []
-
         loop = asyncio.get_event_loop()
-
         def _fetch():
             termos = []
-            # Detecta tipo pela URL
             if "/track/" in url:
-                track_id = re.search(r"/track/([A-Za-z0-9]+)", url)
-                if not track_id:
-                    return termos
-                t = sp.track(track_id.group(1))
+                tid = re.search(r"/track/([A-Za-z0-9]+)", url)
+                if not tid: return termos
+                t = sp.track(tid.group(1))
                 artista = t["artists"][0]["name"] if t.get("artists") else ""
                 termos.append(f"{artista} - {t['name']}")
-
             elif "/playlist/" in url:
-                pl_id = re.search(r"/playlist/([A-Za-z0-9]+)", url)
-                if not pl_id:
-                    return termos
-                resultados = sp.playlist_items(pl_id.group(1), limit=SV_FILA_MAX)
-                for item in resultados.get("items", []):
+                pid = re.search(r"/playlist/([A-Za-z0-9]+)", url)
+                if not pid: return termos
+                for item in sp.playlist_items(pid.group(1), limit=SV_FILA_MAX).get("items", []):
                     t = item.get("track")
-                    if not t:
-                        continue
+                    if not t: continue
                     artista = t["artists"][0]["name"] if t.get("artists") else ""
                     termos.append(f"{artista} - {t['name']}")
-
             elif "/album/" in url:
-                al_id = re.search(r"/album/([A-Za-z0-9]+)", url)
-                if not al_id:
-                    return termos
-                resultados = sp.album_tracks(al_id.group(1), limit=SV_FILA_MAX)
-                for t in resultados.get("items", []):
+                aid = re.search(r"/album/([A-Za-z0-9]+)", url)
+                if not aid: return termos
+                for t in sp.album_tracks(aid.group(1), limit=SV_FILA_MAX).get("items", []):
                     artista = t["artists"][0]["name"] if t.get("artists") else ""
                     termos.append(f"{artista} - {t['name']}")
-
             return termos
-
         return await loop.run_in_executor(None, _fetch)
 
     # ── Busca assíncrona via yt-dlp ──────────────
@@ -7196,23 +7178,19 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             if not gp:
                 return
 
-            eh_spotify = "open.spotify.com" in query
-
-            # ── Spotify ──────────────────────────────────
-            if eh_spotify:
+            # ── Spotify ──────────────────────────────
+            if "open.spotify.com" in query:
                 if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
                     return await ctx.send(embed=discord.Embed(
                         description=(
                             "❌ Spotify não configurado!! 🦇\n"
-                            "Configure `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no `.env`\n"
-                            "Crie seu app em: https://developer.spotify.com/dashboard"
-                        ),
-                        color=SV_COR_ERRO))
+                            "Configure `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` nas variáveis de ambiente."
+                        ), color=SV_COR_ERRO))
 
                 msg_busca = await ctx.send(embed=discord.Embed(
                     description="🎵 Resolvendo link do Spotify... 🦇", color=SV_COR_AVISO))
 
-                termos = await self._resolve_spotify(query, requester=ctx.author)
+                termos = await self._resolve_spotify(query)
                 if not termos:
                     return await msg_busca.edit(embed=discord.Embed(
                         description="❌ Não consegui resolver esse link do Spotify!! 😢🦇",
@@ -7221,7 +7199,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 tocando_antes = gp.playing or gp.paused
                 adicionadas   = 0
 
-                # Playlist/álbum do Spotify
                 if len(termos) > 1:
                     await msg_busca.edit(embed=discord.Embed(
                         description=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇",
@@ -7230,9 +7207,9 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                         if len(gp.queue) >= SV_FILA_MAX:
                             break
                         try:
-                            resultados = await self._search(termo)
-                            if resultados:
-                                gp.queue.append(Track(resultados[0], requester=ctx.author))
+                            res = await self._search(termo)
+                            if res:
+                                gp.queue.append(Track(res[0], requester=ctx.author))
                                 adicionadas += 1
                         except Exception:
                             pass
@@ -7240,18 +7217,15 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                         description=f"📋 Playlist do Spotify adicionada com **{adicionadas}** músicas!! 🦇",
                         color=SV_COR_PRIMARIA))
                 else:
-                    # Música única do Spotify
                     try:
-                        resultados = await self._search(termos[0])
+                        res = await self._search(termos[0])
                     except Exception as e:
                         return await msg_busca.edit(embed=discord.Embed(
-                            description=f"❌ Erro ao buscar no YouTube!! 😢🦇\n`{e}`",
-                            color=SV_COR_ERRO))
-                    if not resultados:
+                            description=f"❌ Erro ao buscar no YouTube!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
+                    if not res:
                         return await msg_busca.edit(embed=discord.Embed(
-                            description="❌ Não encontrei essa música no YouTube!! 😢🦇",
-                            color=SV_COR_ERRO))
-                    track = Track(resultados[0], requester=ctx.author)
+                            description="❌ Não encontrei essa música no YouTube!! 😢🦇", color=SV_COR_ERRO))
+                    track = Track(res[0], requester=ctx.author)
                     gp.queue.append(track)
                     adicionadas = 1
                     if tocando_antes:
@@ -7262,16 +7236,12 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                         await msg_busca.delete()
 
                 if not tocando_antes and gp.queue:
-                    next_track = gp.queue.pop(0)
-                    await self._play_track(gp, next_track)
+                    await self._play_track(gp, gp.queue.pop(0))
                 return
 
-            # ── YouTube / texto / outros links ───────────
-            if not silencioso:
-                msg_busca = await ctx.send(embed=discord.Embed(
-                    description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
-            else:
-                msg_busca = None
+            # ── YouTube / texto / outros links ───────
+            msg_busca = None if silencioso else await ctx.send(embed=discord.Embed(
+                description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
 
             try:
                 resultados = await self._search(query)
@@ -7290,8 +7260,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
             adicionadas   = 0
             tocando_antes = gp.playing or gp.paused
-
-            # Playlist ou múltiplos resultados de URL → adiciona todos
             is_url  = query.lower().startswith("http")
             is_list = is_url and len(resultados) > 1
 
@@ -7324,10 +7292,8 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                     if msg_busca:
                         await msg_busca.delete()
 
-            # Iniciar reprodução se não estava tocando
             if not tocando_antes and gp.queue:
-                next_track = gp.queue.pop(0)
-                await self._play_track(gp, next_track)
+                await self._play_track(gp, gp.queue.pop(0))
 
     @commands.command(name="pausar", aliases=["pause"])
     async def pausar(self, ctx: commands.Context):
@@ -7510,12 +7476,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         embed.add_field(name="👋  Sair",        value="`v!sair` `v!dc`",             inline=True)
         embed.add_field(
             name="🎧 Fontes Suportadas",
-            value="YouTube • Spotify • SoundCloud • Bandcamp • Vimeo • Rádio Online",
-            inline=False
-        )
-        embed.add_field(
-            name="🔗 Auto-link",
-            value="Cole qualquer link de música no chat e eu adiciono à fila automaticamente!! 🦇",
+            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
             inline=False
         )
         embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Use v!sv pra ver esse menu")
@@ -7524,7 +7485,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     # ── 🔗 Auto-link: adiciona música sem v!play ──
 
-    # Padrão de URLs de música reconhecidas
     _MUSIC_URL_RE = re.compile(
         r"https?://"
         r"(?:(?:www\.)?youtube\.com/watch\?[^\s]*v=[\w-]+|"
@@ -7538,29 +7498,19 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Detecta links de música no chat e adiciona à fila automaticamente."""
-        # Ignora bots, mensagens sem guild, e mensagens que já são comandos v!
         if message.author.bot or not message.guild:
             return
         if message.content.startswith("v!") or message.content.startswith("!"):
             return
-
         match = self._MUSIC_URL_RE.search(message.content)
         if not match:
             return
-
-        # Só funciona se o usuário estiver em um canal de voz
         if not message.author.voice or not message.author.voice.channel:
             return
-
-        url = match.group(0)
-
-        # Cria um ctx fake compatível com os métodos do Cog
         ctx = await self.bot.get_context(message)
         if not ctx:
             return
-
-        # Adiciona à fila silenciosamente (sem msg "Buscando...")
-        await self._processar_musica(ctx, url, silencioso=True)
+        await self._processar_musica(ctx, match.group(0), silencioso=True)
 
     # ── Auto-desconectar se canal vazio ──────────
 
