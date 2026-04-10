@@ -6936,26 +6936,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             return
 
         # Pega a próxima música da fila
-        page_url, titulo = fila.pop(0)
-
-        # ── Re-extrai o stream de áudio da URL da página ──────────────────────
-        # Entradas de playlist têm a URL da página do vídeo, não o stream direto.
-        # É preciso extrair de novo pra pegar a URL real do áudio antes de tocar.
-        loop = asyncio.get_event_loop()
-        opts = dict(self.yt_dl_options)
-        opts["noplaylist"] = True   # garante que só extrai esse vídeo, não a playlist inteira
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                data = await loop.run_in_executor(None, lambda u=page_url: ydl.extract_info(u, download=False))
-            if not data or "url" not in data:
-                raise ValueError("sem url de stream")
-            stream_url = data["url"]
-        except Exception as e:
-            # Se não conseguir extrair, pula essa música e vai pra próxima
-            if text_channel:
-                await text_channel.send(f"⚠️ Pulei **{titulo}** (erro ao carregar: `{e}`). 🦇")
-            await self._tocar_proximo(guild_id)
-            return
+        stream_url, titulo = fila.pop(0)
 
         # Cria o player e toca
         player = discord.FFmpegOpusAudio(stream_url, **self.ffmpeg_options)
@@ -6980,8 +6961,6 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
     async def _adicionar_na_fila(self, url: str, guild_id: int, text_channel, voice_client):
         """Extrai info (suporta música única, playlist do YouTube e Spotify) e adiciona tudo na fila."""
 
-        loop = asyncio.get_event_loop()
-
         # ── É um link do SPOTIFY (track, playlist ou album) ─────────────────
         if "open.spotify.com" in url:
             if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
@@ -7001,94 +6980,71 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             if len(termos) > 1:
                 await msg.edit(content=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇")
 
-            # Para Spotify, guarda os termos de busca como "ytsearch:termo"
-            # O _tocar_proximo vai resolver a URL real na hora de tocar
+            adicionadas = 0
             for termo in termos:
-                self.filas.setdefault(guild_id, []).append(
-                    (f"ytsearch:{termo}", termo)
-                )
+                try:
+                    loop = asyncio.get_event_loop()
+                    opts = dict(self.yt_dl_options)
+                    opts["noplaylist"] = True
+                    opts["default_search"] = "ytsearch"
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        res = await loop.run_in_executor(None, lambda t=termo: ydl.extract_info(f"ytsearch:{t}", download=False))
+                    entries = res.get("entries", [res]) if res else []
+                    if entries and entries[0] and "url" in entries[0]:
+                        e = entries[0]
+                        self.filas.setdefault(guild_id, []).append(
+                            (e["url"], e.get("title", termo))
+                        )
+                        adicionadas += 1
+                except Exception:
+                    pass
 
-            adicionadas = len(termos)
             await msg.edit(content=f"📋 **{adicionadas}** músicas do Spotify adicionadas na fila! 🦇")
 
             if not voice_client.is_playing():
                 await self._tocar_proximo(guild_id)
             return
 
-        # ── YouTube playlist ─────────────────────────────────────────────────
-        # Usa extract_flat=True pra obter a lista de vídeos RAPIDAMENTE
-        # sem precisar baixar info de cada vídeo agora (isso é feito na hora de tocar)
-        is_playlist = ("list=" in url and "youtube.com" in url) or ("youtu.be" in url and "list=" in url)
+        # ── YouTube / outros links / busca por texto ─────────────────────────
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
 
-        if is_playlist:
-            opts_flat = dict(self.yt_dl_options)
-            opts_flat["extract_flat"] = True   # só pega id/título/url de cada entrada, sem extrair stream
-            opts_flat["noplaylist"]   = False  # permite playlist inteira
+        if not data:
+            await text_channel.send("❌ Erro ao obter as informações da música.")
+            return
 
-            try:
-                with yt_dlp.YoutubeDL(opts_flat) as ydl:
-                    data = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
-            except Exception as e:
-                await text_channel.send(f"❌ Erro ao carregar playlist: `{e}` 🦇")
-                return
-
-            if not data or "entries" not in data:
-                await text_channel.send("❌ Não consegui carregar essa playlist. 🦇")
-                return
-
-            entries = [e for e in data.get("entries", []) if e]
+        # ── É uma PLAYLIST do YouTube ────────────────
+        if "entries" in data:
+            entries = [e for e in data["entries"] if e and "url" in e]
             if not entries:
-                await text_channel.send("❌ Playlist vazia ou sem vídeos acessíveis. 🦇")
+                await text_channel.send("❌ Playlist vazia ou sem vídeos acessíveis.")
                 return
 
             for entry in entries:
-                # Pega a URL da página do vídeo — o _tocar_proximo extrai o stream depois
-                vid_id  = entry.get("id", "")
-                vid_url = (
-                    entry.get("webpage_url")
-                    or entry.get("url")
-                    or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
-                )
-                if not vid_url:
-                    continue
                 self.filas.setdefault(guild_id, []).append(
-                    (vid_url, entry.get("title", "Desconhecido"))
+                    (entry["url"], entry.get("title", "Desconhecido"))
                 )
 
-            total = len(self.filas.get(guild_id, []))
             await text_channel.send(
                 f"📋 Playlist **{data.get('title', 'sem título')}** adicionada! "
                 f"**{len(entries)}** músicas na fila. 🦇"
             )
 
-            if not voice_client.is_playing():
-                await self._tocar_proximo(guild_id)
-            return
-
-        # ── Música única (YouTube, SoundCloud, link direto, busca por texto) ──
-        opts_single = dict(self.yt_dl_options)
-        opts_single["noplaylist"] = True
-
-        try:
-            with yt_dlp.YoutubeDL(opts_single) as ydl:
-                data = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
-        except Exception as e:
-            await text_channel.send(f"❌ Erro ao obter informações da música: `{e}` 🦇")
-            return
-
-        if not data or "url" not in data:
-            await text_channel.send("❌ Erro ao obter as informações da música.")
-            return
-
-        self.filas.setdefault(guild_id, []).append(
-            (data["url"], data.get("title", "Desconhecido"))
-        )
-        fila_pos = len(self.filas[guild_id])
-        if fila_pos > 1 or voice_client.is_playing():
-            await text_channel.send(
-                f"➕ **{data.get('title', 'Música')}** adicionada na posição {fila_pos} da fila! 🦇"
+        # ── É uma MÚSICA ÚNICA ───────────────────────
+        else:
+            if "url" not in data:
+                await text_channel.send("❌ Erro ao obter as informações da música.")
+                return
+            self.filas.setdefault(guild_id, []).append(
+                (data["url"], data.get("title", "Desconhecido"))
             )
+            fila_pos = len(self.filas[guild_id])
+            if fila_pos > 1 or voice_client.is_playing():
+                await text_channel.send(
+                    f"➕ **{data.get('title', 'Música')}** adicionada na posição {fila_pos} da fila! 🦇"
+                )
 
+        # Se não estiver tocando nada, começa
         if not voice_client.is_playing():
             await self._tocar_proximo(guild_id)
 
