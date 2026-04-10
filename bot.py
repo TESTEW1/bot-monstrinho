@@ -6703,7 +6703,7 @@ YTDL_OPTIONS = {
     "quiet":                True,
     "no_warnings":          True,
     "default_search":       "auto",
-    "cookiefile":           "cookies.txt",
+    "cookiefile":           _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
             "player_client": "web",
@@ -6910,7 +6910,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             "quiet": True,               # Modo silencioso (sem mostrar mensagens no terminal enquanto busca o áudio)
             "no_warnings": True,         # Oculta avisos do yt_dlp
             "default_search": "auto",    # Se o usuário não mandar link, o yt_dlp pesquisa no YouTube
-            "cookiefile": "cookies.txt", # Cookies do YouTube para evitar bloqueio de bot
+            "cookiefile": _COOKIES_TMP_PATH, # Cookies do YouTube para evitar bloqueio de bot
             "extractor_args": {"youtube": {"player_client": "web"}}  # Define o tipo de cliente usado pra extrair o áudio
             #""" ISSO FAZ COM QUE O YT_DLP AJA COMO UM PLAYER DE MUSICA """
         }
