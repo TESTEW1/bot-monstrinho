@@ -6656,7 +6656,21 @@ _YOUTUBE_COOKIES = """\
 """
 
 def _criar_cookies_tmp() -> str:
-    """Escreve os cookies em um arquivo temporário e retorna o caminho."""
+    """Usa variável de ambiente ou arquivo local para os cookies."""
+    # Tenta pegar dos env vars primeiro (Railway/VPS)
+    cookies_env = _os.getenv("YOUTUBE_COOKIES", "")
+    if cookies_env:
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+        tmp.write(cookies_env)
+        tmp.close()
+        return tmp.name
+
+    # Fallback: arquivo local (desenvolvimento)
+    local = _os.path.join(_os.path.dirname(__file__), "cookies.txt")
+    if _os.path.exists(local):
+        return local
+
+    # Último recurso: cookies embutidos no código
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
     tmp.write(_YOUTUBE_COOKIES)
     tmp.close()
