@@ -6902,7 +6902,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
         # Configurações do yt_dlp, que é usado para pegar o áudio do YouTube
         self.yt_dl_options = {
-            "format": "bestaudio/best",  # Pega o melhor formato de áudio disponível
+            "format": "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",  # Pega o melhor formato de áudio disponível
             "noplaylist": True,          # Impede tocar playlists inteiras, só uma música por vez
             "nocheckcertificate": True,  # Ignora erros de certificado SSL (conexão insegura)
             "ignoreerrors": False, #off  # Interrompe se ocorrer erro ao baixar informações
