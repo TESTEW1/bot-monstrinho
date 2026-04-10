@@ -6683,7 +6683,7 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio/best",
+    "format":            None,   # DEBUG: aceita qualquer formato disponível
     "noplaylist":        False,
     "quiet":             False,
     "no_warnings":       False,
@@ -6939,7 +6939,13 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
                 if not info:
                     return []
                 if "entries" in info:
-                    return [e for e in info["entries"] if e]
+                    entries = [e for e in info["entries"] if e]
+                    return entries
+                # Log dos formatos disponíveis para debug
+                fmts = info.get("formats", [])
+                print(f"[Spotyvampy DEBUG] Formatos disponíveis para '{info.get('title')}':")
+                for f in fmts:
+                    print(f"  - id={f.get('format_id')} ext={f.get('ext')} acodec={f.get('acodec')} vcodec={f.get('vcodec')} url={'OK' if f.get('url') else 'VAZIO'}")
                 return [info]
 
         return await loop.run_in_executor(None, _extract)
