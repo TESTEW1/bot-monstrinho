@@ -1,9 +1,7 @@
 discord.py
-discord.py[voice]
 deep-translator
 langdetect
 yt-dlp
+discord.py[voice]
 PyNaCl
 wavelink>=3.4.0
-spotipy
-python-dotenv
