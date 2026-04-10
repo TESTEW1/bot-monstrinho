@@ -17,6 +17,8 @@ services:
     environment:
       - SERVER_PORT=2333
       - LAVALINK_SERVER_PASSWORD=vampypassword
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
     networks:
       - vampy_net
     healthcheck:
@@ -40,6 +42,8 @@ services:
     environment:
       - LAVALINK_URI=http://lavalink:2333
       - LAVALINK_PASSWORD=vampypassword
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
     networks:
       - vampy_net
 
