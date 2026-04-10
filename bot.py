@@ -25,10 +25,6 @@ bot = commands.Bot(command_prefix="v!", intents=intents)
 
 DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
 
-@bot.check
-async def apenas_donos(ctx: commands.Context) -> bool:
-    return ctx.author.id in DONOS_AUTORIZADOS
-
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
 # ║      Sistema completo de segurança integrado ao bot             ║
@@ -4212,7 +4208,7 @@ async def cmd_banir_error(ctx: commands.Context, error: Exception):
 # ║   Votação da direção pra desbanir membros • Estila Vampy   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-DIRECAO_CHANNEL_ID  = 1486114064009531713   # Canal da direção onde a votação é postada
+DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
 BOT_EXCLUIDO_ID     = 1304927837341618338   # ID do bot que NÃO vota
 VOTE_TIMEOUT_HOURS  = 48                    # Horas até a votação expirar automaticamente
 
