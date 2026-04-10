@@ -6926,10 +6926,16 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         """Busca/extrai info de áudio via yt-dlp em thread separada."""
         loop = asyncio.get_event_loop()
         is_url = query.lower().startswith("http://") or query.lower().startswith("https://")
-        search_q = query if is_url else f"ytsearch5:{query}"
+        # Limpa parâmetros de tracking do YouTube (?si=, &pp=, etc) que podem causar erro
+        if is_url:
+            import re as _re
+            search_q = _re.sub(r"[?&](si|pp|feature|ab_channel)=[^&]*", "", query).rstrip("?&")
+        else:
+            search_q = f"ytsearch5:{query}"
 
         opts = dict(YTDL_OPTIONS)
         opts["noplaylist"] = False
+        opts["ignoreerrors"] = False  # na busca queremos ver o erro real
 
         def _extract():
             with yt_dlp.YoutubeDL(opts) as ydl:
