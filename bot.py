@@ -4572,7 +4572,6 @@ VM_DEFAULT_NAME      = "🦇 Call da {user}"   # Nome padrão da call criada
 VM_DEFAULT_LIMIT     = 0                      # 0 = sem limite
 VM_EMPTY_DELAY       = 3                      # Segundos antes de deletar call vazia
 VM_CATEGORY_ID       = 1304658655026741260    # ID da categoria onde o lobby e as calls serão criados
-VM_PAINEL_CHANNEL    = "🎙️ Criar Call"         # Nome do canal de texto onde o painel de controle será enviado
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 💬  MENSAGENS FOFAS DO VOICEMASTER
@@ -6124,49 +6123,46 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             except discord.HTTPException:
                 pass
 
-            # ── Enviar painel de controle num canal de texto dedicado ──
-            painel_ch = discord.utils.get(guild.text_channels, name=VM_PAINEL_CHANNEL)
-            destino = painel_ch or await self._log(guild)   # fallback: canal de monitoramento
-            if destino:
-                try:
-                    embed_call = discord.Embed(
-                        title="🎙️ Painel de Controle — Calls da Vampy",
-                        description=(
-                            f"Oi, {member.mention}!! Sua call foi criada!! 🥳🦇\n"
-                            f"📢 Canal: {novo.mention}\n"
-                            "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
-                            "```\n"
-                            "╔══════════════════════════════════════╗\n"
-                            "║   VAMPY VOICEMASTER  🦇          ║\n"
-                            "║     — Calls Fofas v1.0 —            ║\n"
-                            "╚══════════════════════════════════════╝\n"
-                            "```"
-                        ),
-                        color=_VM_COR_FOFA,
-                        timestamp=datetime.utcnow()
-                    )
-                    campos_call = [
-                        ("✏️ Renomear",    "Muda o nome da call"),
-                        ("👥 Limite",      "Define qtd máxima de pessoas"),
-                        ("🔒 Trancar",     "Bloqueia novas entradas"),
-                        ("👻 Ocultar",     "Esconde a call de todos"),
-                        ("👋 Kickar",      "Remove alguém da call"),
-                        ("🚫 Banir",       "Bloqueia alguém de entrar"),
-                        ("✅ Permitir",    "Desbanir / liberar alguém"),
-                        ("👑 Transferir",  "Passa o dono pra outra pessoa"),
-                        ("💌 Convidar",    "Envia convite na DM de alguém"),
-                        ("📝 Status",      "Define o status/tema da call"),
-                        ("📊 Info",        "Mostra detalhes da call"),
-                        ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
-                        ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
-                        ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
-                    ]
-                    for titulo, desc in campos_call:
-                        embed_call.add_field(name=titulo, value=desc, inline=True)
-                    embed_call.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
-                    await destino.send(embed=embed_call, view=VMPainelView(self))
-                except (discord.Forbidden, discord.HTTPException) as e:
-                    print(f"[VoiceMaster] Erro ao enviar painel: {e}")
+            # ── Enviar painel de controle no chat de texto da call ──
+            try:
+                embed_call = discord.Embed(
+                    title="🎙️ Painel de Controle — Calls da Vampy",
+                    description=(
+                        f"Oi, {member.mention}!! Sua call foi criada!! 🥳🦇\n"
+                        "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
+                        "```\n"
+                        "╔══════════════════════════════════════╗\n"
+                        "║   VAMPY VOICEMASTER  🦇          ║\n"
+                        "║     — Calls Fofas v1.0 —            ║\n"
+                        "╚══════════════════════════════════════╝\n"
+                        "```"
+                    ),
+                    color=_VM_COR_FOFA,
+                    timestamp=datetime.utcnow()
+                )
+                campos_call = [
+                    ("✏️ Renomear",    "Muda o nome da call"),
+                    ("👥 Limite",      "Define qtd máxima de pessoas"),
+                    ("🔒 Trancar",     "Bloqueia novas entradas"),
+                    ("👻 Ocultar",     "Esconde a call de todos"),
+                    ("👋 Kickar",      "Remove alguém da call"),
+                    ("🚫 Banir",       "Bloqueia alguém de entrar"),
+                    ("✅ Permitir",    "Desbanir / liberar alguém"),
+                    ("👑 Transferir",  "Passa o dono pra outra pessoa"),
+                    ("💌 Convidar",    "Envia convite na DM de alguém"),
+                    ("📝 Status",      "Define o status/tema da call"),
+                    ("📊 Info",        "Mostra detalhes da call"),
+                    ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
+                    ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
+                    ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
+                ]
+                for titulo, desc in campos_call:
+                    embed_call.add_field(name=titulo, value=desc, inline=True)
+                embed_call.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
+                # Envia no chat de texto interno do canal de voz
+                await novo.send(embed=embed_call, view=VMPainelView(self))
+            except (discord.Forbidden, discord.HTTPException):
+                pass  # sem permissão ou canal sem chat — ignora
 
             # Log
             log_ch = await self._log(guild)
@@ -6670,10 +6666,11 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
+    "format":            "bestaudio/best",
     "noplaylist":        False,
-    "quiet":             True,
-    "no_warnings":       True,
+    "quiet":             False,
+    "no_warnings":       False,
+    "verbose":           True,
     "default_search":    "ytsearch",
     "source_address":    "0.0.0.0",
     "extractor_retries": 3,
