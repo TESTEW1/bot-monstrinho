@@ -6666,19 +6666,20 @@ _COOKIES_TMP_PATH = _criar_cookies_tmp()
 
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":            "bestaudio/best",
+    "format":            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist":        False,
-    "quiet":             False,
-    "no_warnings":       False,
-    "verbose":           True,
+    "quiet":             True,
+    "no_warnings":       True,
+    "verbose":           False,
     "default_search":    "ytsearch",
-    "source_address":    "0.0.0.0",
-    "extractor_retries": 3,
-    "socket_timeout":    15,
+    # source_address removido — causa erro em ambientes cloud (Railway)
+    "extractor_retries": 5,
+    "socket_timeout":    20,
     "cookiefile":        _COOKIES_TMP_PATH,
     "extractor_args": {
         "youtube": {
-            "player_client": ["tv_embedded", "ios", "web"],
+            "player_client": ["ios", "web", "tv_embedded"],
+            "player_skip":   ["webpage", "js"],
         }
     },
 }
