@@ -6902,7 +6902,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
         # Configurações do yt_dlp, que é usado para pegar o áudio do YouTube
         self.yt_dl_options = {
-            "format": "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",  # Pega o melhor formato de áudio disponível
+            "format": "bestaudio/best",  # Pega o melhor formato de áudio disponível
             "noplaylist": True,          # Impede tocar playlists inteiras, só uma música por vez
             "nocheckcertificate": True,  # Ignora erros de certificado SSL (conexão insegura)
             "ignoreerrors": False, #off  # Interrompe se ocorrer erro ao baixar informações
@@ -6911,7 +6911,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             "no_warnings": True,         # Oculta avisos do yt_dlp
             "default_search": "auto",    # Se o usuário não mandar link, o yt_dlp pesquisa no YouTube
             "cookiefile": "cookies.txt", # Cookies do YouTube para evitar bloqueio de bot
-            "extractor_args": {"youtube": {"player_client": ["ios", "web"]}}  # Define o tipo de cliente usado pra extrair o áudio
+            "extractor_args": {"youtube": {"player_client": "web"}}  # Define o tipo de cliente usado pra extrair o áudio
             #""" ISSO FAZ COM QUE O YT_DLP AJA COMO UM PLAYER DE MUSICA """
         }
 
