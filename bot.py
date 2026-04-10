@@ -7,6 +7,8 @@ import re
 from datetime import timedelta
 from datetime import datetime
 from collections import defaultdict, deque
+from dotenv import load_dotenv
+load_dotenv()  # lê o .env automaticamente
 try:
     from deep_translator import GoogleTranslator
     from langdetect import detect as detectar_idioma
