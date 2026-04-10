@@ -23,7 +23,7 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="v!", intents=intents)
+bot = commands.Bot(command_prefix=["v!", "!"], intents=intents)
 
 DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
 
@@ -6889,6 +6889,31 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         self.bot     = bot
         self.players: dict[int, GuildPlayer] = {}   # guild_id → GuildPlayer
 
+        # ── Idêntico ao main (2).py ──────────────────
+        self.voz_clients = {}
+        """ DICIONÁRIO QUE GUARDA AS CONEXÕES DO BOT NOS SERVIDORES 
+        CASO ELE ESTEJA EM 2 SERVIDORES ELE IRÁ SALVAR A CONEXÃO NOS 2 """
+
+        self.yt_dl_options = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "nocheckcertificate": True,
+            "ignoreerrors": False,
+            "logtostderr": False,
+            "quiet": True,
+            "no_warnings": True,
+            "default_search": "auto",
+            "extractor_args": {"youtube": {"player_client": "web"}},
+            "cookiefile": _COOKIES_TMP_PATH,
+        }
+
+        self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
+
+        self.ffmpeg_options = {
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            'options': '-vn -filter:a "volume=0.25"'
+        }
+
     # ── Helpers ──────────────────────────────────
 
     def _embed_nowplaying(self, track: Track, gp: GuildPlayer) -> discord.Embed:
@@ -7495,8 +7520,97 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """Detecta links de música no chat e adiciona à fila automaticamente."""
-        if message.author.bot or not message.guild:
+        """Lógica idêntica ao main (2).py + auto-link de URLs no chat."""
+
+        # Ignora mensagens enviadas por outros bots (incluindo ele mesmo)
+        if message.author.bot:
+            return
+
+        # ── Comando !play ────────────────────────────────────────────────────
+        if message.content.startswith("!play"):
+            # Verifica se o bot já está conectado em um canal de voz neste servidor
+            """ Verifica se o servidor já está na lista e se o bot ainda está conectado nela. """
+            if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
+
+                # Se já estiver conectado, ela vai reaproveitar essa conexão
+                voice_client = self.voz_clients[message.guild.id]
+            else:
+                # Se o autor da mensagem não for bot e estiver em um canal de voz
+                """ Se o autor não for um bot, estiver em um canal de voz e o canal
+                existir. """
+                if not message.author.bot and message.author.voice and message.author.voice.channel:
+
+                    # Conecta o bot ao canal de voz do autor
+                    voice_client = await message.author.voice.channel.connect()
+                    """ O AWAIT SERVE PRA ELE ESPERAR ESSA PARTE TERMINAR ANTES DE CONTINUAR,
+                    MAS SEM TRAVAR O BOT."""
+
+                    # Guarda a conexão de voz desse servidor no dicionário
+                    self.voz_clients[message.guild.id] = voice_client
+                else:
+                    # Se o usuário não estiver em um canal de voz, avisa e para a execução
+                    await message.channel.send("Você precisa estar em um canal de voz!")
+                    return
+
+            # Pega o link da música (o segundo elemento depois do "!play")
+            url = message.content.split()[1]
+            print(f"URL: {url}")
+
+            # Cria um loop assíncrono para rodar o yt_dlp sem travar o bot
+            loop = asyncio.get_event_loop()
+            """ PEGO O LOOP QUE CONTROLA AS FUNÇÕES ASSÍNCRONAS, PARA RODAR TAREFAS EM SEGUNDO PLANO
+            SEM TRAVAR """
+
+            # Extrai informações do vídeo (como título e URL do áudio)
+            data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
+            """ RUN_IN_EXECUTOR FAZ RODAR EM SEGUNDO PLANO """
+            """ LAMBDA É UMA FUNÇÃO ANÔNIMA SERVE PARA COLOCAR UMA FUNÇÃO SEM NOME QUE RODA
+            EM UMA UNICA LINHA """
+
+            # Se não conseguir obter informações, avisa o usuário
+            """ Se não tiver data ou url não estiver em data """
+            if not data or "url" not in data:
+                await message.channel.send("Erro ao obter as informações da música.")
+                return
+
+            # Pega a URL direta do áudio para o FFmpeg reproduzir
+            song = data['url']
+
+            # Cria o player de áudio com as opções definidas
+            player = discord.FFmpegOpusAudio(song, **self.ffmpeg_options)
+
+            # Se já estiver tocando algo, para antes de iniciar a nova música
+            if voice_client.is_playing():
+                voice_client.stop()
+
+            # Começa a tocar o áudio
+            voice_client.play(player)
+
+            # Envia no chat o nome da música que está tocando
+            await message.channel.send(f"Tocando agora: {data.get('title', 'Música desconhecida')}")
+            return
+
+        # ── Comando !stop ────────────────────────────────────────────────────
+        if message.content.startswith("!stop"):
+
+            # Verifica se o bot está conectado neste servidor
+            """ Se o ID do servidor estiver em voz_clients,
+            no caso conectado ao servidor """
+            if message.guild.id in self.voz_clients:
+                # Para a música
+                self.voz_clients[message.guild.id].stop()
+                # Desconecta o bot do canal de voz
+                await self.voz_clients[message.guild.id].disconnect()
+
+                # Remove a conexão da lista de conexões
+                del self.voz_clients[message.guild.id]
+                """ SERVE PARA NÃO FICAR GUARDANDO CONEXÕES ANTIGAS E ENCHER A LISTA """
+
+                await message.channel.send("Bot desconectado do canal de voz.")
+            return
+
+        # ── Auto-link: adiciona música sem v!play (URLs coladas no chat) ─────
+        if not message.guild:
             return
         if message.content.startswith("v!") or message.content.startswith("!"):
             return
