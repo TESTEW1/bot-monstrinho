@@ -40,20 +40,25 @@ async def analisar_contexto_gemini(mensagem_original: str, palavra_detectada: st
     )
 
     prompt = (
-        "Você é um moderador de um servidor Discord brasileiro.\n"
-        "Analise a mensagem abaixo e decida se ela deve ser APAGADA por conter linguagem ofensiva, "
-        "xingamento direcionado a alguém, ou discurso de ódio.\n\n"
-        f"Palavra/frase detectada pelo filtro: \"{palavra_detectada}\"\n"
+        "Você é um moderador de um servidor Discord brasileiro descontraído.\n"
+        "Sua tarefa é decidir se uma mensagem deve ser APAGADA ou PERMITIDA.\n\n"
+        "APAGAR apenas se a mensagem tiver:\n"
+        "- Xingamento DIRECIONADO a uma pessoa específica (ex: 'você é um lixo', 'vai se fuder seu idiota')\n"
+        "- Discurso de ódio (racismo, homofobia, etc)\n"
+        "- Ameaça real\n\n"
+        "PERMITIR se a mensagem tiver:\n"
+        "- Palavrão usado como expressão de surpresa, animação ou frustração (ex: 'que caralho foi isso', 'porra que jogo')\n"
+        "- Palavrão em contexto de jogo, série, meme ou situação cômica\n"
+        "- Palavrão sem alvo específico\n\n"
+        f"Palavra detectada pelo filtro: \"{palavra_detectada}\"\n"
         f"Mensagem completa: \"{mensagem_original}\"\n\n"
-        "Responda APENAS com uma dessas duas palavras, sem explicação:\n"
-        "- APAGAR  → se a mensagem for ofensiva, xingamento direcionado a alguém, ou discurso de ódio\n"
-        "- PERMITIR → se for uso casual, citação, contexto neutro, ou não for realmente ofensivo\n\n"
+        "Responda SOMENTE com APAGAR ou PERMITIR, sem mais nada.\n"
         "Resposta:"
     )
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 10, "temperature": 0.1}
+        "generationConfig": {"maxOutputTokens": 10, "temperature": 0.0}
     }
 
     try:
