@@ -637,7 +637,7 @@ DONO_ID = 769951556388257812
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・vampy-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌・palavras-apagadas-bot"
+CANAL_LOG_ID = 1463696187235500032  # ❌・logs-chat-vampy
 CANAL_TICKET = "🎟️・ticket"
 CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
@@ -1145,8 +1145,8 @@ async def remover_cargos_advertencia(membro: discord.Member):
                 pass
 
 async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int):
-    """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
-    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
+    """Envia a ficha completa da mensagem apagada para o canal ❌・logs-chat-vampy."""
+    canal_log = message.guild.get_channel(CANAL_LOG_ID)
     if not canal_log:
         return
 
@@ -4941,46 +4941,6 @@ class VMPainelView(discord.ui.View):
             info["locked"] = True
             await interaction.response.send_message(embed=_vm_embed_ok("🔒 Trancada!!", _vm_msg("trancada")), ephemeral=True)
 
-    @discord.ui.button(label="👻 Ocultar", style=discord.ButtonStyle.secondary, custom_id="vm_ocultar", row=0)
-    async def btn_ocultar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if not ch:
-            return
-        info = self.cog.vm_channels[ch.id]
-        everyone = interaction.guild.default_role
-        if info.get("hidden"):
-            # ── Revelar: remove só o view_channel do everyone, preserva connect (lock) ──
-            ow = ch.overwrites_for(everyone)
-            ow.view_channel = None
-            if ow.is_empty():
-                await ch.set_permissions(everyone, overwrite=None)
-            else:
-                await ch.set_permissions(everyone, overwrite=ow)
-            # Remove o override de view_channel dos membros que estavam dentro
-            for membro in ch.members:
-                ow_m = ch.overwrites_for(membro)
-                ow_m.view_channel = None
-                ow_m.connect      = None
-                if ow_m.is_empty():
-                    await ch.set_permissions(membro, overwrite=None)
-                else:
-                    await ch.set_permissions(membro, overwrite=ow_m)
-            info["hidden"] = False
-            await interaction.response.send_message(embed=_vm_embed_ok("👁️ Visível!!", _vm_msg("visivel")), ephemeral=True)
-        else:
-            # ── Ocultar: esconde do everyone, garante view+connect pra quem já está dentro ──
-            ow = ch.overwrites_for(everyone)
-            ow.view_channel = False
-            await ch.set_permissions(everyone, overwrite=ow)
-            # Explicitamente view_channel=True e connect=True pra cada membro dentro
-            for membro in ch.members:
-                ow_m = ch.overwrites_for(membro)
-                ow_m.view_channel = True
-                ow_m.connect      = True
-                await ch.set_permissions(membro, overwrite=ow_m)
-            info["hidden"] = True
-            await interaction.response.send_message(embed=_vm_embed_ok("👻 Oculta!!", _vm_msg("invisivel")), ephemeral=True)
-
     # ── Linha 2 ──────────────────────────────────
 
     @discord.ui.button(label="👋 Kickar", style=discord.ButtonStyle.danger, custom_id="vm_kickar", row=1)
@@ -5039,7 +4999,6 @@ class VMPainelView(discord.ui.View):
         embed.add_field(name="👥 Membros", value=f"`{len(ch.members)}`" + (f"/{ch.user_limit}" if ch.user_limit else " (sem limite)"), inline=True)
         embed.add_field(name="🎧 Bitrate", value=f"`{ch.bitrate // 1000}kbps`", inline=True)
         embed.add_field(name="🔒 Trancada", value="Sim 🔒" if info.get("locked") else "Não 🔓", inline=True)
-        embed.add_field(name="👻 Oculta", value="Sim 👻" if info.get("hidden") else "Não 👁️", inline=True)
         embed.add_field(name="💎 Permanente", value="Sim 💎" if info.get("permanent") else "Não 🕐", inline=True)
         embed.add_field(name="🚫 Banidos", value=banidos, inline=False)
         embed.set_footer(text="🦇 Vampy VoiceMaster")
@@ -6146,7 +6105,6 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
                     ("✏️ Renomear",    "Muda o nome da call"),
                     ("👥 Limite",      "Define qtd máxima de pessoas"),
                     ("🔒 Trancar",     "Bloqueia novas entradas"),
-                    ("👻 Ocultar",     "Esconde a call de todos"),
                     ("👋 Kickar",      "Remove alguém da call"),
                     ("🚫 Banir",       "Bloqueia alguém de entrar"),
                     ("✅ Permitir",    "Desbanir / liberar alguém"),
@@ -6208,7 +6166,6 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             ("✏️ Renomear",    "Muda o nome da call"),
             ("👥 Limite",      "Define qtd máxima de pessoas"),
             ("🔒 Trancar",     "Bloqueia novas entradas"),
-            ("👻 Ocultar",     "Esconde a call de todos"),
             ("👋 Kickar",      "Remove alguém da call"),
             ("🚫 Banir",       "Bloqueia alguém de entrar"),
             ("✅ Permitir",    "Desbanir / liberar alguém"),
@@ -6632,18 +6589,83 @@ SV_COR_AVISO     = 0xffaa00
 SV_VOLUME_PADRAO = 0.5        # 50% (escala 0.0-2.0 para FFmpeg)
 SV_FILA_MAX      = 50         # máximo de músicas na fila
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🍪  COOKIES DO YOUTUBE — embutidos no código
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import tempfile, os as _os
+
+_YOUTUBE_COOKIES = """\
+# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file! Do not edit.
+
+.youtube.com	TRUE	/	FALSE	1810225087	SID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUd-0CfdCephyz1pt25kIw5_wACgYKAY4SARUSFQHGX2Mi7mvA1onk8X24mpBqNY8QshoVAUF8yKrCqVgL2-JNRHjWG68F4hJA0076
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdyCLbueF25JQ3MAdeHTyfUAACgYKAUQSARUSFQHGX2MisUzjCSQijdvmqYmz9wD_JxoVAUF8yKqJqD1EusUKwAVYPJOIWLoc0076
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PSID	g.a0008giHlPBu3z4AMq-cTPHTt1AEMCF5NMEDg66nSYocRN4yXuUdFZ-cpx07b3-AU6B9-Exg_gACgYKASsSARUSFQHGX2MiNILUjwpdoKD2g8aXlKY9RBoVAUF8yKqLt6vAtU_lQTBbilmNzqij0076
+.youtube.com	TRUE	/	FALSE	1810225087	HSID	AxMAwG2ri6X7fbZL6
+.youtube.com	TRUE	/	TRUE	1810225087	SSID	Ae0QFirWJZMSNV_54
+.youtube.com	TRUE	/	FALSE	1810225087	APISID	S44m028E_uIMhf_N/Au9-QlFrzV4dL6Oon
+.youtube.com	TRUE	/	TRUE	1810225087	SAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-1PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225087	__Secure-3PAPISID	akHQ__8QKeh5Qov2/AGq1RDUDgLLCoqtM9
+.youtube.com	TRUE	/	TRUE	1810225092	LOGIN_INFO	AFmmF2swRAIgCPj6tr7RrjxuUp6xdlWjdP6wQwdsMCTw_4NWZGmXs5gCICU5P2tzImKSyvmAPrsuJD51BiZtK-e5W0518PJkjdft:QUQ3MjNmeHctLWRxaVVvN29xU0d0RG5GMDEzUkZNMVN3Z25YNHdTN2N2SGdOV1Utc3E3dHhLM3lfUHE5RzdVbndlMGZmY1Q2MFphUXp6R20tc2NCeDhQT2RqU2NHLXcyMlpTMnI4V3BfamFqUmNjdWZ6enM0WVdnUEwwR3M3SDBMLVlnanJ0c3BHUFl3aWo4Rm9VMVh5R3YwMHJlc2JSRDVR
+.youtube.com	TRUE	/	TRUE	1791217136	__Secure-BUCKET	CKcD
+.youtube.com	TRUE	/	TRUE	1810225149	PREF	f4=4000000&f6=40000000&tz=America.Sao_Paulo
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDTS	sidts-CjIBWhotCcGLp9UGuB5Hu1bmyWH9qMkUi0Z5lqP7xosczTLG3muzBkgNbnU5luPrVdL-XxAA
+.youtube.com	TRUE	/	FALSE	1807201151	SIDCC	AKEyXzVF53gBK0xwBsDtNfLDIyXFxQumiirXHzKmtFh0RTsAyIDRw0yDD_loUpxXuTjjOwes
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-1PSIDCC	AKEyXzWfyfxCWJf_tcWxUQLRcZBhfNSI2py9A5xNdsbrvwpZzVg6EYB2n9jw5QDChcFZ6Cud
+.youtube.com	TRUE	/	TRUE	1807201151	__Secure-3PSIDCC	AKEyXzUZtvl8eVccwKne7wRdI1Wem9AJk1CBaCqUHMnp5bmBXOyXWV8ob6W0wVv_XX7sKon1
+.youtube.com	TRUE	/	TRUE	0	YSC	0iDG-YMgLEA
+.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_INFO1_LIVE	eRD8cRofanc
+.youtube.com	TRUE	/	TRUE	1791217139	VISITOR_PRIVACY_METADATA	CgJCUhIEGgAgKA%3D%3D
+.youtube.com	TRUE	/	TRUE	1791217136	__Secure-YNID	17.YT=hZq4nCwk7m0Atz2APdL6gie0svBfHxHuXz6HJ6gFVOzZ5UmwCNTA6D_skEfNl2YWsntz01XKhwU_JjQtMTTy0PRWTcnvHveZ4caElrSV7hIPN2eMjPUrntB0dt2gzQ_qbE9uhzjPpqYEXLCywWGGDfxozn8l2DoBb9rfeWSVPap037bbs30UboHIGn3rH-sMloV7pFyQ_BWNTWJ9Tug2T1YnmTbhyMuVg6KZvcHJYr9n_Uh91hQEm8LfFlWTi_dRYtyqTeIgN85ed1NPY9ue2X9wof4OrtomBKj-v6FlGdq2IFqFgkO_erBF30c9pgv0V8wsui49c-8h5vlJwKzWtw
+.youtube.com	TRUE	/	TRUE	1791217137	__Secure-ROLLOUT_TOKEN	CLyckO_Z4d7mngEQn6OdjtTekwMYn86zjtTekwM%3D
+"""
+
+def _criar_cookies_tmp() -> str:
+    """Carrega cookies do arquivo local (copiado junto com o projeto no deploy)."""
+    # 1. arquivo cookies.txt na mesma pasta do bot.py (recomendado)
+    local = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "cookies.txt")
+    if _os.path.exists(local):
+        print(f"[Spotyvampy] Usando cookies de: {local}")
+        return local
+
+    # 2. variável de ambiente (fallback para quando o arquivo não está disponível)
+    cookies_env = _os.getenv("YOUTUBE_COOKIES", "")
+    if cookies_env:
+        print("[Spotyvampy] Usando cookies da variável de ambiente YOUTUBE_COOKIES")
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+        tmp.write(cookies_env)
+        tmp.close()
+        return tmp.name
+
+    # 3. último recurso: cookies embutidos no código (podem estar expirados)
+    print("[Spotyvampy] ⚠️ Usando cookies embutidos no código — podem estar expirados!")
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8")
+    tmp.write(_YOUTUBE_COOKIES)
+    tmp.close()
+    return tmp.name
+
+_COOKIES_TMP_PATH = _criar_cookies_tmp()
+
 # Opções do yt-dlp para extração de áudio
 YTDL_OPTIONS = {
-    "format":             "bestaudio/best",
-    "noplaylist":         True,
-    "nocheckcertificate": True,
-    "ignoreerrors":       False,
-    "logtostderr":        False,
-    "quiet":              True,
-    "no_warnings":        True,
-    "default_search":     "ytsearch",   # busca direta sem cookies
-    "source_address":     "0.0.0.0",   # força IPv4
-    "age_limit":          99,
+    "format":               "bestaudio/best",
+    "noplaylist":           True,
+    "nocheckcertificate":   True,
+    "ignoreerrors":         False,
+    "logtostderr":          False,
+    "quiet":                True,
+    "no_warnings":          True,
+    "default_search":       "auto",
+    "cookiefile":           _COOKIES_TMP_PATH,
+    "extractor_args": {
+        "youtube": {
+            "player_client": "web",
+        }
+    },
 }
 
 # Opções do FFmpeg para stream de áudio
@@ -6836,16 +6858,16 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
         """ CANAL DE TEXTO POR SERVIDOR — para mandar mensagens da fila """
 
         self.yt_dl_options = {
-            "format":             "bestaudio/best",
-            "noplaylist":         False,   # permite playlists inteiras
+            "format": "bestaudio/best",
+            "noplaylist": False,   # PERMITE PLAYLISTS INTEIRAS DO YOUTUBE E SPOTIFY
             "nocheckcertificate": True,
-            "ignoreerrors":       False,
-            "logtostderr":        False,
-            "quiet":              True,
-            "no_warnings":        True,
-            "default_search":     "ytsearch",
-            "source_address":     "0.0.0.0",
-            "age_limit":          99,
+            "ignoreerrors": False,
+            "logtostderr": False,
+            "quiet": True,
+            "no_warnings": True,
+            "default_search": "auto",
+            "extractor_args": {"youtube": {"player_client": "web"}},
+            "cookiefile": _COOKIES_TMP_PATH,
         }
 
         self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
