@@ -15,6 +15,62 @@ try:
     TRADUCAO_DISPONIVEL = True
 except ImportError:
     TRADUCAO_DISPONIVEL = False
+
+import aiohttp
+import json
+
+# ══════════════════════════════════════════════════════════════════
+#  🤖  INTEGRAÇÃO GEMINI — Moderação Inteligente por Contexto
+# ══════════════════════════════════════════════════════════════════
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+async def analisar_contexto_gemini(mensagem_original: str, palavra_detectada: str) -> bool:
+    """
+    Envia a mensagem ao Gemini para analisar se o uso da palavra é realmente ofensivo.
+    Retorna True se deve ser APAGADA, False se for uso inocente/casual.
+    Em caso de erro ou API indisponível, retorna True (punir por segurança).
+    """
+    if not GEMINI_API_KEY:
+        return True  # sem API key → comportamento antigo (punir sempre)
+
+    gemini_url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+
+    prompt = (
+        "Você é um moderador de um servidor Discord brasileiro.\n"
+        "Analise a mensagem abaixo e decida se ela deve ser APAGADA por conter linguagem ofensiva, "
+        "xingamento direcionado a alguém, ou discurso de ódio.\n\n"
+        f"Palavra/frase detectada pelo filtro: \"{palavra_detectada}\"\n"
+        f"Mensagem completa: \"{mensagem_original}\"\n\n"
+        "Responda APENAS com uma dessas duas palavras, sem explicação:\n"
+        "- APAGAR  → se a mensagem for ofensiva, xingamento direcionado a alguém, ou discurso de ódio\n"
+        "- PERMITIR → se for uso casual, citação, contexto neutro, ou não for realmente ofensivo\n\n"
+        "Resposta:"
+    )
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 10, "temperature": 0.1}
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                gemini_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status != 200:
+                    return True  # falha na API → punir por segurança
+                data = await resp.json()
+                texto_resposta = data["candidates"][0]["content"]["parts"][0]["text"].strip().upper()
+                return "APAGAR" in texto_resposta
+    except Exception:
+        return True  # qualquer erro → punir por segurança
 # ================= INTENTS =================
 # ============== BOT SETUP =================
 
@@ -637,7 +693,7 @@ DONO_ID = 769951556388257812
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・vampy-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG_ID = 1463696187235500032  # ❌・logs-chat-vampy
+CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・ticket"
 CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
@@ -1144,9 +1200,9 @@ async def remover_cargos_advertencia(membro: discord.Member):
             except Exception:
                 pass
 
-async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int):
-    """Envia a ficha completa da mensagem apagada para o canal ❌・logs-chat-vampy."""
-    canal_log = message.guild.get_channel(CANAL_LOG_ID)
+async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int, gemini_permitiu: bool = False):
+    """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
+    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if not canal_log:
         return
 
@@ -1162,12 +1218,17 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
         else:
             avisos_emoji += "⚪ "
 
-    # Cor do embed sobe com a gravidade
-    cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
-    cor = cor_map.get(qtd_avisos, 0xFF0000)
+    # Cor do embed: verde se Gemini liberou, sobe com gravidade se punido
+    if gemini_permitiu:
+        cor = 0x00CC66
+        titulo = "🤖 DETECTADO MAS LIBERADO PELO GEMINI"
+    else:
+        cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
+        cor = cor_map.get(qtd_avisos, 0xFF0000)
+        titulo = "🗑️ MENSAGEM APAGADA PELO VAMPY"
 
     embed = discord.Embed(
-        title="🗑️ MENSAGEM APAGADA PELO VAMPY",
+        title=titulo,
         color=cor,
         timestamp=datetime.now()
     )
@@ -1177,15 +1238,13 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
     )
     embed.set_thumbnail(url=autor.display_avatar.url)
 
-    # Linha separadora visual com dados principais
     embed.add_field(name="👤 Membro",       value=autor.mention,            inline=True)
     embed.add_field(name="🆔 ID",           value=f"`{autor.id}`",          inline=True)
     embed.add_field(name="📍 Canal",        value=message.channel.mention,  inline=True)
 
-    # Conteúdo apagado
     conteudo = message.content[:900] if message.content else "*(sem texto — possível mídia)*"
     embed.add_field(
-        name="💬 Mensagem apagada",
+        name="💬 Mensagem apagada" if not gemini_permitiu else "💬 Mensagem (mantida)",
         value=f"```{conteudo}```",
         inline=False
     )
@@ -1195,24 +1254,31 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
         inline=False
     )
 
-    # Painel de status
+    # Veredito do Gemini
     embed.add_field(
-        name=f"⚠️ Avisos  ({qtd_avisos}/3)",
-        value=avisos_emoji.strip(),
-        inline=True
+        name="🤖 Análise Gemini",
+        value="✅ **LIBEROU** — uso casual/sem alvo" if gemini_permitiu else "🚫 **APAGAR** — conteúdo ofensivo",
+        inline=False
     )
-    embed.add_field(
-        name="📋 Advertências totais",
-        value=f"**{total_ciclos}** vez(es) punido(a)",
-        inline=True
-    )
+
+    if not gemini_permitiu:
+        embed.add_field(
+            name=f"⚠️ Avisos  ({qtd_avisos}/3)",
+            value=avisos_emoji.strip(),
+            inline=True
+        )
+        embed.add_field(
+            name="📋 Advertências totais",
+            value=f"**{total_ciclos}** vez(es) punido(a)",
+            inline=True
+        )
 
     embed.set_footer(
         text="🦇 Vampy Logs  •  Use os botões abaixo caso tenha sido engano",
         icon_url=AVATAR_VAMPY
     )
 
-    view = DesfazerAvisoView(membro_id)
+    view = DesfazerAvisoView(membro_id) if not gemini_permitiu else discord.ui.View()
     await canal_log.send(embed=embed, view=view)
 
 # ============== FUNÇÕES AUXILIARES =================
@@ -3542,12 +3608,24 @@ async def on_message(message):
                 await atualizar_ranking(message.guild) 
             return
 
-    # --- PALAVRAS PROIBIDAS ---
+    # --- PALAVRAS PROIBIDAS (com análise de contexto via Gemini) ---
     texto = message.content.lower()
     eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in message.author.roles)
     if not eh_imune and message.channel.name != CANAL_DESABAFOS:
         palavra_encontrada = contem_palavra_proibida(texto)
         if palavra_encontrada:
+            # 🤖 Gemini analisa o contexto antes de punir (evita falsos positivos)
+            deve_apagar = await analisar_contexto_gemini(message.content, palavra_encontrada)
+            print(f"[GEMINI] palavra='{palavra_encontrada}' | msg='{message.content[:80]}' | deve_apagar={deve_apagar}")
+
+            if not deve_apagar:
+                # Gemini liberou — loga mas NÃO pune e NÃO apaga
+                qtd_atual = avisos_usuarios.get(message.author.id, 0)
+                await enviar_log_palavras_apagadas(message, palavra_encontrada, qtd_atual, message.author.id, gemini_permitiu=True)
+                await bot.process_commands(message)
+                return
+
+            # Gemini mandou apagar — fluxo normal de punição
             try:
                 await message.delete()
             except Exception:
@@ -4941,6 +5019,46 @@ class VMPainelView(discord.ui.View):
             info["locked"] = True
             await interaction.response.send_message(embed=_vm_embed_ok("🔒 Trancada!!", _vm_msg("trancada")), ephemeral=True)
 
+    @discord.ui.button(label="👻 Ocultar", style=discord.ButtonStyle.secondary, custom_id="vm_ocultar", row=0)
+    async def btn_ocultar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ch = await self._check(interaction)
+        if not ch:
+            return
+        info = self.cog.vm_channels[ch.id]
+        everyone = interaction.guild.default_role
+        if info.get("hidden"):
+            # ── Revelar: remove só o view_channel do everyone, preserva connect (lock) ──
+            ow = ch.overwrites_for(everyone)
+            ow.view_channel = None
+            if ow.is_empty():
+                await ch.set_permissions(everyone, overwrite=None)
+            else:
+                await ch.set_permissions(everyone, overwrite=ow)
+            # Remove o override de view_channel dos membros que estavam dentro
+            for membro in ch.members:
+                ow_m = ch.overwrites_for(membro)
+                ow_m.view_channel = None
+                ow_m.connect      = None
+                if ow_m.is_empty():
+                    await ch.set_permissions(membro, overwrite=None)
+                else:
+                    await ch.set_permissions(membro, overwrite=ow_m)
+            info["hidden"] = False
+            await interaction.response.send_message(embed=_vm_embed_ok("👁️ Visível!!", _vm_msg("visivel")), ephemeral=True)
+        else:
+            # ── Ocultar: esconde do everyone, garante view+connect pra quem já está dentro ──
+            ow = ch.overwrites_for(everyone)
+            ow.view_channel = False
+            await ch.set_permissions(everyone, overwrite=ow)
+            # Explicitamente view_channel=True e connect=True pra cada membro dentro
+            for membro in ch.members:
+                ow_m = ch.overwrites_for(membro)
+                ow_m.view_channel = True
+                ow_m.connect      = True
+                await ch.set_permissions(membro, overwrite=ow_m)
+            info["hidden"] = True
+            await interaction.response.send_message(embed=_vm_embed_ok("👻 Oculta!!", _vm_msg("invisivel")), ephemeral=True)
+
     # ── Linha 2 ──────────────────────────────────
 
     @discord.ui.button(label="👋 Kickar", style=discord.ButtonStyle.danger, custom_id="vm_kickar", row=1)
@@ -4999,6 +5117,7 @@ class VMPainelView(discord.ui.View):
         embed.add_field(name="👥 Membros", value=f"`{len(ch.members)}`" + (f"/{ch.user_limit}" if ch.user_limit else " (sem limite)"), inline=True)
         embed.add_field(name="🎧 Bitrate", value=f"`{ch.bitrate // 1000}kbps`", inline=True)
         embed.add_field(name="🔒 Trancada", value="Sim 🔒" if info.get("locked") else "Não 🔓", inline=True)
+        embed.add_field(name="👻 Oculta", value="Sim 👻" if info.get("hidden") else "Não 👁️", inline=True)
         embed.add_field(name="💎 Permanente", value="Sim 💎" if info.get("permanent") else "Não 🕐", inline=True)
         embed.add_field(name="🚫 Banidos", value=banidos, inline=False)
         embed.set_footer(text="🦇 Vampy VoiceMaster")
@@ -6105,6 +6224,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
                     ("✏️ Renomear",    "Muda o nome da call"),
                     ("👥 Limite",      "Define qtd máxima de pessoas"),
                     ("🔒 Trancar",     "Bloqueia novas entradas"),
+                    ("👻 Ocultar",     "Esconde a call de todos"),
                     ("👋 Kickar",      "Remove alguém da call"),
                     ("🚫 Banir",       "Bloqueia alguém de entrar"),
                     ("✅ Permitir",    "Desbanir / liberar alguém"),
@@ -6166,6 +6286,7 @@ class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
             ("✏️ Renomear",    "Muda o nome da call"),
             ("👥 Limite",      "Define qtd máxima de pessoas"),
             ("🔒 Trancar",     "Bloqueia novas entradas"),
+            ("👻 Ocultar",     "Esconde a call de todos"),
             ("👋 Kickar",      "Remove alguém da call"),
             ("🚫 Banir",       "Bloqueia alguém de entrar"),
             ("✅ Permitir",    "Desbanir / liberar alguém"),
