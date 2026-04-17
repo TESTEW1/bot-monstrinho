@@ -1092,6 +1092,10 @@ FRASES_PROIBIDAS = [
     "idiota mesmo", "idiota do",
     "que lixo você", "você é um lixo", "vc é um lixo",
     "puto da vida", "puta que", "fdp mesmo", "vsf mesmo",
+    "vai tmnc", "se fode aí",
+    "enfia isso no cu", "toma no teu cu",
+    "cala a porra da boca", "se manca, caralho",
+    "vai pra casa do caralho", "vai pra puta que pariu",
 ]
 
 def contem_palavra_proibida(texto: str):
