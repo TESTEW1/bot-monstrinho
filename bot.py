@@ -693,7 +693,8 @@ DONO_ID = 769951556388257812
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・vampy-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌・palavras-apagadas-bot"
+CANAL_LOG = "❌・logs-chat-vampy"
+CANAL_LOG_ID = 1463696187235500032
 CANAL_TICKET = "🎟️・ticket"
 CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
@@ -1078,7 +1079,7 @@ LISTA_EMOJIS_RAPIDOS = [
 
 PALAVRAS_PROIBIDAS_EXATAS = [
     # palavrões isolados (serão verificados com \b word boundary)
-    "porra", "caralho", "bosta", "viado", "bicha", "piranha",
+    "porra", "caralho", "bicha", "piranha",
     "arrombado", "buceta", "carai", "karalho",
 ]
 
@@ -1202,7 +1203,7 @@ async def remover_cargos_advertencia(membro: discord.Member):
 
 async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int, gemini_permitiu: bool = False):
     """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
-    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
+    canal_log = message.guild.get_channel(CANAL_LOG_ID) or discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if not canal_log:
         return
 
