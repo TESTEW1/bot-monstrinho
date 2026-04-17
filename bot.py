@@ -6842,8 +6842,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             "quiet": True,
             "no_warnings": True,
             "default_search": "auto",
-            "extractor_args": {"youtube": {"player_client": "web"}},
-            "cookiefile": _COOKIES_TMP_PATH,
+
         }
 
         self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
