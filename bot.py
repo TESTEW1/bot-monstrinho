@@ -6642,6 +6642,7 @@ YTDL_OPTIONS = {
     "quiet":                True,
     "no_warnings":          True,
     "default_search":       "auto",
+    "extractor_args":       {"youtube": {"player_client": ["ios", "tv_embedded"]}},
 }
 
 # Opções do FFmpeg para stream de áudio
@@ -6842,7 +6843,7 @@ class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
             "quiet": True,
             "no_warnings": True,
             "default_search": "auto",
-
+            "extractor_args": {"youtube": {"player_client": ["ios", "tv_embedded"]}},
         }
 
         self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
