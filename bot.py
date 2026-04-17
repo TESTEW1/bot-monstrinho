@@ -15,62 +15,6 @@ try:
     TRADUCAO_DISPONIVEL = True
 except ImportError:
     TRADUCAO_DISPONIVEL = False
-
-import aiohttp
-import json
-
-# ══════════════════════════════════════════════════════════════════
-#  🤖  INTEGRAÇÃO GEMINI — Moderação Inteligente por Contexto
-# ══════════════════════════════════════════════════════════════════
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
-async def analisar_contexto_gemini(mensagem_original: str, palavra_detectada: str) -> bool:
-    """
-    Envia a mensagem ao Gemini para analisar se o uso da palavra é realmente ofensivo.
-    Retorna True se deve ser APAGADA, False se for uso inocente/casual.
-    Em caso de erro ou API indisponível, retorna True (punir por segurança).
-    """
-    if not GEMINI_API_KEY:
-        return True  # sem API key → comportamento antigo (punir sempre)
-
-    gemini_url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    )
-
-    prompt = (
-        "Você é um moderador de um servidor Discord brasileiro.\n"
-        "Analise a mensagem abaixo e decida se ela deve ser APAGADA por conter linguagem ofensiva, "
-        "xingamento direcionado a alguém, ou discurso de ódio.\n\n"
-        f"Palavra/frase detectada pelo filtro: \"{palavra_detectada}\"\n"
-        f"Mensagem completa: \"{mensagem_original}\"\n\n"
-        "Responda APENAS com uma dessas duas palavras, sem explicação:\n"
-        "- APAGAR  → se a mensagem for ofensiva, xingamento direcionado a alguém, ou discurso de ódio\n"
-        "- PERMITIR → se for uso casual, citação, contexto neutro, ou não for realmente ofensivo\n\n"
-        "Resposta:"
-    )
-
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 10, "temperature": 0.1}
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                gemini_url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as resp:
-                if resp.status != 200:
-                    return True  # falha na API → punir por segurança
-                data = await resp.json()
-                texto_resposta = data["candidates"][0]["content"]["parts"][0]["text"].strip().upper()
-                return "APAGAR" in texto_resposta
-    except Exception:
-        return True  # qualquer erro → punir por segurança
 # ================= INTENTS =================
 # ============== BOT SETUP =================
 
@@ -693,8 +637,7 @@ DONO_ID = 769951556388257812
 CANAL_GERAL = "💭・chat-geral"
 CANAL_GAMES = "🎲・vampy-games"
 CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌・logs-chat-vampy"
-CANAL_LOG_ID = 1463696187235500032
+CANAL_LOG = "❌・palavras-apagadas-bot"
 CANAL_TICKET = "🎟️・ticket"
 CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
 CANAL_EVENTO_CATALOGO = "evento-catalogo"
@@ -1079,7 +1022,7 @@ LISTA_EMOJIS_RAPIDOS = [
 
 PALAVRAS_PROIBIDAS_EXATAS = [
     # palavrões isolados (serão verificados com \b word boundary)
-    "porra", "caralho", "bicha", "piranha",
+    "porra", "caralho", "bosta", "viado", "bicha", "piranha",
     "arrombado", "buceta", "carai", "karalho",
 ]
 
@@ -1092,10 +1035,6 @@ FRASES_PROIBIDAS = [
     "idiota mesmo", "idiota do",
     "que lixo você", "você é um lixo", "vc é um lixo",
     "puto da vida", "puta que", "fdp mesmo", "vsf mesmo",
-    "vai tmnc", "se fode aí",
-    "enfia isso no cu", "toma no teu cu",
-    "cala a porra da boca", "se manca, caralho",
-    "vai pra casa do caralho", "vai pra puta que pariu",
 ]
 
 def contem_palavra_proibida(texto: str):
@@ -1205,9 +1144,9 @@ async def remover_cargos_advertencia(membro: discord.Member):
             except Exception:
                 pass
 
-async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int, gemini_permitiu: bool = False):
+async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int):
     """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
-    canal_log = message.guild.get_channel(CANAL_LOG_ID) or discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
+    canal_log = discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
     if not canal_log:
         return
 
@@ -1223,17 +1162,12 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
         else:
             avisos_emoji += "⚪ "
 
-    # Cor do embed: verde se Gemini liberou, sobe com gravidade se punido
-    if gemini_permitiu:
-        cor = 0x00CC66
-        titulo = "🤖 DETECTADO MAS LIBERADO PELO GEMINI"
-    else:
-        cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
-        cor = cor_map.get(qtd_avisos, 0xFF0000)
-        titulo = "🗑️ MENSAGEM APAGADA PELO VAMPY"
+    # Cor do embed sobe com a gravidade
+    cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
+    cor = cor_map.get(qtd_avisos, 0xFF0000)
 
     embed = discord.Embed(
-        title=titulo,
+        title="🗑️ MENSAGEM APAGADA PELO VAMPY",
         color=cor,
         timestamp=datetime.now()
     )
@@ -1243,13 +1177,15 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
     )
     embed.set_thumbnail(url=autor.display_avatar.url)
 
+    # Linha separadora visual com dados principais
     embed.add_field(name="👤 Membro",       value=autor.mention,            inline=True)
     embed.add_field(name="🆔 ID",           value=f"`{autor.id}`",          inline=True)
     embed.add_field(name="📍 Canal",        value=message.channel.mention,  inline=True)
 
+    # Conteúdo apagado
     conteudo = message.content[:900] if message.content else "*(sem texto — possível mídia)*"
     embed.add_field(
-        name="💬 Mensagem apagada" if not gemini_permitiu else "💬 Mensagem (mantida)",
+        name="💬 Mensagem apagada",
         value=f"```{conteudo}```",
         inline=False
     )
@@ -1259,31 +1195,24 @@ async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avis
         inline=False
     )
 
-    # Veredito do Gemini
+    # Painel de status
     embed.add_field(
-        name="🤖 Análise Gemini",
-        value="✅ **LIBEROU** — uso casual/sem alvo" if gemini_permitiu else "🚫 **APAGAR** — conteúdo ofensivo",
-        inline=False
+        name=f"⚠️ Avisos  ({qtd_avisos}/3)",
+        value=avisos_emoji.strip(),
+        inline=True
     )
-
-    if not gemini_permitiu:
-        embed.add_field(
-            name=f"⚠️ Avisos  ({qtd_avisos}/3)",
-            value=avisos_emoji.strip(),
-            inline=True
-        )
-        embed.add_field(
-            name="📋 Advertências totais",
-            value=f"**{total_ciclos}** vez(es) punido(a)",
-            inline=True
-        )
+    embed.add_field(
+        name="📋 Advertências totais",
+        value=f"**{total_ciclos}** vez(es) punido(a)",
+        inline=True
+    )
 
     embed.set_footer(
         text="🦇 Vampy Logs  •  Use os botões abaixo caso tenha sido engano",
         icon_url=AVATAR_VAMPY
     )
 
-    view = DesfazerAvisoView(membro_id) if not gemini_permitiu else discord.ui.View()
+    view = DesfazerAvisoView(membro_id)
     await canal_log.send(embed=embed, view=view)
 
 # ============== FUNÇÕES AUXILIARES =================
@@ -3613,24 +3542,12 @@ async def on_message(message):
                 await atualizar_ranking(message.guild) 
             return
 
-    # --- PALAVRAS PROIBIDAS (com análise de contexto via Gemini) ---
+    # --- PALAVRAS PROIBIDAS ---
     texto = message.content.lower()
     eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in message.author.roles)
     if not eh_imune and message.channel.name != CANAL_DESABAFOS:
         palavra_encontrada = contem_palavra_proibida(texto)
         if palavra_encontrada:
-            # 🤖 Gemini analisa o contexto antes de punir (evita falsos positivos)
-            deve_apagar = await analisar_contexto_gemini(message.content, palavra_encontrada)
-            print(f"[GEMINI] palavra='{palavra_encontrada}' | msg='{message.content[:80]}' | deve_apagar={deve_apagar}")
-
-            if not deve_apagar:
-                # Gemini liberou — loga mas NÃO pune e NÃO apaga
-                qtd_atual = avisos_usuarios.get(message.author.id, 0)
-                await enviar_log_palavras_apagadas(message, palavra_encontrada, qtd_atual, message.author.id, gemini_permitiu=True)
-                await bot.process_commands(message)
-                return
-
-            # Gemini mandou apagar — fluxo normal de punição
             try:
                 await message.delete()
             except Exception:
@@ -5155,6 +5072,7 @@ class VMPainelView(discord.ui.View):
         info["owner"] = user.id
         await interaction.response.send_message(embed=_vm_embed_ok("👑 Reivindicado!!", _vm_msg("dono_reivindicado")), ephemeral=True)
 
+    # ── Linha 4 — Spotyvampy ─────────────────────
 
     @discord.ui.button(label="🎮 Jogos de Call", style=discord.ButtonStyle.success, custom_id="vm_jogos_call", row=3)
     async def btn_jogos_call(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -5189,18 +5107,28 @@ class VMPainelView(discord.ui.View):
         view = JogosCallMenuView(interaction.user.voice.channel, interaction.channel)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
-
-    @discord.ui.button(label="🎵 SpotyvampY", style=discord.ButtonStyle.primary, custom_id="vm_spotyvampy", row=3)
+    @discord.ui.button(label="🎵 Spotyvampy", style=discord.ButtonStyle.primary, custom_id="vm_spotyvampy", row=3)
     async def btn_spotyvampy(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Abre o painel de música SpotyvampY."""
-        user = interaction.user
-        if not user.voice or not user.voice.channel:
+        """Abre o painel de música Spotyvampy diretamente do painel da call."""
+        sv_cog = interaction.client.cogs.get("SpotyvampyCog")
+        if not sv_cog:
             await interaction.response.send_message(
-                embed=_vm_embed_erro("Você precisa estar em uma call pra usar o SpotyvampY!! 🎵🦇"),
+                embed=discord.Embed(description="❌ Spotyvampy não está disponível no momento!! 🥺🦇", color=0xff4444),
                 ephemeral=True)
             return
-        embed, view = _svy_painel_embed(interaction.guild.id)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+        guild  = interaction.guild
+        gp = sv_cog.players.get(guild.id)
+        if gp and gp.current:
+            embed = sv_cog._embed_nowplaying(gp.current, gp)
+        else:
+            embed = discord.Embed(
+                title="🎵 Spotyvampy",
+                description="😴 Nada tocando agora!! Use `v!play <música>` pra começar!! 🦇",
+                color=SV_COR_PRIMARIA
+            )
+            embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp")
+        view = MusicControlView(sv_cog, guild.id)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
@@ -6675,6 +6603,1107 @@ async def clonar_canal_error(ctx: commands.Context, error: Exception):
 
 
 
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║          🎵 SPOTYVAMPY — SISTEMA DE MÚSICA v3.0             ║
+# ║   Powered by yt-dlp + FFmpeg — Sem servidor externo!!          ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+import yt_dlp          # pip install yt-dlp
+import asyncio
+import functools
+
+try:
+    import spotipy
+    from spotipy.oauth2 import SpotifyClientCredentials
+    SPOTIPY_DISPONIVEL = True
+except ImportError:
+    SPOTIPY_DISPONIVEL = False
+
+SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID", "")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚙️  CONFIGURAÇÕES DO PLAYER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SV_COR_PRIMARIA  = 0x1db954   # verde spotify
+SV_COR_ERRO      = 0xff4444
+SV_COR_AVISO     = 0xffaa00
+SV_VOLUME_PADRAO = 0.5        # 50% (escala 0.0-2.0 para FFmpeg)
+SV_FILA_MAX      = 50         # máximo de músicas na fila
+
+# Opções do yt-dlp para extração de áudio
+YTDL_OPTIONS = {
+    "format":               "bestaudio/best",
+    "noplaylist":           True,
+    "nocheckcertificate":   True,
+    "ignoreerrors":         False,
+    "logtostderr":          False,
+    "quiet":                True,
+    "no_warnings":          True,
+    "default_search":       "auto",
+}
+
+# Opções do FFmpeg para stream de áudio
+FFMPEG_OPTIONS = {
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options":        '-vn -filter:a "volume=0.25"',
+}
+
+ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎵  TRACK — representa uma música
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class Track:
+    """Representa uma faixa de áudio extraída pelo yt-dlp."""
+    def __init__(self, data: dict, requester=None):
+        self.title     = data.get("title",    "Desconhecido")
+        self.url       = data.get("webpage_url", data.get("url", ""))
+        self.duration  = data.get("duration",  0)     # em segundos
+        self.thumbnail = data.get("thumbnail", None)
+        self.uploader  = data.get("uploader",  data.get("channel", "Desconhecido"))
+        self.requester = requester
+        # Guarda a URL de stream se vier fresca (playlist já extraída),
+        # mas ela pode expirar — _play_track re-extrai se necessário.
+        self._stream_url = data.get("url", "")
+
+    def fmt_duration(self) -> str:
+        s = int(self.duration or 0)
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+    def make_source(self, stream_url: str, volume: float = SV_VOLUME_PADRAO) -> discord.PCMVolumeTransformer:
+        """Cria a fonte de áudio a partir de uma URL de stream fresca."""
+        opts = dict(FFMPEG_OPTIONS)
+        opts["options"] = f"-vn -filter:a volume={volume}"
+        raw = discord.FFmpegPCMAudio(stream_url, **opts)
+        return discord.PCMVolumeTransformer(raw, volume=volume)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🧠  GUILD PLAYER — estado de música por servidor
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class GuildPlayer:
+    """Mantém o estado de reprodução de um servidor."""
+
+    LOOP_OFF  = "off"
+    LOOP_ONE  = "one"
+    LOOP_ALL  = "all"
+
+    def __init__(self, vc: discord.VoiceClient, text_channel):
+        self.vc:           discord.VoiceClient = vc
+        self.text_channel                      = text_channel
+        self.queue:        list[Track]         = []
+        self.current:      Track | None        = None
+        self.loop_mode:    str                 = self.LOOP_OFF
+        self.volume:       float               = SV_VOLUME_PADRAO
+        self._play_lock                        = asyncio.Lock()
+
+    @property
+    def connected(self) -> bool:
+        return self.vc and self.vc.is_connected()
+
+    @property
+    def playing(self) -> bool:
+        return self.vc and self.vc.is_playing()
+
+    @property
+    def paused(self) -> bool:
+        return self.vc and self.vc.is_paused()
+
+    def clear_queue(self):
+        self.queue.clear()
+
+    def shuffle_queue(self):
+        import random
+        random.shuffle(self.queue)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎮  VIEW — CONTROLES DE MÚSICA (botões)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class MusicControlView(discord.ui.View):
+    """Painel de botões de controle do Spotyvampy."""
+
+    def __init__(self, cog: "SpotyvampyCog", guild_id: int):
+        super().__init__(timeout=120)
+        self.cog      = cog
+        self.guild_id = guild_id
+
+    def _gp(self) -> "GuildPlayer | None":
+        return self.cog.players.get(self.guild_id)
+
+    @discord.ui.button(emoji="⏸️", label="Pausar", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp or not gp.connected:
+            return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
+        if gp.paused:
+            gp.vc.resume()
+            button.label = "Pausar"; button.emoji = "⏸️"
+        else:
+            gp.vc.pause()
+            button.label = "Continuar"; button.emoji = "▶️"
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(emoji="⏭️", label="Pular", style=discord.ButtonStyle.primary, row=0)
+    async def btn_pular(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp or not gp.playing:
+            return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
+        gp.vc.stop()
+        await interaction.response.send_message(embed=discord.Embed(
+            description="⏭️ Pulei a música!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
+
+    @discord.ui.button(emoji="⏹️", label="Parar", style=discord.ButtonStyle.danger, row=0)
+    async def btn_parar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp:
+            return await interaction.response.send_message("❌ Não há nada tocando!!", ephemeral=True)
+        gp.clear_queue()
+        gp.loop_mode = GuildPlayer.LOOP_OFF
+        gp.current   = None
+        gp.vc.stop()
+        await interaction.response.send_message(embed=discord.Embed(
+            description="⏹️ Música parada e fila limpa!! 🦇", color=SV_COR_ERRO), ephemeral=True)
+
+    @discord.ui.button(emoji="🔁", label="Loop", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp:
+            return await interaction.response.send_message("❌ Não há player ativo!!", ephemeral=True)
+        if gp.loop_mode == GuildPlayer.LOOP_ONE:
+            gp.loop_mode = GuildPlayer.LOOP_OFF
+            status = "❌ desativado"
+        else:
+            gp.loop_mode = GuildPlayer.LOOP_ONE
+            status = "✅ ativado (música)"
+        await interaction.response.send_message(embed=discord.Embed(
+            description=f"🔁 Loop {status}!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
+
+    @discord.ui.button(emoji="📋", label="Fila", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        embed = self.cog._embed_fila(gp)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(emoji="🔀", label="Embaralhar", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp or not gp.queue:
+            return await interaction.response.send_message("❌ A fila está vazia!!", ephemeral=True)
+        gp.shuffle_queue()
+        await interaction.response.send_message(embed=discord.Embed(
+            description=f"🔀 Fila embaralhada com `{len(gp.queue)}` músicas!! 🦇", color=SV_COR_PRIMARIA), ephemeral=True)
+
+    @discord.ui.button(emoji="🎵", label="Tocando Agora", style=discord.ButtonStyle.primary, row=1)
+    async def btn_nowplaying(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gp = self._gp()
+        if not gp or not gp.current:
+            return await interaction.response.send_message("❌ Nada tocando agora!!", ephemeral=True)
+        embed = self.cog._embed_nowplaying(gp.current, gp)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🦇  COG — SPOTYVAMPY
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class SpotyvampyCog(commands.Cog, name="SpotyvampyCog"):
+    """🎵 SPOTYVAMPY — Sistema de Música v3.0 powered by yt-dlp 🦇"""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot     = bot
+        self.players: dict[int, GuildPlayer] = {}   # guild_id → GuildPlayer
+
+        # ── Idêntico ao main (2).py ──────────────────
+        self.voz_clients = {}
+        """ DICIONÁRIO QUE GUARDA AS CONEXÕES DO BOT NOS SERVIDORES 
+        CASO ELE ESTEJA EM 2 SERVIDORES ELE IRÁ SALVAR A CONEXÃO NOS 2 """
+
+        self.filas = {}
+        """ FILA DE MÚSICAS POR SERVIDOR — guild_id → lista de (stream_url, título) """
+
+        self.canais_texto = {}
+        """ CANAL DE TEXTO POR SERVIDOR — para mandar mensagens da fila """
+
+        self.yt_dl_options = {
+            "format": "bestaudio/best",
+            "noplaylist": False,   # PERMITE PLAYLISTS INTEIRAS DO YOUTUBE E SPOTIFY
+            "nocheckcertificate": True,
+            "ignoreerrors": False,
+            "logtostderr": False,
+            "quiet": True,
+            "no_warnings": True,
+            "default_search": "auto",
+            "extractor_args": {"youtube": {"player_client": "web"}},
+            "cookiefile": _COOKIES_TMP_PATH,
+        }
+
+        self.ytdl = yt_dlp.YoutubeDL(self.yt_dl_options)
+
+        self.ffmpeg_options = {
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            'options': '-vn -filter:a "volume=0.25"'
+        }
+
+    # ── Helper: toca próxima da fila ─────────────
+    async def _tocar_proximo(self, guild_id: int):
+        """Pega a próxima música da fila e toca. Chama a si mesmo via after= quando terminar."""
+        voice_client = self.voz_clients.get(guild_id)
+        text_channel  = self.canais_texto.get(guild_id)
+
+        if not voice_client or not voice_client.is_connected():
+            return
+
+        fila = self.filas.get(guild_id, [])
+        if not fila:
+            if text_channel:
+                await text_channel.send("✅ Fila finalizada! 🦇")
+            return
+
+        # Pega a próxima música da fila
+        stream_url, titulo = fila.pop(0)
+
+        # Cria o player e toca
+        player = discord.FFmpegOpusAudio(stream_url, **self.ffmpeg_options)
+
+        def after_play(error):
+            """ Depois que a música terminar, chama o próximo da fila """
+            asyncio.run_coroutine_threadsafe(
+                self._tocar_proximo(guild_id),
+                self.bot.loop
+            )
+
+        voice_client.play(player, after=after_play)
+
+        if text_channel:
+            restantes = len(self.filas.get(guild_id, []))
+            await text_channel.send(
+                f"🎵 Tocando agora: **{titulo}**"
+                + (f" | ⏭️ {restantes} na fila" if restantes else "")
+            )
+
+    # ── Helper: adiciona link/playlist à fila ─────
+    async def _adicionar_na_fila(self, url: str, guild_id: int, text_channel, voice_client):
+        """Extrai info (suporta música única, playlist do YouTube e Spotify) e adiciona tudo na fila."""
+
+        # ── É um link do SPOTIFY (track, playlist ou album) ─────────────────
+        if "open.spotify.com" in url:
+            if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
+                await text_channel.send(
+                    "❌ Spotify não configurado!! Configure `SPOTIFY_CLIENT_ID` e "
+                    "`SPOTIFY_CLIENT_SECRET` nas variáveis de ambiente. 🦇"
+                )
+                return
+
+            msg = await text_channel.send("🎵 Resolvendo link do Spotify... 🦇")
+            termos = await self._resolve_spotify(url)
+
+            if not termos:
+                await msg.edit(content="❌ Não consegui resolver esse link do Spotify!! 😢🦇")
+                return
+
+            if len(termos) > 1:
+                await msg.edit(content=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇")
+
+            adicionadas = 0
+            for termo in termos:
+                try:
+                    loop = asyncio.get_event_loop()
+                    opts = dict(self.yt_dl_options)
+                    opts["noplaylist"] = True
+                    opts["default_search"] = "ytsearch"
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        res = await loop.run_in_executor(None, lambda t=termo: ydl.extract_info(f"ytsearch:{t}", download=False))
+                    entries = res.get("entries", [res]) if res else []
+                    if entries and entries[0] and "url" in entries[0]:
+                        e = entries[0]
+                        self.filas.setdefault(guild_id, []).append(
+                            (e["url"], e.get("title", termo))
+                        )
+                        adicionadas += 1
+                except Exception:
+                    pass
+
+            await msg.edit(content=f"📋 **{adicionadas}** músicas do Spotify adicionadas na fila! 🦇")
+
+            if not voice_client.is_playing():
+                await self._tocar_proximo(guild_id)
+            return
+
+        # ── YouTube / outros links / busca por texto ─────────────────────────
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(url, download=False))
+
+        if not data:
+            await text_channel.send("❌ Erro ao obter as informações da música.")
+            return
+
+        # ── É uma PLAYLIST do YouTube ────────────────
+        if "entries" in data:
+            entries = [e for e in data["entries"] if e and "url" in e]
+            if not entries:
+                await text_channel.send("❌ Playlist vazia ou sem vídeos acessíveis.")
+                return
+
+            for entry in entries:
+                self.filas.setdefault(guild_id, []).append(
+                    (entry["url"], entry.get("title", "Desconhecido"))
+                )
+
+            await text_channel.send(
+                f"📋 Playlist **{data.get('title', 'sem título')}** adicionada! "
+                f"**{len(entries)}** músicas na fila. 🦇"
+            )
+
+        # ── É uma MÚSICA ÚNICA ───────────────────────
+        else:
+            if "url" not in data:
+                await text_channel.send("❌ Erro ao obter as informações da música.")
+                return
+            self.filas.setdefault(guild_id, []).append(
+                (data["url"], data.get("title", "Desconhecido"))
+            )
+            fila_pos = len(self.filas[guild_id])
+            if fila_pos > 1 or voice_client.is_playing():
+                await text_channel.send(
+                    f"➕ **{data.get('title', 'Música')}** adicionada na posição {fila_pos} da fila! 🦇"
+                )
+
+        # Se não estiver tocando nada, começa
+        if not voice_client.is_playing():
+            await self._tocar_proximo(guild_id)
+
+    # ── Helpers ──────────────────────────────────
+
+    def _embed_nowplaying(self, track: Track, gp: GuildPlayer) -> discord.Embed:
+        loop_labels = {GuildPlayer.LOOP_OFF: "❌ Off", GuildPlayer.LOOP_ONE: "🔂 Música", GuildPlayer.LOOP_ALL: "🔁 Fila"}
+        embed = discord.Embed(
+            title="🎵 Tocando Agora",
+            description=f"**[{track.title}]({track.url})**",
+            color=SV_COR_PRIMARIA,
+            timestamp=datetime.utcnow()
+        )
+        embed.add_field(name="⏱️ Duração",    value=f"`{track.fmt_duration()}`",                    inline=True)
+        embed.add_field(name="🎤 Artista",    value=f"`{track.uploader}`",                           inline=True)
+        embed.add_field(name="👤 Pedido por", value=track.requester.mention if track.requester else "—", inline=True)
+        embed.add_field(name="🔁 Loop",    value=loop_labels.get(gp.loop_mode, "❌ Off"),            inline=True)
+        embed.add_field(name="🔊 Volume",  value=f"`{int(gp.volume * 100)}%`",                       inline=True)
+        embed.add_field(name="📋 Na fila", value=f"`{len(gp.queue)}` músicas",                       inline=True)
+        if track.thumbnail:
+            embed.set_thumbnail(url=track.thumbnail)
+        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Feito com muito amor!!")
+        return embed
+
+    def _embed_fila(self, gp: "GuildPlayer | None") -> discord.Embed:
+        embed = discord.Embed(title="📋 Fila de Músicas — Spotyvampy", color=SV_COR_PRIMARIA, timestamp=datetime.utcnow())
+        if not gp or (not gp.current and not gp.queue):
+            embed.description = "😴 A fila está vazia!! Use `v!play` pra adicionar músicas!! 🦇"
+            return embed
+        if gp.current:
+            embed.add_field(
+                name="🎵 Tocando Agora",
+                value=f"**{gp.current.title}** `{gp.current.fmt_duration()}`",
+                inline=False
+            )
+        if gp.queue:
+            linhas = []
+            for i, t in enumerate(gp.queue[:10], 1):
+                linhas.append(f"`{i}.` **{t.title}** `{t.fmt_duration()}`")
+            if len(gp.queue) > 10:
+                linhas.append(f"... e mais `{len(gp.queue) - 10}` músicas")
+            embed.add_field(name=f"📋 Próximas ({len(gp.queue)})", value="\n".join(linhas), inline=False)
+        else:
+            embed.add_field(name="📋 Fila", value="Sem próximas músicas na fila!!", inline=False)
+        embed.set_footer(text="🦇 Spotyvampy • Feito com muito amor!!")
+        return embed
+
+    # ── Spotify → YouTube ────────────────────────
+
+    def _spotify_client(self):
+        if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
+            return None
+        try:
+            return spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+                client_id=SPOTIFY_CLIENT_ID,
+                client_secret=SPOTIFY_CLIENT_SECRET
+            ))
+        except Exception:
+            return None
+
+    async def _resolve_spotify(self, url: str) -> list[str]:
+        """Spotify URL → lista de 'Artista - Título' para buscar no YouTube."""
+        sp = self._spotify_client()
+        if not sp:
+            return []
+        loop = asyncio.get_event_loop()
+        def _fetch():
+            termos = []
+            if "/track/" in url:
+                tid = re.search(r"/track/([A-Za-z0-9]+)", url)
+                if not tid: return termos
+                t = sp.track(tid.group(1))
+                artista = t["artists"][0]["name"] if t.get("artists") else ""
+                termos.append(f"{artista} - {t['name']}")
+            elif "/playlist/" in url:
+                pid = re.search(r"/playlist/([A-Za-z0-9]+)", url)
+                if not pid: return termos
+                for item in sp.playlist_items(pid.group(1), limit=SV_FILA_MAX).get("items", []):
+                    t = item.get("track")
+                    if not t: continue
+                    artista = t["artists"][0]["name"] if t.get("artists") else ""
+                    termos.append(f"{artista} - {t['name']}")
+            elif "/album/" in url:
+                aid = re.search(r"/album/([A-Za-z0-9]+)", url)
+                if not aid: return termos
+                for t in sp.album_tracks(aid.group(1), limit=SV_FILA_MAX).get("items", []):
+                    artista = t["artists"][0]["name"] if t.get("artists") else ""
+                    termos.append(f"{artista} - {t['name']}")
+            return termos
+        return await loop.run_in_executor(None, _fetch)
+
+    # ── Busca assíncrona via yt-dlp ──────────────
+
+    async def _search(self, query: str) -> list[dict]:
+        """Busca/extrai info de áudio via yt-dlp em thread separada."""
+        loop = asyncio.get_event_loop()
+        is_url = query.lower().startswith("http://") or query.lower().startswith("https://")
+        # Limpa parâmetros de tracking do YouTube (?si=, &pp=, etc) que podem causar erro
+        if is_url:
+            import re as _re
+            search_q = _re.sub(r"[?&](si|pp|feature|ab_channel)=[^&]*", "", query).rstrip("?&")
+        else:
+            search_q = f"ytsearch5:{query}"
+
+        opts = dict(YTDL_OPTIONS)
+        opts["noplaylist"] = False
+        opts["ignoreerrors"] = False  # na busca queremos ver o erro real
+
+        def _extract():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(search_q, download=False)
+                if not info:
+                    return []
+                if "entries" in info:
+                    return [e for e in info["entries"] if e]
+                return [info]
+
+        return await loop.run_in_executor(None, _extract)
+
+    # ── Gerenciar player ─────────────────────────
+
+    async def _get_or_create_player(self, ctx: commands.Context) -> "GuildPlayer | None":
+        if not ctx.author.voice or not ctx.author.voice.channel:
+            await ctx.send(embed=discord.Embed(
+                description="❌ Você precisa estar em um canal de voz pra usar o Spotyvampy!! 🦇",
+                color=SV_COR_ERRO))
+            return None
+
+        gid = ctx.guild.id
+        gp  = self.players.get(gid)
+
+        if gp and gp.connected:
+            gp.text_channel = ctx.channel
+            return gp
+
+        # Desconectar player morto se existir
+        if gp and not gp.connected:
+            del self.players[gid]
+
+        try:
+            vc = await ctx.author.voice.channel.connect()
+            gp = GuildPlayer(vc, ctx.channel)
+            self.players[gid] = gp
+            return gp
+        except Exception as e:
+            print(f"[Spotyvampy] Erro ao conectar: {e}")
+            await ctx.send(embed=discord.Embed(
+                description=f"❌ Não consegui entrar na call!! 😢🦇\n`{e}`",
+                color=SV_COR_ERRO))
+            return None
+
+    def _play_next(self, guild_id: int):
+        """Callback chamado quando uma música termina. Agenda a próxima."""
+        gp = self.players.get(guild_id)
+        if not gp or not gp.connected:
+            return
+
+        if gp.loop_mode == GuildPlayer.LOOP_ONE and gp.current:
+            # Replay da música atual
+            asyncio.run_coroutine_threadsafe(
+                self._play_track(gp, gp.current), self.bot.loop)
+            return
+
+        if gp.loop_mode == GuildPlayer.LOOP_ALL and gp.current:
+            gp.queue.append(gp.current)
+
+        if gp.queue:
+            next_track = gp.queue.pop(0)
+            asyncio.run_coroutine_threadsafe(
+                self._play_track(gp, next_track), self.bot.loop)
+        else:
+            gp.current = None
+            asyncio.run_coroutine_threadsafe(
+                self._send_queue_ended(gp), self.bot.loop)
+
+    async def _send_queue_ended(self, gp: GuildPlayer):
+        if gp.text_channel:
+            try:
+                await gp.text_channel.send(embed=discord.Embed(
+                    description="📭 A fila acabou!! Obrigada por usar o Spotyvampy!! 🦇💚",
+                    color=SV_COR_PRIMARIA))
+            except Exception:
+                pass
+
+    async def _get_fresh_stream(self, track: Track) -> str:
+        """Re-extrai a URL de stream fresca para a track (URLs expiram em ~6h)."""
+        loop = asyncio.get_event_loop()
+        base_opts = dict(YTDL_OPTIONS)
+        base_opts["noplaylist"] = True
+
+        def _extract():
+            with yt_dlp.YoutubeDL(base_opts) as ydl:
+                info = ydl.extract_info(track.url, download=False)
+                if info and "entries" in info:
+                    info = info["entries"][0]
+                return info.get("url", "") if info else ""
+
+        return await loop.run_in_executor(None, _extract)
+
+    async def _play_track(self, gp: GuildPlayer, track: Track):
+        """Inicia a reprodução de uma track no VoiceClient."""
+        if not gp.connected:
+            return
+        gp.current = track
+
+        # Sempre busca URL de stream fresca para evitar expiração
+        try:
+            stream_url = await self._get_fresh_stream(track)
+        except Exception as e:
+            print(f"[Spotyvampy] Erro ao obter stream de '{track.title}': {e}")
+            if gp.text_channel:
+                try:
+                    await gp.text_channel.send(embed=discord.Embed(
+                        description=f"❌ Não consegui carregar **{track.title}**!! Pulando... 🦇\n`{e}`",
+                        color=SV_COR_ERRO))
+                except Exception:
+                    pass
+            self._play_next(gp.vc.guild.id)
+            return
+
+        if not stream_url:
+            if gp.text_channel:
+                try:
+                    await gp.text_channel.send(embed=discord.Embed(
+                        description=f"❌ Stream indisponível para **{track.title}**!! Pulando... 🦇",
+                        color=SV_COR_ERRO))
+                except Exception:
+                    pass
+            self._play_next(gp.vc.guild.id)
+            return
+
+        source = track.make_source(stream_url, gp.volume)
+        after_cb = lambda e: self._play_next(gp.vc.guild.id)
+        gp.vc.play(source, after=after_cb)
+        # Envia embed de "tocando agora"
+        if gp.text_channel:
+            try:
+                embed = self._embed_nowplaying(track, gp)
+                view  = MusicControlView(self, gp.vc.guild.id)
+                await gp.text_channel.send(embed=embed, view=view)
+            except Exception:
+                pass
+
+    # ── 🟢 Boot ───────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await asyncio.sleep(3)
+        for guild in self.bot.guilds:
+            log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+            if not log_ch:
+                continue
+            embed = discord.Embed(
+                title="🎵 Spotyvampy Online!!",
+                description=(
+                    "```\n"
+                    "╔══════════════════════════════════════╗\n"
+                    "║   SPOTYVAMPY  🦇  v3.0           ║\n"
+                    "║    — Powered by yt-dlp —            ║\n"
+                    "║       ✅  ONLINE  ✅                 ║\n"
+                    "╚══════════════════════════════════════╝\n"
+                    "```"
+                ),
+                color=SV_COR_PRIMARIA,
+                timestamp=datetime.utcnow()
+            )
+            embed.add_field(name="🎵 Comandos",
+                            value="`v!play` `v!pular` `v!parar` `v!fila` `v!tocando` `v!volume` `v!loop` `v!embaralhar` `v!sair`",
+                            inline=False)
+            embed.add_field(name="🎧 Fontes Suportadas",
+                            value="YouTube • Spotify • SoundCloud • Bandcamp • Vimeo • Rádio Online",
+                            inline=False)
+            embed.add_field(name="📖 Ajuda Completa", value="`v!sv` ou `v!spotyvampy`", inline=False)
+            embed.set_footer(text="🦇 Spotyvampy v3.0 • Sem servidor externo!!")
+            await log_ch.send(embed=embed)
+
+    # ── 🎵 COMANDOS ───────────────────────────────
+
+    @commands.command(name="play", aliases=["tocar", "p"])
+    async def play(self, ctx: commands.Context, *, query: str):
+        """Toca música do YouTube/SoundCloud/Spotify. Uso: v!play <nome ou URL>"""
+        await self._processar_musica(ctx, query)
+
+    async def _processar_musica(self, ctx: commands.Context, query: str, silencioso: bool = False):
+        """Lógica central de play — usada pelo comando e pelo auto-link."""
+        async with ctx.typing():
+            gp = await self._get_or_create_player(ctx)
+            if not gp:
+                return
+
+            # ── Spotify ──────────────────────────────
+            if "open.spotify.com" in query:
+                if not SPOTIPY_DISPONIVEL or not SPOTIFY_CLIENT_ID:
+                    return await ctx.send(embed=discord.Embed(
+                        description=(
+                            "❌ Spotify não configurado!! 🦇\n"
+                            "Configure `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` nas variáveis de ambiente."
+                        ), color=SV_COR_ERRO))
+
+                msg_busca = await ctx.send(embed=discord.Embed(
+                    description="🎵 Resolvendo link do Spotify... 🦇", color=SV_COR_AVISO))
+
+                termos = await self._resolve_spotify(query)
+                if not termos:
+                    return await msg_busca.edit(embed=discord.Embed(
+                        description="❌ Não consegui resolver esse link do Spotify!! 😢🦇",
+                        color=SV_COR_ERRO))
+
+                tocando_antes = gp.playing or gp.paused
+                adicionadas   = 0
+
+                if len(termos) > 1:
+                    await msg_busca.edit(embed=discord.Embed(
+                        description=f"📋 Carregando **{len(termos)}** músicas do Spotify... 🦇",
+                        color=SV_COR_AVISO))
+                    for termo in termos:
+                        if len(gp.queue) >= SV_FILA_MAX:
+                            break
+                        try:
+                            res = await self._search(termo)
+                            if res:
+                                gp.queue.append(Track(res[0], requester=ctx.author))
+                                adicionadas += 1
+                        except Exception:
+                            pass
+                    await msg_busca.edit(embed=discord.Embed(
+                        description=f"📋 Playlist do Spotify adicionada com **{adicionadas}** músicas!! 🦇",
+                        color=SV_COR_PRIMARIA))
+                else:
+                    try:
+                        res = await self._search(termos[0])
+                    except Exception as e:
+                        return await msg_busca.edit(embed=discord.Embed(
+                            description=f"❌ Erro ao buscar no YouTube!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
+                    if not res:
+                        return await msg_busca.edit(embed=discord.Embed(
+                            description="❌ Não encontrei essa música no YouTube!! 😢🦇", color=SV_COR_ERRO))
+                    track = Track(res[0], requester=ctx.author)
+                    gp.queue.append(track)
+                    adicionadas = 1
+                    if tocando_antes:
+                        await msg_busca.edit(embed=discord.Embed(
+                            description=f"📋 **{track.title}** adicionada à fila!! 🦇",
+                            color=SV_COR_PRIMARIA))
+                    else:
+                        await msg_busca.delete()
+
+                if not tocando_antes and gp.queue:
+                    await self._play_track(gp, gp.queue.pop(0))
+                return
+
+            # ── YouTube / texto / outros links ───────
+            msg_busca = None if silencioso else await ctx.send(embed=discord.Embed(
+                description=f"🔎 Buscando: **{query}**... 🦇", color=SV_COR_AVISO))
+
+            try:
+                resultados = await self._search(query)
+            except Exception as e:
+                print(f"[Spotyvampy] Erro ao buscar '{query}': {e}")
+                if msg_busca:
+                    return await msg_busca.edit(embed=discord.Embed(
+                        description=f"❌ Erro ao buscar!! 😢🦇\n`{e}`", color=SV_COR_ERRO))
+                return
+
+            if not resultados:
+                if msg_busca:
+                    return await msg_busca.edit(embed=discord.Embed(
+                        description="❌ Não encontrei nada com essa busca!! 😢🦇", color=SV_COR_ERRO))
+                return
+
+            adicionadas   = 0
+            tocando_antes = gp.playing or gp.paused
+            is_url  = query.lower().startswith("http")
+            is_list = is_url and len(resultados) > 1
+
+            if is_list:
+                for data in resultados:
+                    if len(gp.queue) >= SV_FILA_MAX:
+                        break
+                    gp.queue.append(Track(data, requester=ctx.author))
+                    adicionadas += 1
+                if msg_busca:
+                    await msg_busca.edit(embed=discord.Embed(
+                        description=f"📋 Playlist adicionada com **{adicionadas}** músicas!! 🦇",
+                        color=SV_COR_PRIMARIA))
+            else:
+                track = Track(resultados[0], requester=ctx.author)
+                if len(gp.queue) >= SV_FILA_MAX:
+                    if msg_busca:
+                        return await msg_busca.edit(embed=discord.Embed(
+                            description=f"❌ A fila está cheia!! Máximo de **{SV_FILA_MAX}** músicas!! 🦇",
+                            color=SV_COR_ERRO))
+                    return
+                gp.queue.append(track)
+                adicionadas = 1
+                if tocando_antes:
+                    if msg_busca:
+                        await msg_busca.edit(embed=discord.Embed(
+                            description=f"📋 **{track.title}** adicionada à fila!! 🦇",
+                            color=SV_COR_PRIMARIA))
+                else:
+                    if msg_busca:
+                        await msg_busca.delete()
+
+            if not tocando_antes and gp.queue:
+                await self._play_track(gp, gp.queue.pop(0))
+
+    @commands.command(name="pausar", aliases=["pause"])
+    async def pausar(self, ctx: commands.Context):
+        """Pausa ou continua a música. Uso: v!pausar"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.connected:
+            return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
+        if gp.paused:
+            gp.vc.resume()
+            desc = "▶️ Música continuada!! 🦇"
+        else:
+            gp.vc.pause()
+            desc = "⏸️ Música pausada!! 🦇"
+        await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="continuar", aliases=["resume", "r"])
+    async def continuar(self, ctx: commands.Context):
+        """Continua a música se estiver pausada. Uso: v!continuar"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.paused:
+            return await ctx.send(embed=discord.Embed(description="❌ A música não está pausada!! 🦇", color=SV_COR_ERRO))
+        gp.vc.resume()
+        await ctx.send(embed=discord.Embed(description="▶️ Música continuada!! 🦇", color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="pular", aliases=["skip", "s"])
+    async def pular(self, ctx: commands.Context):
+        """Pula para a próxima música. Uso: v!pular"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.playing:
+            return await ctx.send(embed=discord.Embed(description="❌ Não há nada tocando!! 🦇", color=SV_COR_ERRO))
+        gp.vc.stop()  # dispara o after_cb → _play_next
+        await ctx.send(embed=discord.Embed(
+            description=f"⏭️ Pulei!! 🦇 — pedido por {ctx.author.mention}",
+            color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="parar", aliases=["stop"])
+    async def parar(self, ctx: commands.Context):
+        """Para a música e limpa a fila. Uso: v!parar"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
+            return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhuma call!! 🦇", color=SV_COR_ERRO))
+        gp.clear_queue()
+        gp.loop_mode = GuildPlayer.LOOP_OFF
+        gp.current   = None
+        gp.vc.stop()
+        await ctx.send(embed=discord.Embed(
+            description=f"⏹️ Música parada e fila limpa por {ctx.author.mention}!! 🦇",
+            color=SV_COR_ERRO))
+
+    @commands.command(name="fila", aliases=["queue", "q"])
+    async def fila(self, ctx: commands.Context):
+        """Mostra a fila de músicas. Uso: v!fila"""
+        gp = self.players.get(ctx.guild.id)
+        embed = self._embed_fila(gp)
+        await ctx.send(embed=embed)
+
+    @commands.command(name="tocando", aliases=["nowplaying", "np"])
+    async def tocando(self, ctx: commands.Context):
+        """Mostra a música tocando agora. Uso: v!tocando"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.current:
+            return await ctx.send(embed=discord.Embed(description="❌ Nada tocando agora!! 🦇", color=SV_COR_ERRO))
+        embed = self._embed_nowplaying(gp.current, gp)
+        view  = MusicControlView(self, ctx.guild.id)
+        await ctx.send(embed=embed, view=view)
+
+    @commands.command(name="volume", aliases=["vol"])
+    async def volume(self, ctx: commands.Context, vol: int):
+        """Ajusta o volume (1-100). Uso: v!volume 80"""
+        if not 1 <= vol <= 100:
+            return await ctx.send(embed=discord.Embed(
+                description="❌ Volume deve ser entre **1** e **100**!! 🦇", color=SV_COR_ERRO))
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
+            return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
+        gp.volume = vol / 100
+        if gp.vc.source and isinstance(gp.vc.source, discord.PCMVolumeTransformer):
+            gp.vc.source.volume = gp.volume
+        await ctx.send(embed=discord.Embed(
+            description=f"🔊 Volume ajustado para **{vol}%** por {ctx.author.mention}!! 🦇",
+            color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="loop")
+    async def loop(self, ctx: commands.Context, modo: str = "musica"):
+        """Ativa loop. Modos: musica | fila | off. Uso: v!loop fila"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp:
+            return await ctx.send(embed=discord.Embed(description="❌ Não há player ativo!! 🦇", color=SV_COR_ERRO))
+        modo = modo.lower()
+        if modo in ("off", "desligar", "0"):
+            gp.loop_mode = GuildPlayer.LOOP_OFF
+            desc = "🔁 Loop **desativado**!! 🦇"
+        elif modo in ("fila", "queue", "all"):
+            gp.loop_mode = GuildPlayer.LOOP_ALL
+            desc = "🔁 Loop de **fila** ativado!! 🦇"
+        else:
+            gp.loop_mode = GuildPlayer.LOOP_ONE
+            desc = "🔂 Loop de **música** ativado!! 🦇"
+        await ctx.send(embed=discord.Embed(description=desc, color=SV_COR_PRIMARIA), delete_after=10)
+
+    @commands.command(name="embaralhar", aliases=["shuffle"])
+    async def embaralhar(self, ctx: commands.Context):
+        """Embaralha a fila. Uso: v!embaralhar"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
+            return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
+        gp.shuffle_queue()
+        await ctx.send(embed=discord.Embed(
+            description=f"🔀 Fila embaralhada com **{len(gp.queue)}** músicas por {ctx.author.mention}!! 🦇",
+            color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="remover", aliases=["remove", "rm"])
+    async def remover(self, ctx: commands.Context, pos: int):
+        """Remove uma música da fila pela posição. Uso: v!remover 3"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
+            return await ctx.send(embed=discord.Embed(description="❌ A fila está vazia!! 🦇", color=SV_COR_ERRO))
+        if not 1 <= pos <= len(gp.queue):
+            return await ctx.send(embed=discord.Embed(
+                description=f"❌ Posição inválida!! A fila tem **{len(gp.queue)}** músicas!! 🦇", color=SV_COR_ERRO))
+        removida = gp.queue.pop(pos - 1)
+        await ctx.send(embed=discord.Embed(
+            description=f"🗑️ **{removida.title}** removida da fila por {ctx.author.mention}!! 🦇",
+            color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="limparfila", aliases=["clearqueue", "cq"])
+    async def limparfila(self, ctx: commands.Context):
+        """Limpa a fila sem parar a música atual. Uso: v!limparfila"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.queue:
+            return await ctx.send(embed=discord.Embed(description="❌ A fila já está vazia!! 🦇", color=SV_COR_ERRO))
+        qtd = len(gp.queue)
+        gp.clear_queue()
+        await ctx.send(embed=discord.Embed(
+            description=f"🧹 **{qtd}** músicas removidas da fila por {ctx.author.mention}!! 🦇",
+            color=SV_COR_PRIMARIA), delete_after=8)
+
+    @commands.command(name="sair", aliases=["dc", "disconnect", "desconectar"])
+    async def sair(self, ctx: commands.Context):
+        """Desconecta o bot do canal de voz. Uso: v!sair"""
+        gp = self.players.get(ctx.guild.id)
+        if not gp or not gp.connected:
+            return await ctx.send(embed=discord.Embed(description="❌ Não estou em nenhum canal de voz!! 🦇", color=SV_COR_ERRO))
+        gp.clear_queue()
+        gp.current = None
+        await gp.vc.disconnect()
+        del self.players[ctx.guild.id]
+        await ctx.send(embed=discord.Embed(
+            description=f"👋 Saí do canal de voz!! Tchau tchau, {ctx.author.mention}!! 🦇💚",
+            color=SV_COR_PRIMARIA))
+
+    @commands.command(name="spotyvampy", aliases=["sv", "musicahelp", "mhelp"])
+    async def spotyvampy_help(self, ctx: commands.Context):
+        """Mostra todos os comandos do Spotyvampy. Uso: v!sv"""
+        embed = discord.Embed(
+            title="🎵 Spotyvampy — Comandos de Música",
+            description=(
+                "```\n"
+                "╔══════════════════════════════════════╗\n"
+                "║   SPOTYVAMPY  🦇  v3.0           ║\n"
+                "║    — Powered by yt-dlp! —           ║\n"
+                "╚══════════════════════════════════════╝\n"
+                "```"
+            ),
+            color=SV_COR_PRIMARIA,
+            timestamp=datetime.utcnow()
+        )
+        embed.add_field(name="▶️  Tocar",       value="`v!play <nome/URL>` `v!p` `v!tocar`\nYouTube, SoundCloud, Bandcamp, Vimeo...", inline=False)
+        embed.add_field(name="⏸️  Pausar",      value="`v!pausar` `v!pause`",        inline=True)
+        embed.add_field(name="▶️  Continuar",   value="`v!continuar` `v!resume`",    inline=True)
+        embed.add_field(name="⏭️  Pular",       value="`v!pular` `v!skip`",          inline=True)
+        embed.add_field(name="⏹️  Parar",       value="`v!parar` `v!stop`",          inline=True)
+        embed.add_field(name="📋  Fila",        value="`v!fila` `v!queue`",          inline=True)
+        embed.add_field(name="🎵  Tocando",     value="`v!tocando` `v!np`",          inline=True)
+        embed.add_field(name="🔊  Volume",      value="`v!volume <1-100>`",          inline=True)
+        embed.add_field(name="🔁  Loop",        value="`v!loop musica/fila/off`",    inline=True)
+        embed.add_field(name="🔀  Embaralhar",  value="`v!embaralhar` `v!shuffle`",  inline=True)
+        embed.add_field(name="🗑️  Remover",     value="`v!remover <pos>`",           inline=True)
+        embed.add_field(name="🧹  Limpar Fila", value="`v!limparfila` `v!cq`",       inline=True)
+        embed.add_field(name="👋  Sair",        value="`v!sair` `v!dc`",             inline=True)
+        embed.add_field(
+            name="🎧 Fontes Suportadas",
+            value="YouTube • SoundCloud • Bandcamp • Vimeo • Rádio Online",
+            inline=False
+        )
+        embed.set_footer(text="🦇 Spotyvampy v3.0 • Powered by yt-dlp • Use v!sv pra ver esse menu")
+        view = MusicControlView(self, ctx.guild.id)
+        await ctx.send(embed=embed, view=view)
+
+    # ── 🔗 Auto-link: adiciona música sem v!play ──
+
+    _MUSIC_URL_RE = re.compile(
+        r"https?://"
+        r"(?:(?:www\.)?youtube\.com/watch\?[^\s]*v=[\w-]+|"
+        r"youtu\.be/[\w-]+|"
+        r"(?:www\.)?youtube\.com/playlist\?[^\s]*list=[\w-]+|"
+        r"open\.spotify\.com/(?:track|playlist|album)/[^\s]+|"
+        r"(?:www\.)?soundcloud\.com/[^\s]+)",
+        re.IGNORECASE
+    )
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Lógica idêntica ao main (2).py + auto-link de URLs no chat."""
+
+        # Ignora mensagens enviadas por outros bots (incluindo ele mesmo)
+        if message.author.bot:
+            return
+
+        # ── Comando !play ────────────────────────────────────────────────────
+        if message.content.startswith("!play"):
+            # Verifica se o bot já está conectado em um canal de voz neste servidor
+            """ Verifica se o servidor já está na lista e se o bot ainda está conectado nela. """
+            if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
+
+                # Se já estiver conectado, ela vai reaproveitar essa conexão
+                voice_client = self.voz_clients[message.guild.id]
+            else:
+                # Se o autor da mensagem não for bot e estiver em um canal de voz
+                """ Se o autor não for um bot, estiver em um canal de voz e o canal
+                existir. """
+                if not message.author.bot and message.author.voice and message.author.voice.channel:
+
+                    # Conecta o bot ao canal de voz do autor
+                    voice_client = await message.author.voice.channel.connect()
+                    """ O AWAIT SERVE PRA ELE ESPERAR ESSA PARTE TERMINAR ANTES DE CONTINUAR,
+                    MAS SEM TRAVAR O BOT."""
+
+                    # Guarda a conexão de voz desse servidor no dicionário
+                    self.voz_clients[message.guild.id] = voice_client
+                else:
+                    # Se o usuário não estiver em um canal de voz, avisa e para a execução
+                    await message.channel.send("Você precisa estar em um canal de voz!")
+                    return
+
+            # Guarda o canal de texto para mandar mensagens da fila
+            self.canais_texto[message.guild.id] = message.channel
+
+            # Pega o link da música (o segundo elemento depois do "!play")
+            url = message.content.split()[1]
+            print(f"URL: {url}")
+
+            # Delega para o helper que suporta música única E playlist
+            await self._adicionar_na_fila(url, message.guild.id, message.channel, voice_client)
+            return
+
+        # ── Comando !stop ────────────────────────────────────────────────────
+        if message.content.startswith("!stop"):
+
+            # Verifica se o bot está conectado neste servidor
+            """ Se o ID do servidor estiver em voz_clients,
+            no caso conectado ao servidor """
+            if message.guild.id in self.voz_clients:
+                # Para a música
+                self.voz_clients[message.guild.id].stop()
+                # Desconecta o bot do canal de voz
+                await self.voz_clients[message.guild.id].disconnect()
+
+                # Remove a conexão da lista de conexões
+                del self.voz_clients[message.guild.id]
+                """ SERVE PARA NÃO FICAR GUARDANDO CONEXÕES ANTIGAS E ENCHER A LISTA """
+
+                await message.channel.send("Bot desconectado do canal de voz.")
+            return
+
+        # ── Auto-link: qualquer link de música colado no chat vai direto pra fila ──
+        if not message.guild:
+            return
+        if message.content.startswith("v!") or message.content.startswith("!"):
+            return
+        match = self._MUSIC_URL_RE.search(message.content)
+        if not match:
+            return
+
+        # O usuário precisa estar em um canal de voz
+        if not message.author.voice or not message.author.voice.channel:
+            return
+
+        # Se o bot ainda não estiver conectado neste servidor, entra no canal do usuário
+        if message.guild.id in self.voz_clients and self.voz_clients[message.guild.id].is_connected():
+            voice_client = self.voz_clients[message.guild.id]
+        else:
+            voice_client = await message.author.voice.channel.connect()
+            self.voz_clients[message.guild.id] = voice_client
+
+        # Guarda o canal de texto onde o link foi mandado
+        self.canais_texto[message.guild.id] = message.channel
+
+        # Adiciona na fila (suporta música única E playlist)
+        await self._adicionar_na_fila(match.group(0), message.guild.id, message.channel, voice_client)
+
+    # ── Auto-desconectar se canal vazio ──────────
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if member.bot:
+            return
+        gp = self.players.get(member.guild.id)
+        if not gp or not gp.connected:
+            return
+        vc_channel = gp.vc.channel
+        if vc_channel and len([m for m in vc_channel.members if not m.bot]) == 0:
+            await asyncio.sleep(60)
+            gp = self.players.get(member.guild.id)
+            if gp and gp.connected:
+                if len([m for m in gp.vc.channel.members if not m.bot]) == 0:
+                    gp.clear_queue()
+                    gp.current = None
+                    await gp.vc.disconnect()
+                    del self.players[member.guild.id]
+                    if gp.text_channel:
+                        try:
+                            await gp.text_channel.send(embed=discord.Embed(
+                                description="👋 Saí do canal de voz por inatividade!! 🦇💚",
+                                color=SV_COR_AVISO))
+                        except Exception:
+                            pass
+
+
+
 
 # ══════════════════════════════════════════════════════════════════
 #  🦇  COMANDOS FOFOS — Amber Edition
@@ -6784,506 +7813,13 @@ async def darcargogeral(ctx: commands.Context):
     await ctx.send(embed=embed, view=DarCargoGeralView(ctx.guild))
 
 
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║        🎵 SPOTYVAMPY — Sistema de Música v1.0               ║
-# ║   Player de música integrado ao VoiceMaster • Estilo Vampy  ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-import yt_dlp as _yt_dlp
-
-_YTDL_OPTIONS = {
-    "format": "bestaudio/best",
-    "noplaylist": True,
-    "quiet": True,
-    "no_warnings": True,
-    "default_search": "ytsearch",
-    "extract_flat": False,
-    "source_address": "0.0.0.0",
-}
-
-_FFMPEG_OPTIONS = {
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn",
-}
-
-_svy_ytdl = _yt_dlp.YoutubeDL(_YTDL_OPTIONS)
-
-# ── Estrutura de faixa ────────────────────────────────────────────
-
-class SpotyvampyTrack:
-    """Representa uma faixa de música na fila do SpotyvampY."""
-    __slots__ = ("title", "stream_url", "url", "duration", "requested_by")
-
-    def __init__(self, title: str, stream_url: str, url: str,
-                 duration: int | None = None, requested_by=None):
-        self.title       = title
-        self.stream_url  = stream_url
-        self.url         = url
-        self.duration    = duration
-        self.requested_by = requested_by
-
-    def duration_str(self) -> str:
-        if self.duration is None:
-            return "??:??"
-        m, s = divmod(int(self.duration), 60)
-        h, m = divmod(m, 60)
-        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
-
-    @classmethod
-    async def from_query(cls, query: str, requested_by=None):
-        loop = asyncio.get_running_loop()
-        info = await loop.run_in_executor(
-            None,
-            lambda: _svy_ytdl.extract_info(query, download=False)
-        )
-        if "entries" in info:
-            info = info["entries"][0]
-        return cls(
-            title=info.get("title", "Sem título"),
-            stream_url=info["url"],
-            url=info.get("webpage_url", query),
-            duration=info.get("duration"),
-            requested_by=requested_by,
-        )
-
-
-# ── Player por servidor ───────────────────────────────────────────
-
-_svy_players: dict[int, "SpotyvampyPlayer"] = {}
-
-class SpotyvampyPlayer:
-    """Player de música por servidor."""
-
-    def __init__(self, guild_id: int):
-        self.guild_id = guild_id
-        self.queue: asyncio.Queue = asyncio.Queue()
-        self.current: SpotyvampyTrack | None = None
-        self.is_running = False
-        self.volume = 0.5
-
-    async def start(self, ctx):
-        """Loop principal: toca faixa por faixa até a fila acabar."""
-        self.is_running = True
-        try:
-            while not self.queue.empty():
-                track = await self.queue.get()
-                self.current = track
-
-                source = discord.FFmpegPCMAudio(track.stream_url, **_FFMPEG_OPTIONS)
-                source = discord.PCMVolumeTransformer(source, volume=self.volume)
-
-                done = asyncio.Event()
-
-                def _after(error):
-                    if error:
-                        print(f"[SpotyvampY] Erro: {error}")
-                    ctx.bot.loop.call_soon_threadsafe(done.set)
-
-                ctx.voice_client.play(source, after=_after)
-
-                # Embed "tocando agora"
-                embed = discord.Embed(
-                    title="🎵 SpotyvampY — Tocando Agora",
-                    description=(
-                        f"**{track.title}**\n\n"
-                        f"🔗 [Link da música]({track.url})\n"
-                        f"⏱️ Duração: `{track.duration_str()}`\n"
-                        f"🔊 Volume: `{int(self.volume * 100)}%`"
-                    ),
-                    color=0x1DB954,
-                    timestamp=datetime.utcnow()
-                )
-                req = track.requested_by
-                if req:
-                    embed.set_footer(
-                        text=f"Pedido por {req.display_name}",
-                        icon_url=req.display_avatar.url
-                    )
-                embed.set_thumbnail(url=AVATAR_VAMPY)
-                view = SpotyvampyControlView(self.guild_id)
-                await ctx.channel.send(embed=embed, view=view)
-
-                await done.wait()
-        finally:
-            self.current = None
-            self.is_running = False
-            _svy_players.pop(self.guild_id, None)
-
-
-# ── View de controle (botões) ──────────────────────────────────────
-
-class SpotyvampyControlView(discord.ui.View):
-    """Painel de controle do SpotyvampY com botões interativos."""
-
-    def __init__(self, guild_id: int):
-        super().__init__(timeout=None)
-        self.guild_id = guild_id
-
-    # ── Pausar / Continuar ────────────────────────────────────────
-
-    @discord.ui.button(label="⏸️ Pausar", style=discord.ButtonStyle.secondary,
-                       custom_id="svy_toggle", row=0)
-    async def toggle_pause(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client
-        if not vc:
-            return await interaction.response.send_message("❌ Não estou em uma call!", ephemeral=True)
-        if vc.is_playing():
-            vc.pause()
-            button.label = "▶️ Continuar"
-            button.style = discord.ButtonStyle.success
-            await interaction.response.edit_message(view=self)
-        elif vc.is_paused():
-            vc.resume()
-            button.label = "⏸️ Pausar"
-            button.style = discord.ButtonStyle.secondary
-            await interaction.response.edit_message(view=self)
-        else:
-            await interaction.response.send_message("Nada tocando no momento! 🦇", ephemeral=True)
-
-    # ── Pular ─────────────────────────────────────────────────────
-
-    @discord.ui.button(label="⏭️ Pular", style=discord.ButtonStyle.primary,
-                       custom_id="svy_skip", row=0)
-    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client
-        if vc and (vc.is_playing() or vc.is_paused()):
-            vc.stop()
-            await interaction.response.send_message("⏭️ Música pulada! 🦇", ephemeral=True)
-        else:
-            await interaction.response.send_message("Nada para pular! 🥺🦇", ephemeral=True)
-
-    # ── Parar ─────────────────────────────────────────────────────
-
-    @discord.ui.button(label="⏹️ Parar", style=discord.ButtonStyle.danger,
-                       custom_id="svy_stop", row=0)
-    async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client
-        if not vc:
-            return await interaction.response.send_message("❌ Não estou em uma call!", ephemeral=True)
-        player = _svy_players.get(interaction.guild.id)
-        if player:
-            while not player.queue.empty():
-                try:
-                    player.queue.get_nowait()
-                except Exception:
-                    break
-        vc.stop()
-        await interaction.response.send_message(
-            "⏹️ Música parada e fila limpa! 🦇💚", ephemeral=True
-        )
-
-    # ── Ver fila ──────────────────────────────────────────────────
-
-    @discord.ui.button(label="📋 Fila", style=discord.ButtonStyle.secondary,
-                       custom_id="svy_queue", row=0)
-    async def show_queue(self, interaction: discord.Interaction, button: discord.ui.Button):
-        player = _svy_players.get(interaction.guild.id)
-        if not player or (player.queue.empty() and not player.current):
-            return await interaction.response.send_message("A fila está vazia! 🥺🦇", ephemeral=True)
-
-        itens = list(player.queue._queue)
-        desc = ""
-        if player.current:
-            desc += f"🎵 **Tocando:** {player.current.title} `{player.current.duration_str()}`\n\n"
-        if itens:
-            desc += "\n".join(
-                f"`{i+1}.` {t.title} `{t.duration_str()}`"
-                for i, t in enumerate(itens[:15])
-            )
-            if len(itens) > 15:
-                desc += f"\n*... e mais {len(itens)-15} músicas*"
-        else:
-            desc += "*Nenhuma música na fila*"
-
-        embed = discord.Embed(
-            title="📋 SpotyvampY — Fila",
-            description=desc,
-            color=0x1DB954,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_thumbnail(url=AVATAR_VAMPY)
-        embed.set_footer(text="🎵 SpotyvampY 🦇")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    # ── Sair da call ──────────────────────────────────────────────
-
-    @discord.ui.button(label="👋 Sair", style=discord.ButtonStyle.secondary,
-                       custom_id="svy_leave", row=0)
-    async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client
-        if vc:
-            player = _svy_players.pop(interaction.guild.id, None)
-            if player:
-                while not player.queue.empty():
-                    try:
-                        player.queue.get_nowait()
-                    except Exception:
-                        break
-            await vc.disconnect()
-            await interaction.response.send_message("👋 Saí da call! Até mais!! 🦇💚", ephemeral=True)
-        else:
-            await interaction.response.send_message("Não estou em nenhuma call! 🥺🦇", ephemeral=True)
-
-
-# ── Painel principal SpotyvampY (embed de boas-vindas) ────────────
-
-def _svy_painel_embed(guild_id: int) -> tuple[discord.Embed, "SpotyvampyControlView"]:
-    """Retorna embed + view do painel SpotyvampY."""
-    player = _svy_players.get(guild_id)
-    if player and player.current:
-        desc = (
-            f"🎵 **Tocando:** {player.current.title}\n"
-            f"⏱️ Duração: `{player.current.duration_str()}`\n\n"
-            "Use os botões abaixo ou os comandos para controlar! 🦇"
-        )
-    else:
-        desc = (
-            "Nenhuma música tocando agora.\n\n"
-            "**Como usar:**\n"
-            "`v!play <nome ou link>` — Toca uma música\n"
-            "`v!skip` — Pula a atual\n"
-            "`v!pause` / `v!resume` — Pausa / Retoma\n"
-            "`v!stop` — Para e limpa a fila\n"
-            "`v!queue` — Ver fila\n"
-            "`v!volume <0-100>` — Ajustar volume\n"
-            "`v!leave` — Sair da call\n\n"
-            "Use os botões abaixo para controlar! 🦇"
-        )
-    embed = discord.Embed(
-        title="🎵 SpotyvampY — Player de Música",
-        description=desc,
-        color=0x1DB954,
-        timestamp=datetime.utcnow()
-    )
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.set_footer(text="🎵 SpotyvampY • Vampy Music System 🦇")
-    view = SpotyvampyControlView(guild_id)
-    return embed, view
-
-
-# ── Cog principal ──────────────────────────────────────────────────
-
-class SpotyvampyCog(commands.Cog, name="SpotyvampY"):
-    """🎵 SPOTYVAMPY — Sistema de Música v1.0"""
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-    def _get_player(self, guild_id: int) -> SpotyvampyPlayer:
-        if guild_id not in _svy_players:
-            _svy_players[guild_id] = SpotyvampyPlayer(guild_id)
-        return _svy_players[guild_id]
-
-    # ── v!play ──────────────────────────────────────────────────
-
-    @commands.command(name="play", aliases=["tocar", "p"])
-    async def svy_play(self, ctx: commands.Context, *, query: str):
-        """Toca ou adiciona uma música à fila. Uso: v!play <nome ou link>"""
-        # Verifica se usuário está em uma call
-        if not ctx.author.voice or not ctx.author.voice.channel:
-            return await ctx.send("🥺🦇 Você precisa estar em uma call pra usar o SpotyvampY!")
-
-        # Conecta ao canal de voz se necessário
-        if ctx.voice_client is None:
-            await ctx.author.voice.channel.connect()
-        elif ctx.voice_client.channel != ctx.author.voice.channel:
-            await ctx.voice_client.move_to(ctx.author.voice.channel)
-
-        # Mensagem de carregamento
-        msg = await ctx.send("🔍 Procurando sua música... 🦇💚")
-
-        try:
-            track = await SpotyvampyTrack.from_query(query, requested_by=ctx.author)
-        except Exception as e:
-            await msg.edit(content=f"❌ Não consegui encontrar a música: `{e}`\n🦇 Tenta de novo!")
-            return
-
-        player = self._get_player(ctx.guild.id)
-        await player.queue.put(track)
-
-        queue_size = player.queue.qsize()
-        if player.is_running:
-            embed = discord.Embed(
-                title="✅ Adicionado à Fila!",
-                description=(
-                    f"**{track.title}**\n"
-                    f"⏱️ Duração: `{track.duration_str()}`\n"
-                    f"📋 Posição na fila: `#{queue_size}`"
-                ),
-                color=0x1DB954,
-                timestamp=datetime.utcnow()
-            )
-            embed.set_footer(text=f"Pedido por {ctx.author.display_name}")
-            embed.set_thumbnail(url=AVATAR_VAMPY)
-            await msg.edit(content=None, embed=embed)
-        else:
-            await msg.delete()
-            self.bot.loop.create_task(player.start(ctx))
-
-    # ── v!skip ──────────────────────────────────────────────────
-
-    @commands.command(name="skip", aliases=["pular", "s"])
-    async def svy_skip(self, ctx: commands.Context):
-        """Pula a música atual. Uso: v!skip"""
-        if ctx.voice_client and (ctx.voice_client.is_playing() or ctx.voice_client.is_paused()):
-            ctx.voice_client.stop()
-            await ctx.send("⏭️ Música pulada!! 🦇", delete_after=5)
-        else:
-            await ctx.send("🥺🦇 Nada tocando pra pular!", delete_after=5)
-
-    # ── v!pause ─────────────────────────────────────────────────
-
-    @commands.command(name="pause", aliases=["pausar"])
-    async def svy_pause(self, ctx: commands.Context):
-        """Pausa a música. Uso: v!pause"""
-        if ctx.voice_client and ctx.voice_client.is_playing():
-            ctx.voice_client.pause()
-            await ctx.send("⏸️ Música pausada!! 🦇", delete_after=5)
-        else:
-            await ctx.send("🥺🦇 Nada tocando!", delete_after=5)
-
-    # ── v!resume ─────────────────────────────────────────────────
-
-    @commands.command(name="resume", aliases=["continuar", "r"])
-    async def svy_resume(self, ctx: commands.Context):
-        """Retoma a música pausada. Uso: v!resume"""
-        if ctx.voice_client and ctx.voice_client.is_paused():
-            ctx.voice_client.resume()
-            await ctx.send("▶️ Música retomada!! 🦇", delete_after=5)
-        else:
-            await ctx.send("🥺🦇 Nenhuma música pausada!", delete_after=5)
-
-    # ── v!stop ───────────────────────────────────────────────────
-
-    @commands.command(name="stop", aliases=["parar"])
-    async def svy_stop(self, ctx: commands.Context):
-        """Para tudo e limpa a fila. Uso: v!stop"""
-        player = _svy_players.get(ctx.guild.id)
-        if player:
-            while not player.queue.empty():
-                try:
-                    player.queue.get_nowait()
-                except Exception:
-                    break
-        if ctx.voice_client:
-            ctx.voice_client.stop()
-        await ctx.send("⏹️ Música parada e fila limpa!! 🦇", delete_after=5)
-
-    # ── v!queue ──────────────────────────────────────────────────
-
-    @commands.command(name="queue", aliases=["fila", "q"])
-    async def svy_queue(self, ctx: commands.Context):
-        """Mostra a fila de músicas. Uso: v!queue"""
-        player = _svy_players.get(ctx.guild.id)
-        if not player or (player.queue.empty() and not player.current):
-            return await ctx.send("🥺🦇 A fila está vazia!")
-
-        itens = list(player.queue._queue)
-        desc = ""
-        if player.current:
-            desc += f"🎵 **Tocando:** {player.current.title} `{player.current.duration_str()}`\n\n"
-        if itens:
-            desc += "\n".join(
-                f"`{i+1}.` {t.title} `{t.duration_str()}`"
-                for i, t in enumerate(itens[:15])
-            )
-            if len(itens) > 15:
-                desc += f"\n*... e mais {len(itens)-15} músicas*"
-        else:
-            desc += "*Nenhuma música na fila*"
-
-        embed = discord.Embed(
-            title="📋 SpotyvampY — Fila de Músicas",
-            description=desc,
-            color=0x1DB954,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_thumbnail(url=AVATAR_VAMPY)
-        embed.set_footer(text="🎵 SpotyvampY 🦇")
-        await ctx.send(embed=embed)
-
-    # ── v!volume ─────────────────────────────────────────────────
-
-    @commands.command(name="volume", aliases=["vol", "v"])
-    async def svy_volume(self, ctx: commands.Context, vol: int):
-        """Ajusta o volume (0-100). Uso: v!volume 50"""
-        if not 0 <= vol <= 100:
-            return await ctx.send("🥺🦇 Volume deve ser entre **0** e **100**!", delete_after=5)
-        player = _svy_players.get(ctx.guild.id)
-        if player:
-            player.volume = vol / 100
-            if ctx.voice_client and ctx.voice_client.source:
-                ctx.voice_client.source.volume = vol / 100
-        await ctx.send(f"🔊 Volume ajustado para **{vol}%**!! 🦇💚", delete_after=5)
-
-    # ── v!leave ──────────────────────────────────────────────────
-
-    @commands.command(name="leave", aliases=["sair", "dc"])
-    async def svy_leave(self, ctx: commands.Context):
-        """Sai da call. Uso: v!leave"""
-        player = _svy_players.pop(ctx.guild.id, None)
-        if player:
-            while not player.queue.empty():
-                try:
-                    player.queue.get_nowait()
-                except Exception:
-                    break
-        if ctx.voice_client:
-            await ctx.voice_client.disconnect()
-        await ctx.send("👋 Saí da call!! Até mais, neném!! 🦇💚", delete_after=8)
-
-    # ── v!nowplaying ─────────────────────────────────────────────
-
-    @commands.command(name="nowplaying", aliases=["np", "tocando"])
-    async def svy_nowplaying(self, ctx: commands.Context):
-        """Mostra a música tocando agora. Uso: v!np"""
-        player = _svy_players.get(ctx.guild.id)
-        if not player or not player.current:
-            return await ctx.send("🥺🦇 Nada tocando agora!")
-        track = player.current
-        embed = discord.Embed(
-            title="🎵 SpotyvampY — Tocando Agora",
-            description=(
-                f"**{track.title}**\n\n"
-                f"🔗 [Link da música]({track.url})\n"
-                f"⏱️ Duração: `{track.duration_str()}`\n"
-                f"🔊 Volume: `{int(player.volume * 100)}%`"
-            ),
-            color=0x1DB954,
-            timestamp=datetime.utcnow()
-        )
-        if track.requested_by:
-            embed.set_footer(
-                text=f"Pedido por {track.requested_by.display_name}",
-                icon_url=track.requested_by.display_avatar.url
-            )
-        embed.set_thumbnail(url=AVATAR_VAMPY)
-        view = SpotyvampyControlView(ctx.guild.id)
-        await ctx.send(embed=embed, view=view)
-
-    # ── v!spotyvampy (painel) ─────────────────────────────────────
-
-    @commands.command(name="spotyvampy", aliases=["svy", "music", "musica"])
-    async def svy_panel(self, ctx: commands.Context):
-        """Abre o painel SpotyvampY. Uso: v!spotyvampy"""
-        embed, view = _svy_painel_embed(ctx.guild.id)
-        await ctx.send(embed=embed, view=view)
-
-
-# ══════════════════════════════════════════════════════════════════
-# FIM DO SPOTYVAMPY
-# ══════════════════════════════════════════════════════════════════
-
-
 async def _main():
     async with bot:
         await bot.add_cog(VampyCog(bot))
         await bot.add_cog(VoiceMasterCog(bot))
         await bot.add_cog(BanAppealCog(bot))
         await bot.add_cog(SpotyvampyCog(bot))
-        bot.add_view(BanirMembroView())
-        bot.add_view(SpotyvampyControlView(0))          # intercepta botões existentes no Discord
+        bot.add_view(BanirMembroView())          # intercepta botões existentes no Discord
         bot.loop.create_task(_setup_linha_indireta())
         await bot.start(TOKEN)
 
