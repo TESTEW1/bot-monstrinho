@@ -2322,6 +2322,7 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(label="🎤 Influencer", value="influencer"),
             discord.SelectOption(label="🎬 Cineasta", value="cineasta"),
             discord.SelectOption(label="🎵 Sync", value="sync"),
+            discord.SelectOption(label="⚽ Death Ball", value="death_ball"),
         ]
         super().__init__(
             placeholder="🎟️ Selecione o tipo de ticket",
@@ -2412,6 +2413,14 @@ class TicketSelect(discord.ui.Select):
                 color=0x9B59B6
             )
             await canal.send(embed=embed_sync, view=FecharTicketView())
+
+        elif tipo == "death_ball":
+            embed_death_ball = discord.Embed(
+                title="⚽ DEATH BALL",
+                description=f"{user.mention}, bem-vindo ao ticket de Death Ball! Conta pra staff o que você precisa! 💚🦇",
+                color=0xFF4500
+            )
+            await canal.send(embed=embed_death_ball, view=FecharTicketView())
 
         else:
             await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
