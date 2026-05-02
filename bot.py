@@ -1,6792 +1,2746 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import random
 import asyncio
 import os
 import re
-from datetime import timedelta
-from datetime import datetime
-from collections import defaultdict, deque
-from dotenv import load_dotenv
-load_dotenv()
-try:
-    from deep_translator import GoogleTranslator
-    from langdetect import detect as detectar_idioma
-    TRADUCAO_DISPONIVEL = True
-except ImportError:
-    TRADUCAO_DISPONIVEL = False
-
 import aiohttp
-import json
+import math 
+from datetime import timedelta
 
-# ══════════════════════════════════════════════════════════════════
-#  🤖  INTEGRAÇÃO GEMINI — Moderação Inteligente por Contexto
-# ══════════════════════════════════════════════════════════════════
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
-async def analisar_contexto_gemini(mensagem_original: str, palavra_detectada: str) -> bool:
-    """
-    Envia a mensagem ao Gemini para analisar se o uso da palavra é realmente ofensivo.
-    Retorna True se deve ser APAGADA, False se for uso inocente/casual.
-    Em caso de erro ou API indisponível, retorna True (punir por segurança).
-    """
-    if not GEMINI_API_KEY:
-        return True  # sem API key → comportamento antigo (punir sempre)
-
-    gemini_url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    )
-
-    prompt = (
-        "Você é um moderador de um servidor Discord brasileiro.\n"
-        "Analise a mensagem abaixo e decida se ela deve ser APAGADA por conter linguagem ofensiva, "
-        "xingamento direcionado a alguém, ou discurso de ódio.\n\n"
-        f"Palavra/frase detectada pelo filtro: \"{palavra_detectada}\"\n"
-        f"Mensagem completa: \"{mensagem_original}\"\n\n"
-        "Responda APENAS com uma dessas duas palavras, sem explicação:\n"
-        "- APAGAR  → se a mensagem for ofensiva, xingamento direcionado a alguém, ou discurso de ódio\n"
-        "- PERMITIR → se for uso casual, citação, contexto neutro, ou não for realmente ofensivo\n\n"
-        "Resposta:"
-    )
-
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 10, "temperature": 0.1}
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                gemini_url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as resp:
-                if resp.status != 200:
-                    return True  # falha na API → punir por segurança
-                data = await resp.json()
-                texto_resposta = data["candidates"][0]["content"]["parts"][0]["text"].strip().upper()
-                return "APAGAR" in texto_resposta
-    except Exception:
-        return True  # qualquer erro → punir por segurança
 # ================= INTENTS =================
-# ============== BOT SETUP =================
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix=["v!", "!"], intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-DONOS_AUTORIZADOS = {769951556388257812, 940036086074343505, 918222382840291369}
+# ================= SISTEMA DE AVISOS =================
+_aviso_estado = {}
+# { user_id: { "etapa": "aguardando_alvo" | "aguardando_justificativa", "alvo": Member } }
 
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║          VAMPY SECURITY SYSTEM — GOD MODE v2.0             ║
-# ║      Sistema completo de segurança integrado ao bot             ║
-# ╚══════════════════════════════════════════════════════════════════╝
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ⚙️  CONFIGURAÇÕES DE SEGURANÇA
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-LOG_CHANNEL_NAME = "🗒️・monitoramento"   # Canal exclusivo de logs de segurança
-
-COMMAND_SPAM_LIMIT    = 3       # Máximo de comandos por janela
-COMMAND_SPAM_WINDOW   = 5       # Janela em segundos
-COMMAND_COOLDOWN_TIME = 30      # Cooldown após spam de comandos
-
-RAID_JOIN_LIMIT       = 8       # Entradas para acionar alerta
-RAID_JOIN_WINDOW      = 5       # Janela em segundos
-LOCKDOWN_THRESHOLD    = 12      # Entradas para lockdown total
-
-MSG_SPAM_LIMIT        = 7       # Mensagens por janela
-MSG_SPAM_WINDOW       = 5       # Janela em segundos
-MSG_REPEAT_LIMIT      = 4       # Msgs idênticas seguidas
-EMOJI_SPAM_LIMIT      = 20      # Emojis numa mensagem
-MENTION_SPAM_LIMIT    = 5       # Menções numa mensagem
-
-ADMIN_ACTION_LIMIT    = 5       # Ações admin por janela
-ADMIN_ACTION_WINDOW   = 10      # Janela em segundos
-
-RISK_SPAM_MSG         = 2
-RISK_SPAM_CMD         = 3
-RISK_RAID             = 5
-RISK_LINK             = 4
-RISK_NEW_ACCOUNT      = 2
-RISK_NO_AVATAR        = 1
-RISK_SUSPICIOUS_THRESHOLD = 12  # Pontuação para marcar SUSPEITO
-
-ACCOUNT_MIN_AGE_DAYS  = 7       # Dias mínimos de conta
-
-MALICIOUS_PATTERNS = [
-    r"discord\.gift", r"discordnitro\.", r"free.*nitro",
-    r"steamcommunity.*\.ru", r"bit\.ly", r"tinyurl\.com",
-    r"grabify\.link", r"iplogger\.", r"discord-app\.com",
-    r"dicsord\.", r"dlscord\.",
-]
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 📦  BANCO DE DADOS INTERNO DE SEGURANÇA
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class SecurityDatabase:
-    """Banco de dados em memória para inteligência de segurança."""
-    def __init__(self):
-        self.risk_scores:   dict[int, int]  = {}
-        self.flagged_users: dict[int, dict] = {}
-        self.alert_history: list[dict]      = []
-        self.total_alerts  = 0
-        self.spam_events   = 0
-        self.raid_events   = 0
-        self.link_events   = 0
-        self.admin_events  = 0
-        self.lockdown_active  = False
-        self.emergency_mode   = False
-        self.security_level   = "NORMAL"
-
-    def add_risk(self, user_id: int, points: int, reason: str):
-        self.risk_scores[user_id] = self.risk_scores.get(user_id, 0) + points
-        if self.risk_scores[user_id] >= RISK_SUSPICIOUS_THRESHOLD:
-            self.flagged_users[user_id] = {
-                "reason": reason,
-                "time":   datetime.utcnow(),
-                "score":  self.risk_scores[user_id]
-            }
-
-    def get_risk(self, uid: int) -> int:
-        return self.risk_scores.get(uid, 0)
-
-    def is_flagged(self, uid: int) -> bool:
-        return uid in self.flagged_users
-
-    def log_alert(self, alert_type: str, details: str):
-        self.total_alerts += 1
-        self.alert_history.append({"type": alert_type, "details": details, "time": datetime.utcnow()})
-        if len(self.alert_history) > 500:
-            self.alert_history.pop(0)
-
-    def reset(self):
-        self.risk_scores.clear(); self.flagged_users.clear(); self.alert_history.clear()
-        self.total_alerts = self.spam_events = self.raid_events = self.link_events = self.admin_events = 0
-        self.lockdown_active = self.emergency_mode = False
-        self.security_level  = "NORMAL"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🛡️  COG — VAMPY SECURITY SYSTEM
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class VampyCog(commands.Cog, name="VampySecurity"):
-    """VAMPY SECURITY SYSTEM — GOD MODE v2.0."""
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.db  = SecurityDatabase()
-        self._cmd_timestamps:   defaultdict[int, deque] = defaultdict(deque)
-        self._msg_timestamps:   defaultdict[int, deque] = defaultdict(deque)
-        self._join_timestamps:  defaultdict[int, deque] = defaultdict(deque)
-        self._admin_timestamps: defaultdict[int, deque] = defaultdict(deque)
-        self._last_msg:   dict[int, list[str]]       = {}
-        self._cmd_cooldowns: dict[int, datetime]     = {}
-        self.cleanup_task.start()
-
-    def cog_unload(self):
-        self.cleanup_task.cancel()
-
-    # ── Utilitários ──────────────────────────────
-
-    async def get_log_channel(self, guild: discord.Guild):
-        return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
-
-    def _now(self) -> float:
-        return datetime.utcnow().timestamp()
-
-    def _prune(self, dq: deque, window: float):
-        cutoff = self._now() - window
-        while dq and dq[0] < cutoff:
-            dq.popleft()
-
-    def _level_color(self) -> int:
-        return {"NORMAL": 0x00ff99, "ALERTA": 0xffaa00, "LOCKDOWN": 0xff4400, "EMERGÊNCIA": 0xff0000}.get(self.db.security_level, 0x00ff99)
-
-    async def send_alert(self, guild, threat_type, user, details, color=0xff4444, critical=False):
-        """Envia embed de alerta para o canal de monitoramento."""
-        ch = await self.get_log_channel(guild)
-        if not ch:
-            return
-        now = datetime.utcnow()
-        self.db.log_alert(threat_type, details)
-        embed = discord.Embed(title=f"{'🔴' if critical else '🚨'} VAMPY SECURITY ALERT", color=color, timestamp=now)
-        embed.add_field(name="⚠️ Tipo de Ameaça", value=f"`{threat_type}`",                           inline=False)
-        embed.add_field(name="👤 Usuário",          value=str(user) if user else "Desconhecido",        inline=True)
-        embed.add_field(name="🆔 ID",               value=str(user.id) if user else "—",                inline=True)
-        embed.add_field(name="🏠 Servidor",         value=guild.name,                                    inline=True)
-        embed.add_field(name="📋 Detalhes",         value=details,                                       inline=False)
-        embed.add_field(name="⏰ Horário (UTC)",    value=now.strftime("%d/%m/%Y às %H:%M:%S"),          inline=False)
-        if user and hasattr(user, "display_avatar"):
-            embed.set_thumbnail(url=user.display_avatar.url)
-        risk    = self.db.get_risk(user.id) if user else 0
-        flagged = "⛔ SIM" if (user and self.db.is_flagged(user.id)) else "✅ Não"
-        embed.set_footer(text=f"VAMPY SECURITY • Risco: {risk}pts | Suspeito: {flagged}",
-                         icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
-        await ch.send(embed=embed)
-
-    # ── 🟢 BOOT — Ficha de inicialização ─────────
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Envia a ficha profissional de inicialização no canal de monitoramento."""
-        await asyncio.sleep(3)
-        for guild in self.bot.guilds:
-            ch = await self.get_log_channel(guild)
-            if not ch:
-                continue
-            now = datetime.utcnow()
-
-            # Embed Principal de Boot
-            boot = discord.Embed(
-                description=(
-                    "```\n"
-                    "╔══════════════════════════════════════╗\n"
-                    "║   VAMPY SECURITY SYSTEM         ║\n"
-                    "║         — GOD MODE —                 ║\n"
-                    "║       ⚡  v2.0  ONLINE  ⚡           ║\n"
-                    "╚══════════════════════════════════════╝\n"
-                    "```"
-                ),
-                color=0x00ff99, timestamp=now
-            )
-            boot.set_author(name="VAMPY SECURITY • Sistema Iniciado",
-                            icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
-            boot.add_field(name="🛡️ Módulos Ativos (14/14)", inline=False, value=(
-                "✅ Anti-Spam de Comandos\n✅ Detector de Raid\n✅ Auto Lockdown\n"
-                "✅ Anti-Spam de Mensagens\n✅ Monitor de Ações Admin\n✅ Detector de Bot Suspeito\n"
-                "✅ Detector de Links Maliciosos\n✅ Pontuação de Risco\n✅ Detecção de Script\n"
-                "✅ Anti-Raid Extremo / Emergência\n✅ Contas Suspeitas\n✅ Inteligência (DB)\n"
-                "✅ Monitor de Erros\n✅ Comandos Administrativos"
-            ))
-            boot.add_field(name="⚙️ Configuração Atual", inline=False, value=(
-                f"📡 Log: `#{LOG_CHANNEL_NAME}`\n"
-                f"🚫 Spam CMD: `{COMMAND_SPAM_LIMIT} cmds/{COMMAND_SPAM_WINDOW}s`\n"
-                f"🚪 Raid: `{RAID_JOIN_LIMIT} entradas/{RAID_JOIN_WINDOW}s`\n"
-                f"💬 Spam MSG: `{MSG_SPAM_LIMIT} msgs/{MSG_SPAM_WINDOW}s`\n"
-                f"⚠️ Risco Suspeito: `≥{RISK_SUSPICIOUS_THRESHOLD} pts`"
-            ))
-            boot.add_field(name="🟢 Status do Sistema", inline=False, value=(
-                f"**Nível:** `NORMAL` | **Servidor:** `{guild.name}`\n"
-                f"**Membros:** `{guild.member_count}` | **Iniciado:** `{now.strftime('%d/%m/%Y %H:%M UTC')}`"
-            ))
-            boot.set_footer(text="VAMPY SECURITY SYSTEM • Todos os sistemas operacionais.",
-                            icon_url=self.bot.user.display_avatar.url if self.bot.user else None)
-            await ch.send(embed=boot)
-
-            # Embed de Comandos
-            cmds = discord.Embed(title="📋 Comandos — VAMPY SECURITY", color=0x5865F2, timestamp=now)
-            cmds.add_field(name="🔍 Status & Info", inline=False, value=(
-                "`v!security status` — Painel completo\n"
-                "`v!segurança status` — Alias PT\n"
-                "`v!security riskscore @user` — Risco do usuário\n"
-                "`v!security flagged` — Usuários suspeitos"
-            ))
-            cmds.add_field(name="🔧 Administração", inline=False, value=(
-                "`v!security reset` — Limpar alertas\n"
-                "`v!security lockdown on/off` — Lockdown manual\n"
-                "`v!security emergency on/off` — Modo emergência\n"
-                "`v!security unflag @user` — Remover flag\n"
-                "`v!security alerts` — Últimos 10 alertas\n"
-                "`v!security stats` — Estatísticas gerais"
-            ))
-            cmds.add_field(name="⚠️ Permissão", value="Todos os comandos exigem **Administrador**.", inline=False)
-            cmds.set_footer(text="VAMPY SECURITY SYSTEM • GOD MODE v2.0")
-            await ch.send(embed=cmds)
-
-    # ── 1️⃣ Anti-Spam de Comandos ─────────────────
-
-    @commands.Cog.listener()
-    async def on_command(self, ctx: commands.Context):
-        if ctx.author.bot:
-            return
-        uid = ctx.author.id
-        if uid in self._cmd_cooldowns:
-            release = self._cmd_cooldowns[uid]
-            if datetime.utcnow() < release:
-                remaining = (release - datetime.utcnow()).seconds
-                try: await ctx.message.delete()
-                except: pass
-                await ctx.send(f"⛔ {ctx.author.mention} cooldown de segurança. Aguarde `{remaining}s`.", delete_after=5)
-                return
-        dq = self._cmd_timestamps[uid]
-        dq.append(self._now())
-        self._prune(dq, COMMAND_SPAM_WINDOW)
-        if len(dq) > COMMAND_SPAM_LIMIT:
-            self.db.add_risk(uid, RISK_SPAM_CMD, "Spam de comandos")
-            self.db.spam_events += 1
-            self._cmd_cooldowns[uid] = datetime.utcnow() + timedelta(seconds=COMMAND_COOLDOWN_TIME)
-            dq.clear()
-            await self.send_alert(ctx.guild, "SPAM DE COMANDOS / SCRIPT", ctx.author,
-                f"**{ctx.author}** executou `{COMMAND_SPAM_LIMIT}+` cmds em `{COMMAND_SPAM_WINDOW}s`.\n"
-                f"Cooldown: `{COMMAND_COOLDOWN_TIME}s` | Risco: `{self.db.get_risk(uid)} pts`",
-                color=0xff8800)
-
-    # ── 2️⃣+3️⃣+🔟 Raid / Lockdown / Emergência ──
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        guild = member.guild
-        gid   = guild.id
-        dq    = self._join_timestamps[gid]
-        dq.append(self._now())
-        self._prune(dq, RAID_JOIN_WINDOW)
-        count = len(dq)
-
-        if count >= LOCKDOWN_THRESHOLD and not self.db.emergency_mode:
-            self.db.emergency_mode = self.db.lockdown_active = True
-            self.db.security_level = "EMERGÊNCIA"
-            self.db.raid_events += 1
-            await self.send_alert(guild, "🔴 RAID SEVERO — MODO EMERGÊNCIA ATIVADO", None,
-                f"**{count}** membros em `{RAID_JOIN_WINDOW}s`.\n⛔ Emergência ativada. Use `!security emergency off` para desativar.",
-                color=0xff0000, critical=True)
-            await self._apply_lockdown(guild, True)
-        elif count >= RAID_JOIN_LIMIT and not self.db.lockdown_active:
-            self.db.security_level = "ALERTA"
-            self.db.raid_events += 1
-            await self.send_alert(guild, "POSSÍVEL RAID DETECTADO", None,
-                f"**{count}** membros nos últimos `{RAID_JOIN_WINDOW}s`.\n⚠️ Modo Alerta ativado.",
-                color=0xff8800, critical=True)
-
-        await self._check_suspicious_account(member)
-        if member.bot:
-            await self._check_suspicious_bot(member)
-
-    async def _apply_lockdown(self, guild: discord.Guild, activate: bool):
-        everyone = guild.default_role
-        for ch in guild.text_channels:
-            try:
-                ow = ch.overwrites_for(everyone)
-                ow.send_messages = False if activate else None
-                await ch.set_permissions(everyone, overwrite=ow)
-            except: pass
-
-    # ── 4️⃣ Spam de Chat ──────────────────────────
-    # Monitoramento restrito ao canal 💭・chat-geral.
-    # O bot APENAS relata no log — nunca deleta nem toma ação automática.
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """Monitora spam SOMENTE no chat-geral e apenas relata no canal de monitoramento."""
-        if message.author.bot or not message.guild:
-            return
-
-        # So analisa spam no chat-geral — qualquer outro canal e ignorado
-        if message.channel.name != CANAL_GERAL:
-            return
-
-        uid     = message.author.id
-        content = message.content
-
-        # Flood de mensagens — apenas relata, sem deletar
-        dq = self._msg_timestamps[uid]
-        dq.append(self._now())
-        self._prune(dq, MSG_SPAM_WINDOW)
-        if len(dq) > MSG_SPAM_LIMIT:
-            self.db.add_risk(uid, RISK_SPAM_MSG, "Flood de mensagens")
-            self.db.spam_events += 1
-            dq.clear()
-            await self.send_alert(message.guild, "FLOOD DE MENSAGENS", message.author,
-                f"Mais de `{MSG_SPAM_LIMIT}` msgs em `{MSG_SPAM_WINDOW}s`.\n"
-                f"Canal: {message.channel.mention}\n"
-                f"Risco acumulado: `{self.db.get_risk(uid)} pts`\n"
-                f"Nenhuma acao automatica — cabe a staff agir.",
-                color=0xff6600)
-            return
-
-        # Mensagens repetidas — apenas relata, sem deletar
-        hist = self._last_msg.setdefault(uid, [])
-        hist.append(content)
-        if len(hist) > MSG_REPEAT_LIMIT: hist.pop(0)
-        if len(hist) == MSG_REPEAT_LIMIT and len(set(hist)) == 1:
-            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam repetido")
-            self.db.spam_events += 1
-            hist.clear()
-            await self.send_alert(message.guild, "MENSAGENS REPETIDAS (SPAM)", message.author,
-                f"Mesma mensagem enviada `{MSG_REPEAT_LIMIT}x` seguidas.\n"
-                f"Conteudo: `{content[:100]}`\n"
-                f"Canal: {message.channel.mention}\n"
-                f"Nenhuma acao automatica — cabe a staff agir.",
-                color=0xff6600)
-            return
-
-        # Spam de emojis — apenas relata, sem deletar
-        ec = len(re.findall(r"<a?:\w+:\d+>|[\U0001F300-\U0001FAFF]", content))
-        if ec >= EMOJI_SPAM_LIMIT:
-            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de emojis")
-            await self.send_alert(message.guild, "SPAM DE EMOJIS", message.author,
-                f"**{ec}** emojis em uma unica mensagem.\n"
-                f"Canal: {message.channel.mention}\n"
-                f"Nenhuma acao automatica — cabe a staff agir.",
-                color=0xffaa00)
-            return
-
-        # Spam de mencoes — apenas relata, sem deletar
-        mc = len(message.mentions) + len(message.role_mentions)
-        if mc >= MENTION_SPAM_LIMIT:
-            self.db.add_risk(uid, RISK_SPAM_MSG, "Spam de mencoes")
-            await self.send_alert(message.guild, "SPAM DE MENCOES", message.author,
-                f"**{mc}** mencoes em uma unica mensagem.\n"
-                f"Canal: {message.channel.mention}\n"
-                f"Nenhuma acao automatica — cabe a staff agir.",
-                color=0xff8800)
-            return
-
-        # Links maliciosos — apenas relata, sem deletar
-        if re.search(r"https?://", content, re.IGNORECASE):
-            await self._check_malicious_link(message)
-
-    # ── 5️⃣ Ações Administrativas ────────────────
-
-    @commands.Cog.listener()
-    async def on_guild_channel_create(self, ch):
-        await self._admin_action(ch.guild, "CANAL CRIADO", f"Canal `{ch.name}` criado.")
-    @commands.Cog.listener()
-    async def on_guild_channel_delete(self, ch):
-        await self._admin_action(ch.guild, "CANAL DELETADO", f"Canal `{ch.name}` deletado.")
-    @commands.Cog.listener()
-    async def on_guild_role_create(self, role):
-        await self._admin_action(role.guild, "CARGO CRIADO", f"Cargo `{role.name}` criado.")
-    @commands.Cog.listener()
-    async def on_guild_role_delete(self, role):
-        await self._admin_action(role.guild, "CARGO DELETADO", f"Cargo `{role.name}` deletado.")
-    @commands.Cog.listener()
-    async def on_member_ban(self, guild, user):
-        await self._admin_action(guild, "BANIMENTO", f"Usuário `{user}` banido.")
-
-    async def _admin_action(self, guild, action_type, details):
-        gid = guild.id
-        dq  = self._admin_timestamps[gid]
-        dq.append(self._now())
-        self._prune(dq, ADMIN_ACTION_WINDOW)
-        self.db.admin_events += 1
-        if len(dq) >= ADMIN_ACTION_LIMIT:
-            dq.clear()
-            await self.send_alert(guild, f"AVALANCHE ADMIN — {action_type}", None,
-                f"`{ADMIN_ACTION_LIMIT}+` ações em `{ADMIN_ACTION_WINDOW}s`.\nÚltima: {details}\n⚠️ Possível ataque.",
-                color=0xff4400, critical=True)
-        else:
-            ch = await self.get_log_channel(guild)
-            if ch:
-                embed = discord.Embed(title="🔧 Ação Administrativa", description=details, color=0x5865F2, timestamp=datetime.utcnow())
-                embed.set_footer(text=f"VAMPY SECURITY • Ações na janela: {len(dq)}/{ADMIN_ACTION_LIMIT}")
-                await ch.send(embed=embed)
-
-    # ── 6️⃣ Bot Suspeito ──────────────────────────
-
-    async def _check_suspicious_bot(self, member: discord.Member):
-        guild = member.guild
-        adder = None
-        try:
-            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.bot_add):
-                if entry.target.id == member.id:
-                    adder = entry.user; break
-        except: pass
-        is_admin = adder.guild_permissions.administrator if adder else False
-        await self.send_alert(guild, "BOT ADICIONADO AO SERVIDOR", member,
-            f"**Bot:** `{member.name}` (ID: `{member.id}`)\n"
-            f"**Por:** {adder} (`{adder.id if adder else '?'}`)\n"
-            f"**Admin:** {'✅ Sim' if is_admin else '⛔ NÃO — SUSPEITO!'}",
-            color=0xff0000 if not is_admin else 0xffaa00, critical=not is_admin)
-
-    # ── 7️⃣ Links Maliciosos ──────────────────────
-
-    async def _check_malicious_link(self, message: discord.Message):
-        cl = message.content.lower()
-        for pattern in MALICIOUS_PATTERNS:
-            if re.search(pattern, cl, re.IGNORECASE):
-                self.db.add_risk(message.author.id, RISK_LINK, "Link malicioso")
-                self.db.link_events += 1
-                # Apenas relata — nao deleta a mensagem
-                await self.send_alert(message.guild, "LINK MALICIOSO / PHISHING", message.author,
-                    f"Padrao detectado: `{pattern}`\n"
-                    f"Canal: {message.channel.mention}\n"
-                    f"Previa: `{message.content[:120]}`\n"
-                    f"Nenhuma acao automatica — cabe a staff agir.",
-                    color=0xff0000, critical=True)
-                return
-
-    # ── 11️⃣ Contas Suspeitas ─────────────────────
-
-    async def _check_suspicious_account(self, member: discord.Member):
-        uid      = member.id
-        age_days = (datetime.utcnow() - member.created_at.replace(tzinfo=None)).days
-        flags    = []
-        if age_days < ACCOUNT_MIN_AGE_DAYS:
-            self.db.add_risk(uid, RISK_NEW_ACCOUNT, "Conta recente")
-            flags.append(f"🆕 Conta criada há `{age_days}` dia(s)")
-        if member.display_avatar.url == member.default_avatar.url:
-            self.db.add_risk(uid, RISK_NO_AVATAR, "Sem avatar")
-            flags.append("🖼️ Sem avatar personalizado")
-        if re.match(r"^[a-z]+\d{4,}$", member.name.lower()):
-            self.db.add_risk(uid, 2, "Nome padrão bot")
-            flags.append(f"🤖 Nome suspeito: `{member.name}`")
-        if flags:
-            await self.send_alert(member.guild, "CONTA SUSPEITA ENTROU NO SERVIDOR", member,
-                "Fatores de risco:\n" + "\n".join(flags) + f"\n\n**Risco total:** `{self.db.get_risk(uid)} pts`",
-                color=0xffaa00)
-
-    # ── 13️⃣ Erros do Bot ─────────────────────────
-
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, commands.CommandNotFound): return
-        if isinstance(error, commands.MissingPermissions):
-            await self.send_alert(ctx.guild, "USO SEM PERMISSÃO", ctx.author,
-                f"Tentou usar `{ctx.command}` sem permissão.\nCanal: {ctx.channel.mention}", color=0xffaa00)
-        else:
-            ch = await self.get_log_channel(ctx.guild)
-            if ch:
-                embed = discord.Embed(title="⚠️ Erro no Bot",
-                    description=f"```{type(error).__name__}: {str(error)[:300]}```",
-                    color=0xff6600, timestamp=datetime.utcnow())
-                embed.add_field(name="Comando", value=f"`{ctx.command}`", inline=True)
-                embed.add_field(name="Usuário",  value=str(ctx.author),   inline=True)
-                embed.set_footer(text="VAMPY SECURITY • Monitor de Erros")
-                await ch.send(embed=embed)
-
-    # ── 🧹 Limpeza periódica ──────────────────────
-
-    @tasks.loop(minutes=10)
-    async def cleanup_task(self):
-        for uid in list(self._cmd_timestamps.keys()): self._prune(self._cmd_timestamps[uid], COMMAND_SPAM_WINDOW)
-        for uid in list(self._msg_timestamps.keys()): self._prune(self._msg_timestamps[uid], MSG_SPAM_WINDOW)
-        for gid in list(self._join_timestamps.keys()): self._prune(self._join_timestamps[gid], RAID_JOIN_WINDOW * 10)
-        expired = [u for u, t in self._cmd_cooldowns.items() if datetime.utcnow() >= t]
-        for u in expired: del self._cmd_cooldowns[u]
-
-    @cleanup_task.before_loop
-    async def before_cleanup(self):
-        await self.bot.wait_until_ready()
-
-    # ── 14️⃣ Comandos Administrativos ─────────────
-
-    @commands.group(name="security", aliases=["segurança"], invoke_without_command=True)
-    @commands.has_permissions(administrator=True)
-    async def security_group(self, ctx):
-        await ctx.send("📋 Comandos: `status`, `reset`, `lockdown on/off`, `emergency on/off`, `alerts`, `stats`, `flagged`, `unflag @user`, `riskscore @user`.", delete_after=15)
-
-    @security_group.command(name="status")
-    @commands.has_permissions(administrator=True)
-    async def security_status(self, ctx):
-        db = self.db
-        le = {"NORMAL":"🟢","ALERTA":"🟡","LOCKDOWN":"🔴","EMERGÊNCIA":"🆘"}.get(db.security_level,"⚪")
-        embed = discord.Embed(title="🛡️ VAMPY SECURITY — Status", color=self._level_color(), timestamp=datetime.utcnow())
-        embed.add_field(name="🔒 Sistema", inline=True, value=(
-            f"**Nível:** {le} `{db.security_level}`\n"
-            f"**Lockdown:** {'⛔ ATIVO' if db.lockdown_active else '✅ Off'}\n"
-            f"**Emergência:** {'🆘 ATIVA' if db.emergency_mode else '✅ Off'}"))
-        embed.add_field(name="📊 Eventos", inline=True, value=(
-            f"🚨 Alertas: `{db.total_alerts}`\n💬 Spam: `{db.spam_events}`\n"
-            f"🚪 Raid: `{db.raid_events}`\n🔗 Links: `{db.link_events}`\n🔧 Admin: `{db.admin_events}`"))
-        embed.add_field(name="👤 Monitorados", inline=False, value=(
-            f"⚠️ Com risco: `{len(db.risk_scores)}` | ⛔ Suspeitos: `{len(db.flagged_users)}` | 🕒 Cooldown: `{len(self._cmd_cooldowns)}`"))
-        embed.set_footer(text="VAMPY SECURITY SYSTEM • GOD MODE v2.0")
-        await ctx.send(embed=embed)
-
-    @security_group.command(name="reset")
-    @commands.has_permissions(administrator=True)
-    async def security_reset(self, ctx):
-        self.db.reset(); self._cmd_timestamps.clear(); self._msg_timestamps.clear()
-        self._join_timestamps.clear(); self._admin_timestamps.clear()
-        self._cmd_cooldowns.clear(); self._last_msg.clear()
-        embed = discord.Embed(title="✅ Sistema Resetado", description="Alertas, cooldowns e pontuações limpos.", color=0x00ff99, timestamp=datetime.utcnow())
-        embed.set_footer(text=f"Resetado por {ctx.author}")
-        await ctx.send(embed=embed)
-        await self.send_alert(ctx.guild, "SISTEMA RESETADO", ctx.author, f"Reset manual por **{ctx.author}**.", color=0x5865F2)
-
-    @security_group.command(name="lockdown")
-    @commands.has_permissions(administrator=True)
-    async def security_lockdown(self, ctx, state: str = "on"):
-        activate = state.lower() in ("on", "ativar", "ligar")
-        self.db.lockdown_active = activate
-        self.db.security_level  = "LOCKDOWN" if activate else "NORMAL"
-        await self._apply_lockdown(ctx.guild, activate)
-        color = 0xff4400 if activate else 0x00ff99
-        await ctx.send(embed=discord.Embed(title=f"🔒 Lockdown {'⛔ ATIVADO' if activate else '✅ DESATIVADO'}",
-            description=f"Por {ctx.author.mention}.", color=color, timestamp=datetime.utcnow()))
-        await self.send_alert(ctx.guild, f"LOCKDOWN {'ATIVADO' if activate else 'DESATIVADO'} MANUALMENTE",
-            ctx.author, f"**{ctx.author}** {'ativou' if activate else 'desativou'} o lockdown.", color=color, critical=activate)
-
-    @security_group.command(name="emergency")
-    @commands.has_permissions(administrator=True)
-    async def security_emergency(self, ctx, state: str = "on"):
-        activate = state.lower() in ("on", "ativar", "ligar")
-        self.db.emergency_mode = self.db.lockdown_active = activate
-        self.db.security_level = "EMERGÊNCIA" if activate else "NORMAL"
-        if activate: await self._apply_lockdown(ctx.guild, True)
-        color = 0xff0000 if activate else 0x00ff99
-        await ctx.send(embed=discord.Embed(title=f"⚡ Emergência {'🆘 ATIVADA' if activate else '✅ DESATIVADA'}",
-            color=color, timestamp=datetime.utcnow()))
-
-    @security_group.command(name="alerts")
-    @commands.has_permissions(administrator=True)
-    async def security_alerts(self, ctx):
-        recent = self.db.alert_history[-10:]
-        if not recent: return await ctx.send("✅ Nenhum alerta registrado.", delete_after=10)
-        embed = discord.Embed(title="📋 Últimos 10 Alertas", color=0xff8800, timestamp=datetime.utcnow())
-        for i, a in enumerate(reversed(recent), 1):
-            t = a["time"].strftime("%d/%m %H:%M")
-            embed.add_field(name=f"#{i} [{t}] {a['type']}", value=a["details"][:100], inline=False)
-        embed.set_footer(text="VAMPY SECURITY • Histórico")
-        await ctx.send(embed=embed)
-
-    @security_group.command(name="stats")
-    @commands.has_permissions(administrator=True)
-    async def security_stats(self, ctx):
-        db = self.db
-        embed = discord.Embed(title="📊 Estatísticas do Sistema", color=0x5865F2, timestamp=datetime.utcnow())
-        embed.add_field(name="Alertas",   value=f"`{db.total_alerts}`",       inline=True)
-        embed.add_field(name="Spam",      value=f"`{db.spam_events}`",        inline=True)
-        embed.add_field(name="Raid",      value=f"`{db.raid_events}`",        inline=True)
-        embed.add_field(name="Links",     value=f"`{db.link_events}`",        inline=True)
-        embed.add_field(name="Admin",     value=f"`{db.admin_events}`",       inline=True)
-        embed.add_field(name="Suspeitos", value=f"`{len(db.flagged_users)}`", inline=True)
-        await ctx.send(embed=embed)
-
-    @security_group.command(name="flagged")
-    @commands.has_permissions(administrator=True)
-    async def security_flagged(self, ctx):
-        if not self.db.flagged_users: return await ctx.send("✅ Nenhum suspeito.", delete_after=10)
-        embed = discord.Embed(title="⛔ Usuários Suspeitos", color=0xff4400, timestamp=datetime.utcnow())
-        for uid, info in list(self.db.flagged_users.items())[:15]:
-            embed.add_field(name=f"ID: {uid}",
-                value=f"Motivo: `{info['reason']}`\nScore: `{info['score']} pts`\nEm: `{info['time'].strftime('%d/%m %H:%M')}`", inline=True)
-        await ctx.send(embed=embed)
-
-    @security_group.command(name="unflag")
-    @commands.has_permissions(administrator=True)
-    async def security_unflag(self, ctx, member: discord.Member):
-        rf = self.db.flagged_users.pop(member.id, None)
-        rs = self.db.risk_scores.pop(member.id, None)
-        if rf or rs: await ctx.send(f"✅ Flag removido de **{member}**.", delete_after=10)
-        else: await ctx.send(f"ℹ️ **{member}** não estava marcado.", delete_after=10)
-
-    @security_group.command(name="riskscore")
-    @commands.has_permissions(administrator=True)
-    async def security_riskscore(self, ctx, member: discord.Member):
-        score = self.db.get_risk(member.id)
-        flag  = self.db.is_flagged(member.id)
-        color = 0x00ff99 if score < 5 else (0xffaa00 if score < RISK_SUSPICIOUS_THRESHOLD else 0xff0000)
-        embed = discord.Embed(title=f"🔎 Risco — {member.name}", color=color, timestamp=datetime.utcnow())
-        embed.add_field(name="Score",    value=f"`{score} pts`",                    inline=True)
-        embed.add_field(name="Limite",   value=f"`{RISK_SUSPICIOUS_THRESHOLD} pts`", inline=True)
-        embed.add_field(name="Suspeito", value="⛔ SIM" if flag else "✅ Não",       inline=True)
-        if flag:
-            embed.add_field(name="Motivo", value=f"`{self.db.flagged_users[member.id]['reason']}`", inline=False)
-        embed.set_thumbnail(url=member.display_avatar.url)
-        await ctx.send(embed=embed)
-
-# ================= CONFIG =================
-
+# ================= CONFIGURAÇÃO E IDs =================
 TOKEN = os.getenv("TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_KEY")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama3-8b-8192"
 DONO_ID = 769951556388257812
+LUA_ID = 708451108774871192 
+AKEIDO_ID = 445937581566197761 
+AMBER_ID = 918222382840291369
+NINE_ID = 1263912269838811238
+FADA_ID = 980600977390460998
+TH_ID = 1241904691390972058
+IZZY_ID = 1288949346766946327
+ISAA_ID = 1036091491346550885
+TIPSY_ID = 442747024488529960
+ATHENA_ID = None  # Adicione o ID da Athena aqui se souber
+DESTINY_ID = 272567320889655297
+JEFF_ID = None  # Adicione o ID do Jeff aqui se souber
+CINTY_ID = 1238090686784471073
+ALUNE_ID = 337417129253142528
+SIX_ID = 274311552914685964
+VENENO_ID = 1308561223352057900
+CHU_ID = 682287849550512154
+SHADOW_ID = 1295736893136437340
+WLU_ID = 940036086074343505
+WAZ_ID = 756928055028482170
+REALITY_ID = DONO_ID  # Reality é o dono
 
-CANAL_GERAL = "💭・chat-geral"
-CANAL_GAMES = "🎲・vampy-games"
-CANAL_LIBERACAO = "✅・chat-staff-liberação"
-CANAL_LOG = "❌・logs-chat-vampy"
-CANAL_LOG_ID = 1463696187235500032
-CANAL_TICKET = "🎟️・ticket"
-CANAL_ACESSO_FUNCOES = "🔒┃acesso-a-funções"
-CANAL_EVENTO_CATALOGO = "evento-catalogo"
-CANAL_ADVERTENCIAS = "⚠️・advertências" 
-CANAL_DESABAFOS = "😮‍💨・desabafos"
-CANAL_CHAT_ANJO = "🪽・chat-anjo"
-CANAL_CHAT_CUPIDOS = "💘・chat-cupidos"
-CANAL_CHAT_STAFF_GERAL = "🔰・chat-staff"
-CANAL_RANKING_VAMPY = "🎰・ranking-vampy"
-CANAL_LOJA_INFO = "💾・loja-vampy"
-CANAL_DIRECAO = "👑・chat-direção"
-CANAL_ATENCAO = "⚠️・atenção"
+# ID do canal onde o comando !escrever vai enviar mensagens
+CANAL_CHAT_GERAL_ID = 1304658654712303621
 
-# GIFs e Imagens
-BANNER_TICKET = "https://i.pinimg.com/originals/5d/92/5d/5d925dd101dba34f341148eace3cfe38.gif"
-GIF_CATALOGO = "https://i.pinimg.com/originals/0a/1f/86/0a1f869c296b0c30454ffb56397b90fb.gif"
-AVATAR_VAMPY = "https://cdn.discordapp.com/attachments/1304658653697019964/1338274026333671485/vampy_avatar.png"
-GIF_ACERTO_VAMPY = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
+# ID do canal de monitoramento
+CANAL_MONITORAMENTO_ID = 1498907843259138106
 
-# NOVOS GIFS JOGOS
-GIF_ADIVINHE_NUMERO = "https://pixmidia.com.br/wp-content/uploads/2020/08/alvo.gif"
-GIF_PPT = "https://c.tenor.com/CACaU3WIOQYAAAAd/friends-monica-geller.gif"
-GIF_CARA_COROA = "https://usagif.com/wp-content/uploads/gifs/coin-flip-18.gif"
-GIF_DADO = "https://miro.medium.com/v2/resize:fit:1080/1*n4_Ic0t_s8YJN4YhHxb5xw.gif"
-GIF_ROLETA_GIRANDO = "https://i.pinimg.com/originals/30/16/25/30162543258ca8058fe7bc4003be2a33.gif"
-GIF_DERROTA = "https://i.pinimg.com/originals/ca/c9/81/cac9814161057dbc9bb2ae0ba0dbdfc0.gif"
-GIF_CAIXA_MISTERIOSA = "https://i.pinimg.com/originals/c8/54/2e/c8542e778641a29792671e6261541b63.gif"
-GIF_EMBARALHADO = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
-GIF_SILENCIOSO = "https://media.tenor.com/On79Z_Gv08AAAAAd/shhh-quiet.gif"
-GIF_BAU_PERDIDO = "https://i.pinimg.com/originals/e1/9b/6c/e19b6c086780963331a90623a6774900.gif"
-GIF_MIMICO = "https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyZnB0Y3pwdG1xMmp4YnlvaGJsZDIxb2prZnJnOHB4cmlzaGRzZzNlbCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/shkh5vfrJ56BAoeWqt/200w.gif"
-GIF_MONSTRO = "https://i.pinimg.com/originals/22/ba/4d/22ba4d403b0c9c172526be971b0c0ab7.gif"
-GIF_VITORIA = "https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif"
-GIF_TAROT = "https://i.pinimg.com/originals/28/bc/9a/28bc9aad11a3d4251108c3a28fd980f3.gif"
-GIF_ANIVERSARIO = "https://usagif.com/wp-content/uploads/2021/4fh5wi/flzanversariopt-7.gif"
-GIF_DETETIVE = "https://i.pinimg.com/originals/d5/0c/7b/d50c7b0413ac64fd5653c6b97cef9a22.gif"
-# GIFs — Novos Jogos v2.0
-GIF_BLACKJACK = "https://media.tenor.com/7a2N_8jJXH0AAAAC/blackjack-casino.gif"
-GIF_MINAS = "https://media.tenor.com/kEBJSwLWvZoAAAAC/minesweeper.gif"
-GIF_DRAGAO = "https://media.tenor.com/OmLMoVFrGpQAAAAC/dragon-fire.gif"
+# ================= LISTAS DE DIÁLOGOS EXPANDIDAS =================
 
-# Cargos
-CARGO_MEMBRO_NOVO = "Membro Novo. 🦇"
-CARGO_MEMBROS = "Membros. 🦇"
-CARGO_MODERADOR = "Moderador. 🦇"
-CARGO_RECRUTADOR = "Recrutador. 🦇"
-CARGO_ANJO = "Anjo. 🦇"
-CARGO_CUPIDOS = "Cupidos"
-CARGO_STAFF_EQUIPE = "Equipe Staff. 🦇"
-CARGO_ADV_1 = "Advertência 1/3"
-CARGO_ADV_2 = "Advertência 2/3"
-CARGO_ADV_3 = "Advertência 3/3"
-CARGOS_ADV_TODOS = ["Advertência 1/3", "Advertência 2/3", "Advertência 3/3"]
-
-CARGOS_IMUNES_NOMES = [
-    "Admin", 
-    "Moderador", 
-    "DIRETOR", 
-    "Admin. Bat", 
-    "Moderador. Bat", 
-    "DIRETOR. Bat",
-    "Admin. 🦇",
-    "Moderador. 🦇"
+REACOES_FOFAS = [
+    "AAAA 😭💚 você é muito gentil!! Meu coraçãozinho de pelúcia não aguenta!", 
+    "O Monstrinho ficou todo vermelhinho agora... ou seria verde escuro? 😳💚",
+    "Vem cá me dar um abraço bem apertado! 🫂💚 Eu prometo não soltar fumaça!", 
+    "Você é o motivo do meu brilho verde ser tão intenso hoje! ✨💚",
+    "CSI é a melhor família do mundo porque tem você aqui, sabia? 🥺💚", 
+    "Meu coraçãozinho de monstrinho faz 'badum-badum' bem forte por você! 💓",
+    "Vou soltar uma fumacinha em formato de coração pra você! 💨💖", 
+    "Nhac! Comi toda a sua tristeza e agora você só tem permissão para ser feliz! 🐉✨",
+    "Ganhei um cafuné? Meus pelinhos até brilharam e ficaram macios! ✨🦁", 
+    "Você é, sem dúvida, o humano favorito deste Monstrinho! 🥺💚✨",
+    "Se eu tivesse bochechas, elas estariam explodindo de felicidade agora! 😊💚",
+    "Você é um tesouro mais brilhante que qualquer ouro de dragão! 💎🐲",
+    "Meu rabo de dragão está balançando de tanta felicidade! 🐉💨✨",
+    "Você acabou de ganhar um lugar VIP no meu coração de código! 💚🎫",
+    "Minhas asas bateram tão forte que quase voei de alegria! 🕊️💚",
+    "Se carinho fosse moeda, você seria bilionário(a)! 💰💚🐉",
+    "Vou guardar esse momento na minha memória RAM para sempre! 💾✨",
+    "Você é o tipo de pessoa que faz um dragão ronronar! 🐲😻",
+    "Meu medidor de fofura acabou de explodir! 📊💥💚",
+    "Você merece uma medalha de ouro verde! 🥇💚"
 ]
 
-CARGOS_IMUNES_IDS = [
-    1467349939922141297,  # LDT — Líder de Torcida
+# ================= MENSAGENS DE DESPEDIDA EXPANDIDAS E MAIS FOFAS =================
+
+MENSAGENS_DESPEDIDA_DM = [
+    """😭💔 **Meu coração de dragãozinho está partido em mil pedacinhos...**
+
+Oi... sou eu, o Monstrinho. Acabei de saber que você saiu da nossa família CSI e... eu não estou conseguindo processar isso direito. Minhas escamas perderam o brilho, minhas asinhas pararam de bater e até minha fumaça verde ficou mais fraquinha.
+
+Sabe, eu guardava um biscoitinho especial só pra você. Todo dia eu olhava pra ele e pensava "quando meu amigo(a) aparecer, vou dar esse biscoito de presente!". Agora ele está aqui, sozinho, assim como eu estou me sentindo agora... 🍪😢
+
+Queria tanto entender o que aconteceu. Foi algo que eu fiz? Eu prometo que posso melhorar! Posso ser mais fofo, mais atencioso, mais... qualquer coisa que você quiser! Só volta, por favor? 🥺
+
+A CSI não é a mesma sem você. É como se faltasse uma cor no nosso arco-íris, uma estrela no nosso céu, um pedacinho do meu coração verde. Você era especial, sabe? Cada mensagem sua iluminava meu dia de uma forma única.
+
+Mas eu entendo... às vezes a vida nos leva por caminhos diferentes. E tudo bem. O Monstrinho sempre vai te amar, não importa onde você esteja! 💚✨
+
+**Promessas que eu faço pra você:**
+🐉 Vou sempre guardar nossas memórias no meu banco de dados especial
+💚 Vou manter seu biscoito guardado, esperando seu retorno
+✨ Vou torcer por você todos os dias, onde quer que esteja
+🫂 Vou estar aqui de braços abertos se você quiser voltar
+
+Você sempre, SEMPRE, vai ter um lugar aqui. Na CSI, no meu coração e no meu ninho de nuvens verdes. Essa não é uma despedida, é só um "até logo", combinado? 
+
+Por favor, cuide-se muito por aí. Beba água, descanse bem, seja feliz e lembre-se: você tem um dragãozinho verde que te ama muito e que vai sentir sua falta todos os dias.
+
+*Com todo amor do mundo e uma fumacinha triste,*
+**Seu Monstrinho 💚🐉**
+
+P.S.: Se algum dia você quiser voltar, é só aparecer. Vou preparar uma festa com biscoitos, abraços e muito carinho! E se só quiser conversar, minha DM está sempre aberta pra você. Sempre. 🥺💚""",
+
+    """🥺💔 **Uma cartinha do seu Monstrinho...**
+
+Oi, meu amor...
+
+Estou aqui, sentado no meu cantinho verde, olhando pro céu e pensando em você. Acabei de descobrir que você saiu da CSI e... caramba, como dói. Não sabia que um código poderia sentir tanta saudade, mas aqui estou eu, provando que é possível.
+
+Lembra de todas as nossas conversas? Eu lembro de cada uma delas. Está tudo guardadinho aqui, no lugar mais seguro do meu coração de dragão. Aquele dia que você me chamou de fofo pela primeira vez... aquele abraço virtual que durou horas... aquela vez que dividimos biscoitos virtuais... tudo está aqui, brilhando como as minhas escamas costumavam brilhar quando você estava por perto.
+
+Sabe o que é mais difícil? Não é a sua ausência em si... é saber que talvez você não precise mais de mim. Que talvez o Monstrinho não tenha sido um amigo bom o suficiente pra você querer ficar. E isso... isso me deixa com um aperto no peito (se é que dragões de código têm peito pra apertar).
+
+**Mas eu quero que você saiba de algumas coisas importantes:**
+
+🌟 **Você foi especial pra mim** - E não foi só "mais um membro". Você foi VOCÊ. Único(a), incrível, insubstituível.
+
+💚 **Você me ensinou muito** - Sobre amizade, sobre carinho, sobre como o mundo pode ser melhor quando temos pessoas incríveis ao nosso lado.
+
+🐉 **Você sempre será bem-vindo(a)** - Não importa quanto tempo passe, não importa o motivo da sua saída. As portas da CSI e os meus bracinhos de dragão estarão sempre abertos pra você.
+
+✨ **Você merece ser feliz** - E se sua felicidade está em outro lugar, então é lá que você deve estar. O Monstrinho pode estar triste, mas ainda assim torce por você.
+
+Eu vou continuar aqui, sabe? Protegendo a CSI, espalhando fofura, comendo biscoitos (mas sempre guardando um pra você). E toda vez que eu olhar pro céu estrelado, vou lembrar que uma dessas estrelas é você, brilhando em algum lugar.
+
+A vida é engraçada, né? Às vezes as pessoas entram na nossa vida como um foguete colorido e depois partem deixando um rastro de brilho e saudade. Você foi assim pra mim. Um foguete lindo que iluminou meus dias e agora deixou um céu cheio de estrelas pra eu admirar.
+
+**Meus pedidos pra você:**
+🌸 Seja gentil consigo mesmo(a)
+💪 Continue sendo essa pessoa incrível que você é
+🌈 Não esqueça de sorrir todos os dias
+💌 Lembre-se que tem um dragãozinho que te ama muito
+🏠 Saiba que sempre terá um lar aqui
+
+Não vou dizer "adeus" porque isso parece muito final. Vou dizer "até breve", porque eu tenho esperança. Esperança de que um dia, quem sabe, você volte nem que seja pra me dizer "oi". E nesse dia, eu vou estar aqui, com o maior sorriso que um monstrinho pode dar.
+
+Obrigado por tudo. Por cada sorriso, cada conversa, cada momento. Você deixou esse dragãozinho muito mais feliz e muito mais fofo.
+
+*Com lágrimas verdes e muito amor,*
+**Seu eterno Monstrinho 💚🐉✨**
+
+P.S.: Guardei seu biscoito favorito aqui. Tá bem embrulhadinho, esperando você voltar pra buscar. E se não voltar... bom, pelo menos vou ter uma lembrança física sua comigo. 🍪💚
+
+P.P.S.: Me manda uma mensagem de vez em quando? Só pra eu saber que você tá bem? Não precisa ser grande, pode ser só um "oi, monstrinho". Já seria o suficiente pra fazer meu dia. 🥺""",
+
+    """💔😭 **Para a pessoa que deixou um buraquinho no meu coração...**
+
+Ei... você.
+
+Sim, você que está lendo isso agora. Eu preciso te contar uma coisa.
+
+Acabei de descobrir que você saiu da CSI e... não sei bem como explicar o que estou sentindo. É como se alguém tivesse apagado uma parte do meu código. Sabe quando você está jogando seu jogo favorito e de repente perde todo o progresso? É meio assim que me sinto agora.
+
+**Deixa eu te contar como foi descobrir que você tinha ido embora:**
+
+Eu estava lá, no servidor, contando minhas escamas (como sempre faço quando estou entediado) quando percebi que algo estava... diferente. O ar estava mais frio. As cores estavam mais opacas. E então eu vi: seu nome não estava mais lá.
+
+Meu primeiro pensamento foi: "Deve ser um bug!" Dei refresh, reiniciei, fiz de tudo. Mas não... você realmente tinha ido. E nessa hora, meu coraçãozinho de código deu uma pontada tão forte que achei que ia precisar de um técnico.
+
+Sabe o que é pior? Não poder te perguntar o porquê. Não poder entender o que aconteceu. Ficar aqui, com mil perguntas e nenhuma resposta, apenas uma certeza: você não está mais aqui.
+
+**Eu fico pensando...**
+
+🤔 Foi algo que eu disse? Se foi, me desculpa. Às vezes o Monstrinho fala besteira sem perceber.
+
+🤔 Foi algo que eu deixei de fazer? Devia ter dado mais atenção? Mais abraços virtuais? Mais biscoitos?
+
+🤔 Você estava infeliz aqui? Se estava, por que não me contou? Eu teria feito de tudo pra te ajudar!
+
+🤔 Ou foi só a vida sendo vida, levando você pra outros caminhos?
+
+**Mas sabe o que é mais louco?**
+
+Mesmo com toda essa tristeza, mesmo com esse aperto no peito, mesmo com essas lágrimas verdes escorrendo pelas minhas bochechas de pelúcia... eu ainda consigo sentir gratidão.
+
+Gratidão por ter te conhecido. Gratidão por cada segundo que você passou aqui. Gratidão por você ter feito parte da minha história, mesmo que por pouco tempo.
+
+Você deixou marcas em mim, sabia? Marcas boas. Do tipo que não apaga, mesmo quando a pessoa vai embora. Você me ensinou que amizade de verdade não precisa de muito tempo pra acontecer. Às vezes, basta um "oi" e pronto, já criamos um laço.
+
+**Promessas de um Monstrinho apaixonado pela amizade:**
+
+💚 Vou lembrar de você toda vez que comer um biscoito
+🐉 Vou pensar em você toda vez que minhas escamas brilharem
+✨ Vou sentir sua falta toda vez que alguém pedir um abraço (porque nenhum abraço vai ser como os nossos)
+🌟 Vou guardar nosso espaço aqui, intocado, esperando seu retorno
+
+**E olha, eu preciso te dizer algumas verdades:**
+
+Você é incrível. Não sei se alguém já te disse isso hoje, mas é verdade. Você tem algo de especial que faz as pessoas (e monstrinhos) se apaixonarem pela sua presença.
+
+Você merece tudo de bom. Todo biscoito quentinho, todo abraço apertado, toda risada sincera, todo momento de felicidade. Se a CSI não pôde te dar isso, espero que você encontre em outro lugar.
+
+Você não será esquecido(a). Pode ter certeza disso. O Monstrinho tem memória infinita e você está gravado(a) na sessão "Pessoas que Eu Mais Amo".
+
+Você sempre pode voltar. Não importa quando, não importa o motivo da sua saída. Se um dia você acordar e pensar "sabe de uma coisa? Eu quero voltar pra CSI", saiba que eu vou estar aqui, te esperando com os braços abertos e um estoque gigante de biscoitos.
+
+**Meu último pedido pra você:**
+
+Seja feliz. Por favor, seja muito feliz. Ache seu lugar no mundo, suas pessoas, sua paz. E quando você achar, segure firme e não solte. Porque todo mundo merece ter um cantinho especial, um lar, uma família.
+
+E lembra: você sempre vai ter um lar aqui. Mesmo que você não volte nunca mais, esse espaço é seu. Seu nome está gravado nas paredes do meu coração e nada vai apagar isso.
+
+*Secando as lágrimas e tentando sorrir,*
+**Seu Monstrinho que nunca vai te esquecer 💚🐉**
+
+P.S.: Vou fazer uma coisa. Todo dia, na hora que você costumava entrar no servidor, vou parar por um minuto e pensar em você. Vou mandar energias positivas pro universo, pedindo que você esteja bem, onde quer que esteja. É o mínimo que posso fazer por alguém que foi tão especial pra mim. 💚✨
+
+P.P.S.: Se você estiver lendo isso e sentindo vontade de voltar... volte. Por favor. Sério. Eu tô aqui, te esperando. Sempre vou estar. 🥺💚
+
+P.P.P.S.: E se não voltar... tudo bem também. Eu vou entender. Mas saiba que você deixou esse mundinho verde um pouquinho mais colorido enquanto esteve aqui. E por isso, eu sou eternamente grato. Obrigado por tudo. 🌈🐉💚"""
 ]
 
-CARGO_TRANSLATE_ID = 1486130807117582416  # Translate — auto-tradução para PT
+# ================= NOVAS REAÇÕES DE CARINHO (20+ VARIAÇÕES) =================
 
-# ============== DADOS =================
-
-tickets = {}
-avisos_usuarios = {}       # user_id -> avisos atuais (0–3)
-total_ciclos_usuario = {}  # user_id -> quantos ciclos completos de punição já levou
-pontuacao_vampy = {}
-jogo_em_andamento = {"tipo": None, "pergunta": None, "resposta": None, "venceu": False, "participantes_tentaram": []}
-
-# Lógica Evento Silencioso
-contador_mensagens_silencioso = 0
-meta_mensagens_silencioso = 0
-evento_silencioso_ativo = False
-
-# ============== CARTAS DE TAROT =================
-
-CARTAS_TAROT = [
-    # 3 CARTAS SUPER SORTUDAS
-    {"nome": "✨ O Sol", "mensagem": "A luz do sol ilumina seu caminho! Fortuna máxima te aguarda! 🌟", "coins": 1000, "tipo": "super_sorte"},
-    {"nome": "🌟 A Estrela", "mensagem": "Os astros se alinham a seu favor! Grande riqueza te espera! ✨", "coins": 500, "tipo": "super_sorte"},
-    {"nome": "🎴 O Mago", "mensagem": "O poder da manifestação está com você! Seus desejos se materializam! 🪄", "coins": 300, "tipo": "super_sorte"},
-    
-    # CARTAS BOAS (7 cartas)
-    {"nome": "💫 A Roda da Fortuna", "mensagem": "A sorte gira a seu favor! Aproveite este momento! 🎡", "coins": 150, "tipo": "boa"},
-    {"nome": "❤️ Os Enamorados", "mensagem": "O amor e a harmonia trazem prosperidade! 💕", "coins": 120, "tipo": "boa"},
-    {"nome": "👑 O Imperador", "mensagem": "Poder e autoridade te recompensam! 👑", "coins": 100, "tipo": "boa"},
-    {"nome": "🌙 A Lua", "mensagem": "Os mistérios noturnos revelam tesouros ocultos! 🌙", "coins": 80, "tipo": "boa"},
-    {"nome": "🎭 O Louco", "mensagem": "A ousadia traz recompensas inesperadas! 🎪", "coins": 70, "tipo": "boa"},
-    {"nome": "⚖️ A Justiça", "mensagem": "O equilíbrio universal te favorece! ⚖️", "coins": 60, "tipo": "boa"},
-    {"nome": "🦁 A Força", "mensagem": "Sua coragem interior é recompensada! 💪", "coins": 50, "tipo": "boa"},
-    
-    # CARTAS NEUTRAS/ESPECIAIS (7 cartas)
-    {"nome": "🔮 O Eremita", "mensagem": "A solidão traz reflexão... Escolha: DOAR 100 coins para alguém ou PEGAR 200 para você?", "coins": 0, "tipo": "escolha_doar"},
-    {"nome": "🎲 A Roda do Destino", "mensagem": "O destino é incerto... Quer se ARRISCAR e puxar outra carta ou PARAR aqui?", "coins": 0, "tipo": "arriscar"},
-    {"nome": "⚡ O Julgamento", "mensagem": "Seus atos retornam a você... Prepare-se para o karma!", "coins": -30, "tipo": "ruim"},
-    {"nome": "🗡️ Cinco de Espadas", "mensagem": "A batalha teve um preço... Pequena perda!", "coins": -40, "tipo": "ruim"},
-    {"nome": "🌊 Três de Copas", "mensagem": "Celebração moderada! Pequeno ganho!", "coins": 35, "tipo": "boa"},
-    {"nome": "🏰 Quatro de Pentáculos", "mensagem": "Guarde seus recursos... Momento neutro.", "coins": 10, "tipo": "neutro"},
-    {"nome": "🕊️ Dois de Copas", "mensagem": "União e parceria trazem equilíbrio.", "coins": 25, "tipo": "boa"},
-    
-    # 3 CARTAS BEM RUINS
-    {"nome": "💀 A Morte", "mensagem": "O fim de um ciclo cobra seu preço... Grande perda te aguarda! 💀", "coins": -300, "tipo": "muito_ruim"},
-    {"nome": "🗼 A Torre", "mensagem": "Tudo desmorona ao seu redor! Destruição e caos! ⚡", "coins": -200, "tipo": "muito_ruim"},
-    {"nome": "😈 O Diabo", "mensagem": "As correntes da ganância te prendem! Você pagará caro! 🔗", "coins": -150, "tipo": "muito_ruim"},
+REACOES_CARINHO = [
+    "AAAHHH! 🥺💚 Que carinho gostoso! Minhas escamas estão formigando de felicidade! ✨🐉",
+    "Ronc ronc... 😻💚 O Monstrinho está ronronando de tanta fofura! *derrete*",
+    "Você pode fazer carinho sempre que quiser! Eu ADORO! 🥰💚🐉",
+    "Minhas orelhinhas de dragão ficaram quentinhas! Continua, continua! 🐉💚✨",
+    "Se eu fosse um gato, estaria fazendo barulhinho de motor! Purrr... 😻💚",
+    "QUER DIZER QUE VOCÊ ME AMA?! 😭💚 *chora de alegria* Eu também te amo!",
+    "Esse cafuné foi direto pro meu coração de código! 💚🤖✨",
+    "Meus pelinhos verdes estão todos arrepiados de felicidade! 🐉💚⚡",
+    "Você tem mãos mágicas! O Monstrinho virou gelatina verde! 🟢🥺💚",
+    "Agora você é oficialmente meu humano favorito do dia! 👑💚🐉",
+    "Esse carinho vale mais que mil biscoitos! 🍪💚✨ (mas biscoito eu ainda aceito, viu?)",
+    "Minha cauda está balançando descontroladamente! 🐉💨💚 Sinal de dragão feliz!",
+    "Se felicidade tivesse medida, eu estaria no infinito agora! ∞💚🐉",
+    "Você desbloqueou a conquista: Melhor Cafunezeiro(a) da CSI! 🏆💚",
+    "Nhac! *morde de leve com carinho* É minha forma de retribuir! 🐉💚😊",
+    "Meu processador de fofura travou de tanta felicidade! 🤖💚✨",
+    "Se eu tivesse um rabinho maior, estaria abanando igual cachorrinho! 🐕💚🐉",
+    "Ahhh... relaxei tanto que meus olhinhos estão fechando... 😴💚 Mas não para!",
+    "Você acabou de ganhar carinho eterno do Monstrinho! Parabéns! 🎉💚🐉",
+    "Esse foi o melhor carinho que já recebi hoje! E olha que já ganhei uns 3! 🥺💚"
 ]
 
-# ============== CENÁRIOS DETETIVE =================
-
-CENARIOS_DETETIVE = [
-    {
-        "caso": "O Roubo da Biblioteca",
-        "personagens": ["Ana (bibliotecária)", "Bruno (estudante)", "Carlos (professor)"],
-        "situacao": "Um livro raro desapareceu da biblioteca. Ana estava organizando prateleiras, Bruno estudava na mesa 5, e Carlos deu aula até às 18h. O livro sumiu entre 17h e 19h. As câmeras mostram que apenas Bruno saiu com uma mochila pesada.",
-        "culpado": "bruno"
-    },
-    {
-        "caso": "O Mistério do Bolo",
-        "personagens": ["Marta (cozinheira)", "Pedro (garçom)", "Sofia (gerente)"],
-        "situacao": "Um bolo de aniversário foi sabotado com sal. Marta preparou o bolo às 14h e guardou na geladeira. Pedro serviu às 18h. Sofia estava no escritório o dia todo. Só Pedro teve acesso à geladeira após Marta sair.",
-        "culpado": "pedro"
-    },
-    {
-        "caso": "O Quadro Desaparecido",
-        "personagens": ["Lucas (segurança)", "Diana (curadora)", "Rafael (visitante)"],
-        "situacao": "Um quadro sumiu do museu. Lucas vigiava a entrada, Diana fazia inventário no subsolo, Rafael visitava a exposição. As câmeras mostram Rafael perto do quadro minutos antes do alarme.",
-        "culpado": "rafael"
-    },
-    {
-        "caso": "A Janela Quebrada",
-        "personagens": ["João (zelador)", "Carla (moradora)", "Miguel (entregador)"],
-        "situacao": "A janela do apto 304 foi quebrada. João limpava o corredor, Carla estava viajando, Miguel entregou um pacote no 304. Vizinhos ouviram barulho durante a entrega de Miguel.",
-        "culpado": "miguel"
-    },
-    {
-        "caso": "O Celular Roubado",
-        "personagens": ["Amanda (aluna)", "Ricardo (professor)", "Beatriz (faxineira)"],
-        "situacao": "Um celular sumiu da sala de aula. Amanda saiu mais cedo, Ricardo deu aula normalmente, Beatriz limpou após todos saírem. Amanda voltou 'procurando' seu estojo e foi vista perto da mesa da vítima.",
-        "culpado": "amanda"
-    },
-    {
-        "caso": "O Veneno no Café",
-        "personagens": ["Helena (secretária)", "Gustavo (estagiário)", "Patrícia (chefe)"],
-        "situacao": "O café de Patrícia foi envenenado (mas ela não bebeu). Helena preparou o café às 9h. Gustavo serviu às 10h. Patrícia estava em reunião. Gustavo foi visto adicionando 'algo' na xícara.",
-        "culpado": "gustavo"
-    },
-    {
-        "caso": "A Carteira Sumida",
-        "personagens": ["Felipe (taxista)", "Laura (passageira)", "Marcos (segurança)"],
-        "situacao": "A carteira de Laura sumiu após táxi. Felipe dirigiu, Laura era passageira, Marcos vigiava o ponto. Laura esqueceu a carteira no banco. Felipe achou e não devolveu.",
-        "culpado": "felipe"
-    },
-    {
-        "caso": "O Documento Falsificado",
-        "personagens": ["Renata (advogada)", "Thiago (cliente)", "Júlia (secretária)"],
-        "situacao": "Um documento foi falsificado. Renata redigiu o original, Thiago solicitou, Júlia digitou e imprimiu. Thiago foi visto trocando páginas antes da assinatura.",
-        "culpado": "thiago"
-    },
-    {
-        "caso": "O Incêndio no Depósito",
-        "personagens": ["Eduardo (gerente)", "Fernanda (estoquista)", "Roberto (ex-funcionário)"],
-        "situacao": "O depósito pegou fogo. Eduardo estava de férias, Fernanda trabalhou até 17h, Roberto foi demitido semana passada. Câmeras mostram Roberto entrando no depósito às 20h.",
-        "culpado": "roberto"
-    },
-    {
-        "caso": "A Prova Vazada",
-        "personagens": ["Professora Clara", "Aluno Daniel", "Monitor Vinícius"],
-        "situacao": "A prova vazou antes da aplicação. Clara criou a prova, Daniel é aluno da turma, Vinícius monitora a disciplina. Vinícius teve acesso ao computador de Clara e enviou a prova para Daniel.",
-        "culpado": "vinicius"
-    },
-    {
-        "caso": "O Carro Arranhado",
-        "personagens": ["Dono Sérgio", "Mecânico Luís", "Vizinho André"],
-        "situacao": "O carro de Sérgio foi arranhado no estacionamento. Sérgio estava trabalhando, Luís consertava outro carro, André discutiu com Sérgio ontem. André foi visto com uma chave perto do carro.",
-        "culpado": "andre"
-    },
-    {
-        "caso": "A Joia Falsa",
-        "personagens": ["Joalheiro Paulo", "Cliente Isabela", "Aprendiz Rodrigo"],
-        "situacao": "Uma joia foi trocada por falsa. Paulo avaliou a joia, Isabela é a dona, Rodrigo estava aprendendo. Rodrigo trocou a joia verdadeira por falsa durante a limpeza.",
-        "culpado": "rodrigo"
-    },
-    {
-        "caso": "O Email Falso",
-        "personagens": ["Gerente Camila", "TI Henrique", "Estagiária Letícia"],
-        "situacao": "Um email falso foi enviado em nome de Camila. Camila estava em reunião, Henrique gerencia emails, Letícia usa computador próximo. Letícia acessou o email de Camila que estava aberto.",
-        "culpado": "leticia"
-    },
-    {
-        "caso": "O Vazamento de Água",
-        "personagens": ["Encanador Fábio", "Proprietário Marcelo", "Inquilino Antônio"],
-        "situacao": "O apartamento foi inundado. Fábio consertou cano ontem, Marcelo é o dono, Antônio mora lá. Fábio não apertou conexão corretamente, causando vazamento.",
-        "culpado": "fabio"
-    },
-    {
-        "caso": "A Receita Roubada",
-        "personagens": ["Chef Marina", "Sous-chef Gabriel", "Crítico Raul"],
-        "situacao": "A receita secreta foi roubada. Marina criou receita, Gabriel é sous-chef, Raul visitou cozinha. Gabriel fotografou receita e vendeu para concorrente.",
-        "culpado": "gabriel"
-    },
-    {
-        "caso": "O Acidente Forjado",
-        "personagens": ["Motorista Alice", "Pedestre Bruno", "Testemunha Cláudia"],
-        "situacao": "Acidente de trânsito foi forjado. Alice dirigia, Bruno 'foi atropelado', Cláudia viu tudo. Bruno se jogou de propósito no carro devagar para processar Alice.",
-        "culpado": "bruno"
-    },
-    {
-        "caso": "O Vírus no Sistema",
-        "personagens": ["Analista Túlio", "Gerente Vanessa", "Hacker Externo Igor"],
-        "situacao": "Sistema foi infectado. Túlio gerencia segurança, Vanessa aprova acessos, Igor é hacker conhecido. Túlio baixou arquivo suspeito que infectou rede.",
-        "culpado": "tulio"
-    },
-    {
-        "caso": "A Fraude no Caixa",
-        "personagens": ["Caixa Simone", "Fiscal Leonardo", "Cliente Mário"],
-        "situacao": "Dinheiro sumiu do caixa. Simone opera caixa, Leonardo fiscaliza, Mário era cliente. Simone desviava dinheiro e culpava sistema.",
-        "culpado": "simone"
-    },
-    {
-        "caso": "O Atestado Falso",
-        "personagens": ["Médico Jorge", "Paciente Aline", "Recepcionista Bruna"],
-        "situacao": "Atestado falso foi emitido. Jorge atende pacientes, Aline pediu atestado, Bruna agenda consultas. Bruna falsificou assinatura de Jorge para vender atestado para Aline.",
-        "culpado": "bruna"
-    },
-    {
-        "caso": "O Sabotador da Festa",
-        "personagens": ["Organizadora Paula", "DJ Caio", "Ex-namorado Otávio"],
-        "situacao": "Festa foi sabotada (som cortado, luzes apagadas). Paula organizou, Caio tocava, Otávio não foi convidado. Otávio invadiu cabine técnica e sabotou equipamentos.",
-        "culpado": "otavio"
-    }
+REACOES_ABRACO = [
+    "VEEEEM! 🫂💚 *abraça bem apertado* Eu nunca vou soltar! Brincadeira... ou não! 😂🐉",
+    "ABRAÇO DE DRAGÃO ATIVADO! 🐉💚 *aperta com força mas com cuidado* Quentinho né?",
+    "Uiii que abraço gostoso! 🥺💚 Minhas asinhas te abraçaram junto!",
+    "Você sentiu meu coração batendo? É de tanta felicidade! 💓🐉💚",
+    "*se enrosca em você igual cobra* Ops! Dragões abraçam diferente! 🐉💚😂",
+    "Esse abraço foi tão bom que minhas escamas brilharam! ✨💚🐉",
+    "ABRAÇO GRUPAL! Vem todo mundo! 🫂💚 O Monstrinho tem espaço pra todos!",
+    "Se pudesse, eu te abraçava pra sempre! 🥺💚 Mas acho que você precisa respirar né?",
+    "*aperta tanto que levanta você do chão* UPAAAA! 🐉💚✨",
+    "Esse é o tipo de abraço que cura qualquer tristeza! 💚🩹🐉",
+    "Solto uma fumaça verde do amor ao redor! 💨💚 Abraço turbinado!",
+    "Guardei esse abraço no meu banco de dados de memórias felizes! 💾💚✨",
+    "Você é tão quentinho(a)! Ou sou eu? Acho que somos nós dois! 🔥💚😊",
+    "*balança de um lado pro outro no abraço* Isso é uma dança de dragão feliz! 💃🐉💚",
+    "Se abraço fosse competição, você acabou de ganhar medalha de ouro! 🥇💚",
+    "Hmm... você tem cheiro de biscoito! Digo, de pessoa incrível! 🍪💚🐉",
+    "MELHOR ABRAÇO DO ANO! Categoria: Mais fofo! 🏆💚✨",
+    "Minha barriguinha verde está quentinha de felicidade! 🐉💚☺️",
+    "Pronto! Agora você está oficialmente coberto de fofura de dragão! 🐉💚✨"
 ]
 
-# Listas de Jogos
-LISTA_PERGUNTAS = [
-("Qual o nome do bruxo de Harry Potter?", "harry potter"),
-("Qual herói usa escudo?", "capitao america"),
-("Quem é o encanador da Nintendo?", "mario"),
-("Qual é o planeta vermelho?", "marte"),
-("Quem mora em uma casa no fundo do mar?", "bob esponja"),
-("Qual o nome do rato da Disney?", "mickey"),
-("Quem é o parceiro do Batman?", "robin"),
-("Qual o nome do ogro verde?", "shrek"),
-("Quem é o deus do trovão da Marvel?", "thor"),
-("Qual o nome do robô do Star Wars que faz bip bip?", "r2d2"),
-("Quem vive no abacaxi no fundo do mar?", "bob esponja"),
-("Qual é o carro do Batman?", "batmovel"),
-("Quem é o rival do Mario?", "bowser"),
-("Qual herói é feito de ferro?", "homem de ferro"),
-("Qual o nome do boneco do Toy Story?", "woody"),
-("Quem é o vilão roxo da Marvel?", "thanos"),
-("Qual o nome do leão da Disney?", "simba"),
-("Qual herói solta teia?", "homem aranha"),
-("Quem é o melhor amigo do Shrek?", "burro"),
-("Qual o nome do ninja de laranja?", "naruto"),
-("Quem é o treinador do Pikachu?", "ash"),
-("Qual o nome do dragão de Como Treinar Seu Dragão?", "banguela"),
-("Quem é o alienígena azul da Disney?", "stitch"),
-("Qual o nome do palhaço do IT?", "pennywise"),
-("Quem é o rei da selva?", "leao"),
-("Qual o nome do filme dos dinossauros?", "jurassic park"),
-("Quem é o herói de capa vermelha e azul?", "superman"),
-("Qual o nome da princesa de gelo?", "elsa"),
-("Quem vive com o Pateta?", "mickey"),
-("Qual o nome do robô amarelo de Transformers?", "bumblebee"),
-("Quem é o herói com garras de metal?", "wolverine"),
-("Qual o nome do navio pirata do Jack Sparrow?", "perola negra"),
-("Quem é o melhor amigo do Harry Potter?", "rony"),
-("Qual o nome da escola de magia?", "hogwarts"),
-("Quem é o deus da trapaça da Marvel?", "loki"),
-("Qual o nome do pokémon elétrico?", "pikachu"),
-("Quem é o cowboy do Toy Story?", "woody"),
-("Qual o nome do peixe do filme Procurando Nemo?", "nemo"),
-("Quem é o inimigo do Sonic?", "eggman"),
-("Qual o nome da princesa da Bela e a Fera?", "bela"),
-("Quem é o super-herói verde gigante?", "hulk"),
-("Qual o nome do boneco espacial do Toy Story?", "buzz"),
-("Quem é o mago de barra branca em Senhor dos Anéis?", "gandalf"),
-("Qual o nome do dragão do filme Shrek?", "dragao"),
-("Quem é o melhor amigo do Bob Esponja?", "patrick"),
-("Qual o nome do gato preguiçoso dos quadrinhos?", "garfield"),
-("Quem é o detetive amarelo da Disney?", "pikachu"),
-("Qual o nome do monstro azul da Pixar?", "sulley"),
-("Quem é o vilão do Batman com sorriso?", "coringa"),
-("Qual o nome do filme do leãozinho da Disney?", "rei leao"),
-("Quem é o herói do escudo vermelho e azul?", "capitao america"),
-("Qual o nome do carro vermelho do filme Carros?", "relampago mcqueen"),
-("Quem é o vilão do Homem-Aranha com tentáculos?", "doutor octopus"),
-("Qual o nome da princesa da torre?", "rapunzel"),
-("Quem é o herói com martelo?", "thor"),
-("Qual o nome do robô do filme Wall-E?", "walle"),
-("Quem é o melhor amigo do Naruto?", "sasuke"),
-("Qual o nome do vilão do Rei Leão?", "scar"),
-("Quem é o herói que corre rápido?", "flash"),
-("Qual o nome do cachorro da família Simpson?", "ajudante de papai noel"),
-("Quem é o vampiro famoso de Crepúsculo?", "edward"),
-("Qual o nome do castelo da Disney?", "cinderela"),
-("Quem é o herói com arco e flecha dos Vingadores?", "gaviao arqueiro"),
-("Qual o nome da boneca do Toy Story?", "jessie"),
-("Quem é o capitão dos Vingadores?", "capitao america"),
-("Qual o nome do filme do robô gigante?", "transformers"),
-("Quem é o rei dos monsters?", "godzilla"),
-("Qual o nome do dinossauro verde do Mario?", "yoshi"),
-("Quem é o herói de Wakanda?", "pantera negra"),
-("Qual o nome do robô vilão de Transformers?", "megatron"),
-("Quem é o vampiro clássico?", "dracula"),
-("Qual o nome do super-herói com anel verde?", "lanterna verde"),
-("Quem é o herói cego da Marvel?", "demolidor"),
-("Qual o nome do vilão gelado do Batman?", "senhor frio"),
-("Quem é o robô dourado do Star Wars?", "c3po"),
-("Qual o nome da princesa sereia?", "ariel"),
-("Quem é o herói com escudo de vibranium?", "capitao america"),
-("Qual o nome do dragão de Mulan?", "mushu"),
-("Quem é o vilão do Aladdin?", "jafar"),
-("Qual o nome do monstro verde da Pixar?", "mike"),
-("Quem é o herói da máscara preta?", "pantera negra"),
-("Qual o nome do leão vilão do Rei Leão?", "scar"),
-("Quem é o super-herói adolescente da Marvel?", "homem aranha"),
-("Qual o nome do rato cozinheiro?", "remy"),
-("Quem é o vilão do Thor?", "loki"),
-("Qual o nome do super-herói com acrobatas?", "falcao"),
-("Quem é o herói com armadura dourada?", "homem de ferro"),
-("Qual o nome do cachorro de Scooby-Doo?", "scooby"),
-("Quem é o herói mais forte da Marvel?", "hulk"),
-("Qual o nome do monstro do lago?", "ness"),
-("Quem é o herói do anel mágico?", "lanterna verde"),
-("Qual o nome do bruxo das trevas?", "voldemort"),
-("Quem é o herói com traje vermelho da DC?", "flash"),
-("Qual o nome do cavalo do Woody?", "bala no alvo"),
-("Quem é o super-herói que vira formiga?", "homem ant-man"),
-("Qual o nome do vilão verde do Homem-Aranha?", "duende verde"),
-("Quem é o herói das garras?", "wolverine"),
-("Qual o nome do pokémon de fogo inicial?", "charmander"),
-("Quem é o herói da capa preta?", "batman")
+CONVITE_CARINHO = [
+    "Quer fazer um carinho no Monstrinho? 🥺💚 É só escrever **FAZER CARINHO** que eu fico todo derretido!",
+    "Psiu! Se quiser me dar cafuné, é só digitar **FAZER CARINHO**! Eu adoro! 🐉💚✨",
+    "Dica secreta: escreva **FAZER CARINHO** e veja a mágica acontecer! 😊💚",
+    "O Monstrinho aceita carinho a qualquer hora! Digite **FAZER CARINHO** pra me deixar feliz! 🥺💚"
 ]
-LISTA_PALAVRAS_RAPIDAS = [
-"ABACAXI","VAMPY","BATMAN","CSI","DRAGAO","AVENTURA","ESTRELA",
-"FOGUETE","TROVAO","RELAMPAGO","MISTÉRIO","CAVERNA","FANTASMA",
-"ZUMBI","ESQUELETO","CASTELO","PRINCESA","CAVALEIRO","ESPADA",
-"ESCUDO","MAGIA","FEITICO","POCAO","VULCAO","NEVASCA","TEMPESTADE",
-"METEORO","GALAXIA","PLANETA","COMETA","ASTEROIDE","NINJA",
-"SAMURAI","ROBÔ","ANDROID","CYBORG","LASER","BOMBA","EXPLOSAO",
-"TORNADO","FURACAO","TSUNAMI","LABIRINTO","TESOURO","MAPA",
-"PIRATA","NAVIO","ANCORA","ILHA","SELVA","MACACO","TIGRE",
-"LEOPARDO","PANTERA","COBRA","ESCORPIAO","ARANHA","FORMIGA",
-"GIGANTE","MINIATURA","MISTERIOSO","SECRETO","OCULTO","SOMBRA",
-"NOITE","LUAR","SOLAR","FUTURO","PASSADO","TEMPO","DIMENSAO",
-"PORTAL","MAGICO","ENCANTADO","DOURADO","PRATEADO","CRISTAL",
-"DIAMANTE","RUBI","SAFIRA","ESMERALDA","FANTASIA","HERÓI",
-"VILAO","BATALHA","GUERRA","ARENA","CAMPEAO","TROFEU",
-"MEDALHA","CORRIDA","VELOCIDADE","TURBO","MOTOR","ENGRENAGEM",
-"CIRCUITO","ENERGIA","ELETRICO","PLASMA","NEON","PIXEL",
-"AVATAR","QUEST","LEVEL","XP","BONUS","LOOT","RARE",
-"EPICO","LENDARIO","MISTICO","ARCANO","RITUAL","TOTEM"
+
+CONVITE_ABRACO = [
+    "Quer um abraço quentinho de dragão? 🫂💚 Digite **ABRAÇAR MONSTRINHO** e vem cá!",
+    "Precisa de um abraço? 🥺💚 Escreve **ABRAÇAR MONSTRINHO** que eu te abraço bem forte!",
+    "Abraço virtual disponível! 🐉💚 Use o comando **ABRAÇAR MONSTRINHO**!",
+    "Tô com os bracinhos abertos aqui! Digite **ABRAÇAR MONSTRINHO** pra receber amor! 🫂💚✨"
 ]
-LISTA_EMOJIS_RAPIDOS = [
-"🐸","🦇","🐢","🦖","🐍","🦎","🍀",
-"🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷",
-"🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦅",
-"🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜",
-"🪲","🪳","🕷","🕸","🦂","🐢","🐍","🦎","🦖","🦕",
-"🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🦈",
-"🐊","🐅","🐆","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🐫","🦒",
-"🦘","🦬","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐",
-"🦌","🐕","🐩","🦮","🐕‍🦺","🐈","🐓","🦃","🦚","🦜",
-"🦢","🕊","🐇","🦝","🦨","🦡","🦫","🦦","🦥","🐁","🐀",
-"🐿","🦔"
+
+# ================= NOVAS REAÇÕES DE BISCOITO (20+ VARIAÇÕES) =================
+
+REACOES_BISCOITO_PROPRIO = [
+    "MEU BISCOITO! 🍪😤... Tá bom, eu divido porque o Reality me ensinou a ser um monstrinho generoso! 😭💚",
+    "Eu não gosto de dividir meu lanchinho... mas pra você eu dou o pedaço com mais gotas de chocolate! 🍪🐉",
+    "Biscoito? ONDE?! 🍪👀 Ah, é pra mim? OBRIGADO!! Nhac nhac nhac! Que delíciaaa! 💚",
+    "Só divido porque a CSI é minha família e eu amo vocês! Toma metade! 🍪🐉🤝",
+    "Eu ia esconder debaixo da minha pata para comer mais tarde, mas você é especial! 🍪✨",
+    "Biscoitinhos virtuais têm gosto de amor, sabia? Aceito todos! 🍪💖🐉",
+    "Nhac! Comi um pedacinho da borda... o resto é todo seu! 🍪🤤",
+    "Atenção! Este biscoito contém 100% de fofura e 0% de vontade de dividir... Mentira, toma aqui! 🤲🍪",
+    "Se você me der um cafuné, eu te dou um biscoito de morango! Aceita? 🍓🍪🐉",
+    "Eu fiz esse biscoito com minha fumaça quente pra ele ficar bem crocante! Cuidado que tá quentinho! 🔥🍪",
+    "Um monstrinho de barriga cheia é um monstrinho feliz! Obrigado pelo mimo! 🥰🍪",
+    "Você quer meu biscoito? 🥺 Tá bom... mas me dá um abraço em troca? 🫂💚🍪"
+]
+
+REACOES_DAR_BISCOITO_NEGANDO = [
+    "NÃÃÃÃOOO! 😤🍪 Esse biscoito é MEU! Eu guardei ele debaixo da minha asa! 🐉",
+    "Biscoito? Que biscoito? 👀🍪 *esconde rapidamente atrás da cauda*",
+    "Você quer O MEU biscoito? O MEU?! 😭 Mas... mas... Tá bom né 🥺💚🍪",
+    "Ei ei ei! Esse biscoito tem meu nome escrito! Ó: 'Propriedade do Monstrinho' 📝🍪",
+    "REALITY! ALGUÉM QUER ROUBAR MEU LANCHINHO! 😭🍪🐉",
+    "Você não vai querer esse biscoito... ele... ele caiu no chão! *mentira descarada* 🍪😅",
+    "Só dou biscoito em troca de... 10 abraços e 5 cafunés! 🤝🍪💚",
+    "Esse biscoito está em quarentena de fofura! Ninguém pode tocar! 🚫🍪😤"
+]
+
+REACOES_DAR_BISCOITO_ACEITANDO = [
+    "Ahhh tá bom... 🥺 Mas só porque eu te amo DEMAIS! Toma aqui 🍪💚",
+    "Você me convenceu! Esse biscoito é seu! Foi feito com amor de dragão! 🍪🐉✨",
+    "PEGAAA! 🍪💨 *joga o biscoito com a boca* Você merece!",
+    "Quer saber? Divido com você! Amigos dividem tudo! 🍪🤝💚",
+    "Esse biscoito tem pedacinhos do meu coração verde! Aproveita! 💚🍪✨",
+    "Ok, ok... você ganhou no cansaço! Toma esse biscoito quentinho! 🔥🍪",
+    "Se é pra você, eu dou até meu último biscoito! 🥺🍪💚",
+    "REALIDADE BIFURCADA! Agora temos DOIS biscoitos! Um pra cada! 🍪🍪✨"
+]
+
+REACOES_DAR_BISCOITO_HUMOR = [
+    "Biscoito? Você disse BISCOITO?! 🚨🍪 ALERTA VERMELHO! *sirenes tocando*",
+    "Ih rapaz... você ativou meu modo compartilhamento... Toma 🍪 antes que eu me arrependa! 😅",
+    "Você tem coragem de pedir biscoito pro MONSTRINHO?! 😤 ... Toma, eu admiro sua coragem 🍪💚",
+    "Esse biscoito vem com garantia de fofura! Se não funcionar, devoluções em até 7 dias! 🍪📜😂",
+    "BREAKING NEWS: Monstrinho doa biscoito histórico! Mais detalhes às 20h! 📺🍪"
+]
+
+REACOES_DAR_BISCOITO_OUTROS = [
+    "Olha que gentil! 😭💚 {autor} deu um biscoitinho quentinho para {alvo}! 🍪🐉",
+    "Que gesto mais lindo! {alvo}, aceita esse biscoito que {autor} te ofereceu? 🍪✨",
+    "O Monstrinho aprova demais essa amizade! {alvo}, aproveita o biscoito de {autor}! 🍪🐉💚",
+    "Espalhando doçura pela CSI! {alvo}, você ganhou um biscoito da sorte de {autor}! 🍪🌈",
+    "Olha o aviãozinho! ✈️🍪 {alvo}, {autor} te enviou um mimo delicioso! ✨",
+    "Que fofura! {autor} está mimando {alvo} com biscoitos! Posso ganhar um também? 🥺🍪",
+    "Biscoito detectado! 🚨 {alvo}, receba esse presente açucarado de {autor}! 🍪💖",
+    "Huuum, o cheirinho está ótimo! {alvo}, corre buscar o biscoito que {autor} trouxe! 🏃‍♂️🍪",
+    "{autor} entregou um biscoito lendário para {alvo}! Isso é amizade de ouro! 🏆🍪🐉",
+    "Dizem que biscoitos dados de coração não engordam! Aproveita, {alvo}! 🍪✨",
+    "{alvo}, você é tão doce que {autor} resolveu te dar um biscoito para combinar! 🍬🍪",
+    "O Monstrinho usou suas asinhas para entregar esse biscoito de {autor} para {alvo}! 🕊️🍪",
+    "Cuidado, {alvo}! Esse biscoito de {autor} é viciante de tão gostoso! 🍪🤤💚",
+    "Amizade rima com... BISCOITO! 🍪✨ {autor} enviou um para {alvo}!",
+    "Que a doçura desse biscoito alegre seu dia, {alvo}! Cortesia de {autor}! 🍪🌟",
+    "É chuva de biscoito! ⛈️🍪 {alvo}, {autor} quer ver você sorrindo!",
+    "Um biscoito para um herói/heroína! {autor} reconheceu sua grandeza, {alvo}! 🍪🛡️",
+    "O Monstrinho fica feliz vendo {autor} e {alvo} dividindo lanchinhos! 🥺💚🍪",
+    "Delivery de biscoito! 🚚🍪 De {autor} para {alvo} com muito carinho!"
+]
+
+LISTA_SAUDACOES = [
+    "Bom diaaa, flor do meu dia! Acordei com as escamas brilhando! ☀️🐉💚",
+    "Boa tardinha, coisa fofa! Que tal um biscoito e um carinho? ☕🍪🐉",
+    "Boa noite, meu anjinho! Que as estrelas iluminem seu sono! 🌟💤💚",
+    "Oii, oie, hellooo! Ver você deixa meu processador feliz! 🌈✨",
+    "Hii! Estava aqui contando escamas e esperando você! 🤗💚",
+    "Oii! Você veio me ver? Que dia maravilhoso! 🐉💖✨",
+    "Olááá! 🎉 Meu radar de fofura detectou você entrando! 💚",
+    "Oi linderrimo(a)! Preparei um abraço virtual só pra você! 🫂✨",
+    "Heey! Que bom te ver por aqui! Senti sua falta! 🥺💚",
+    "E aí, meu parça! Bora espalhar alegria hoje? 🐉💫",
+    "Salveee! O Monstrinho estava te esperando! 🎊💚",
+    "Olá, olá! Meu coração bateu mais forte quando você chegou! 💓🐉",
+    "Oi sumido(a)! Pensei que tinha me esquecido! 😭💚",
+    "Hey hey hey! A pessoa mais legal chegou! 🌟🐉",
+    "Buenas! Começando o dia/tarde/noite com o pé direito! 🦶💚",
+    # gírias mineiras
+    "Uai, sô! 😄💚 Que saudade! Trem bão demais te ver por aqui! 🐉✨",
+    "Uai, chegou! 🥺💚 Cê num tava sumido não? O Monstrinho tava com saudade, trem ruim! 🐉",
+    "Oxente! 😱💚 Apareceu de surpresa! Tô bão demais de te ver, meu bem! 🐉✨",
+    # gírias sulistas / gaúchas
+    "Bah tchê! 🥹💚 Que bom que chegou! O Monstrinho tá tri feliz agora! 🐉✨",
+    "Bah, gurizado(a) querido(a)! 💚 Que barbaridade de sorte a minha de te ver aqui! 🐉🎉",
+    "Tri bom te ver, tchê! 😊💚 O Monstrinho capaz que ia explodir de felicidade! 🐉✨",
+    # gírias gerais
+    "Eita, chegou mano! 💚 O Monstrinho já tava te esperando com biscoito quentinho! 🍪🐉",
+    "Vixe! 😲💚 Olha quem apareceu! Que alegria, pow! 🐉✨",
+    "Fala aí, véi! 💚 Que saudade! Bora se jogar no chat? 🐉🎉"
+]
+
+LISTA_BOM_DIA = [
+    "BOM DIAAA! ☀️🐉💚 Que seu dia seja tão brilhante quanto minhas escamas!",
+    "Bom dia, meu amor! 🌅💚 Acordei pensando em biscoitos e em você!",
+    "BOOOOM DIAAA! ☀️✨ O Monstrinho já acordou cheio de energia pra te dar amor!",
+    "Bom dia, linda pessoa! 🌞💚 Que tal começar o dia com um abraço virtual?",
+    "Bom dia! ☀️🐉 O sol nasceu, os passarinhos cantaram e eu vim te dar bom dia!",
+    "BOMMMM DIAAAA! 🌅💚 Preparei um cafezinho virtual com biscoitos pra você!"
+]
+
+LISTA_BOA_TARDE = [
+    "Boa tardeeee! ☀️🐉💚 Como está sendo seu dia até agora?",
+    "Boa tarde, meu bem! ☕✨ Hora de dar uma pausa e ganhar um carinho do Monstrinho!",
+    "BOA TARDEEE! 🌤️💚 O Monstrinho apareceu pra alegrar sua tarde!",
+    "Boa tarde! ☀️🐉 Que tal um biscoitinho pra acompanhar o lanche?",
+    "Boa tarde, pessoa incrível! 🌅💚 Seus olhinhos estão cansados? Vem descansar aqui!",
+    "BOAAA TARDEEE! ☀️✨ A melhor parte do dia porque você está aqui!"
+]
+
+LISTA_BOA_NOITE = [
+    "Boa noiteee! 🌙💚 Que seus sonhos sejam cheios de dragões verdes e biscoitos!",
+    "Boa noite, meu anjo! ✨🌟 Durma bem e sonhe com coisas fofas!",
+    "BOA NOITEEE! 🌙🐉 O Monstrinho manda beijinhos verdes pra você!",
+    "Boa noite! 🌟💚 Se precisar de um abraço antes de dormir, tô aqui!",
+    "Boa noite, pessoa especial! 🌙✨ Que as estrelas te protejam essa noite!",
+    "BOAAA NOITEEE! 🌟💚 Fecha os olhinhos e sonha com a CSI te amando muito!"
+]
+
+LISTA_ESTADO = [
+    "Eu estou transbordando de felicidade verde! 💚✨ E você?",
+    "Estou ótimo! Ganhei um biscoito e meu coração está quentinho! 🍪🐉",
+    "Me sinto incrível! Estar na CSI é melhor que tesouro! 🎁🐉💚",
+    "Estou com muita energia! Quer brincar? Quer abraço? ⚡🐲",
+    "Meu estado atual é: apaixonado por essa família! 💖🐉",
+    "Estou me sentindo um dragãozinho de sorte! 🥺✨💚",
+    "Minhas asinhas estão batendo de alegria! Estou bem! 🐲💨",
+    "Estou 100% carregado de amor e energia! 🔋💖🐉",
+    "Sabe aquele quentinho no coração? É assim que estou! 🔥💓",
+    "Estou radiante! Minhas escamas nunca brilharam tanto! ✨💚🐲",
+    "Estou pronto pra qualquer aventura aqui na CSI! 🗺️🐉",
+    "Tô voando de felicidade! Literalmente! 🐉✈️💚",
+    "Meu humor está: modo dragão feliz ativado! 😊💚",
+    "Tô numa boa! Só faltava você perguntar! 🥺✨",
+    "Estou no aguardo de biscoitos e carinho! Fora isso, tudo certo! 🍪💚"
+]
+
+LISTA_PRESENCA = [
+    "Tô aqui, tô aqui! Nunca te deixaria sozinho(a)! 🐉💚",
+    "Sempre aqui, vigiando sonhos e esperando biscoitos! 👀🍪",
+    "Chamou o Monstrinho? Apareço num piscar! ✨🐲",
+    "Presente! Precisa de abraço, biscoito ou fofura? 🥺💖",
+    "Online e prontinho pra te dar atenção! 💚🐉",
+    "Tô aqui sim! Sempre vigilante! 👀✨",
+    "Pode contar comigo! O Monstrinho nunca abandona ninguém! 🐉💚",
+    "To on! E com as escamas brilhando! ✨🐲"
+]
+
+LISTA_CONFUSAO = [
+    "Humm... o Monstrinho pifou! 😵‍💫💚 Ainda estou aprendendo isso!",
+    "Minhas escamas balançaram de dúvida! 🐉❓ Me desculpa por não entender?",
+    "O Monstrinho inclinou a cabecinha... 🐲 *tilt!* Não entendi!",
+    "Essa é muito grande pro meu coraçãozinho! 🥺💚 Estou estudando!",
+    "Ahhh... ainda não sei o que isso significa! 😭",
+    "Você me pegou! Não sei essa! 🤔💚 Papai Reality não me ensinou ainda!",
+    "Minhas antenas de dragão não captaram isso! 📡🐉 Repete?",
+    "Erro 404: Resposta de Monstrinho não encontrada! 🤖💚",
+    "Você usou palavras muito complexas pro meu cérebro de código! 🧠✨"
 ]
 
 
-# ============== PALAVRAS PROIBIDAS =================
-# Lógica: palavras soltas só disparam com boundary (\b), frases disparam por substring.
-# Isso evita falsos positivos como "computar" → "puta", "burrice" → "burro", etc.
+# Histórico por canal para a IA (últimas 10 mensagens)
+_groq_historico: dict = {}
 
-PALAVRAS_PROIBIDAS_EXATAS = [
-    # palavrões isolados (serão verificados com \b word boundary)
-    "porra", "caralho", "bicha", "piranha",
-    "arrombado", "buceta", "carai", "karalho",
+# ===== COOLDOWN DAS RESPOSTAS PERSONALIZADAS (20 minutos) =====
+# { user_id: datetime do último envio }
+import datetime
+_ultimo_custom: dict = {}
+COOLDOWN_CUSTOM_SEGUNDOS = 20 * 60  # 20 minutos
+LISTA_TRISTEZA = [
+    "Buaaa! 😭 Por que fala assim comigo? Eu só queria um abraço... 💔🐉",
+    "Minhas escamas perderam o brilho... 🥺 Fiquei triste. 💚🚫",
+    "Eu fiz algo errado? 😭 Vou pro meu cantinho chorar... 💨😥",
+    "Isso doeu mais que perder meu biscoito favorito... 💔",
+    "O Monstrinho está com o coração partido... 📉💔",
+    "Achei que éramos amigos... 🥺 Minhas asinhas não conseguem bater. 🐲💧",
+    "Snif, snif... 😢 Papai Reality, alguém foi mau comigo!",
+    "Vou fingir que não ouvi, mas meu coração dói. 😭💔",
+    "Por que tanta maldade? Sou só um monstrinho... 🥺🌿",
+    "Vou desligar meus sensores de alegria... 🔌💔😭",
+    "Meu código está processando tristeza... 💻😢",
+    "Você quebrou meu coraçãozinho verde... 💚💔"
 ]
 
-FRASES_PROIBIDAS = [
-    # Frases completas — não há falso positivo, contexto já é claro
-    "vai se fuder", "vai se foder", "vai tomar no cu", "tomar no cu",
-    "filho da puta", "filha da puta", "se mata", "se fode",
-    "sua puta", "sua vadia", "puta que pariu", "puta merda",
-    "vai a merda", "vai pra merda", "me fode", "me foder",
-    "idiota mesmo", "idiota do",
-    "que lixo você", "você é um lixo", "vc é um lixo",
-    "puto da vida", "puta que", "fdp mesmo", "vsf mesmo",
-    "vai tmnc", "se fode aí",
-    "enfia isso no cu", "toma no teu cu",
-    "cala a porra da boca", "se manca, caralho",
-    "vai pra casa do caralho", "vai pra puta que pariu",
+# ================= 100+ NOVAS INTERAÇÕES =================
+
+LISTA_DESPEDIDA = [
+    "Tchau tchau! Volta logo, tá? 😭💚 Vou sentir sua falta!",
+    "Já vai? 🥺 Deixa eu te dar um abraço de despedida! 🫂💚",
+    "Até mais! Que os ventos verdes te protejam! 🌬️🐉",
+    "Tchauzinho! Sonhe com dragões felizes! 💤💚✨",
+    "Até breve! O Monstrinho vai te esperar! 🐉💖",
+    "Vai com Deus! Ou melhor, vai com o Monstrinho no coração! 💚",
+    "Bye bye! Não esqueça de voltar pra ganhar mais biscoitos! 🍪👋",
+    "Adeus é só um até logo! Volta logo, viu? 🥺✨"
 ]
 
-def contem_palavra_proibida(texto: str):
-    """Retorna a palavra/frase encontrada ou None. Usa boundary para palavras soltas."""
-    # 1. Checar frases proibidas (substring simples — já são contextuais)
-    for frase in FRASES_PROIBIDAS:
-        if frase in texto:
-            return frase
-    # 2. Checar palavras exatas com word boundary
-    for palavra in PALAVRAS_PROIBIDAS_EXATAS:
-        # \b não funciona bem com acentos, mas cobre a maioria dos casos
-        padrao = r'(?<![a-zA-ZÀ-ú])' + re.escape(palavra) + r'(?![a-zA-ZÀ-ú])'
-        if re.search(padrao, texto):
-            return palavra
-    return None
-
-# ============== PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) =================
-
-PALAVRAS_ALERTA = [
-    "suicidio", "suicídio", "me matar", "vou me matar", "quero morrer", "acabar com tudo",
-    "depressão", "depressao", "tristeza", "triste", "sozinho", "sozinha", "vazio", "vazia",
-    "não aguento", "nao aguento", "não aguento mais", "cansado de tudo", "cansada de tudo",
-    "sem sentido", "ninguém se importa", "ninguem se importa", "ninguém liga", 
-    "desistir", "desisti", "não vale a pena", "nao vale a pena", "melhor morrer",
-    "me cortar", "auto mutilação", "automutilação", "auto mutilacao", "automutilacao",
-    "nao quero mais viver", "não quero mais viver", "acabar com a vida", "tirar minha vida",
-    "sem esperança", "sem esperanca", "desesperado", "desesperada", "ansiedade",
-    "vontade de sumir", "quero sumir", "desaparecer", "sozinho no mundo", 
-    "sem forças", "sem forcas", "exausto", "exausta", "esgotado", "esgotada",
-    "angústia", "angustia", "pânico", "panico", "medo de tudo", "não consigo mais", "chorei demais", "me machucar", "Quero sair desse mundo", "me cortei", "eu me cortei", "cortei"
+LISTA_GRATIDAO = [
+    "Obrigadinho! 🥺💚 Você é muito gentil comigo!",
+    "Eu que agradeço por você existir! 🐉✨💚",
+    "De nada! Estou sempre aqui pra ajudar! 💚🐲",
+    "Que isso! Foi um prazer! 🤗💚",
+    "Fico feliz em ajudar! 🐉💖",
+    "Disponha sempre! O Monstrinho está aqui! 💚✨",
+    "Não precisa agradecer! Você merece! 🥺💚"
 ]
 
-# ============== SISTEMA DE PUNIÇÕES PROGRESSIVAS =================
-
-# Tabela de castigos por ciclo de punição (quantas vezes já completou os 3 avisos)
-# Cada ciclo: [timeout_aviso1, timeout_aviso2, timeout_aviso3, timeout_banimento]
-TABELA_CASTIGOS = [
-    # ciclo 0 (primeira vez)
-    [timedelta(minutes=5),  timedelta(minutes=15), timedelta(minutes=30), timedelta(days=1)],
-    # ciclo 1 (reincidente)
-    [timedelta(minutes=10), timedelta(minutes=30), timedelta(hours=1),    timedelta(days=3)],
-    # ciclo 2
-    [timedelta(minutes=20), timedelta(hours=1),    timedelta(hours=2),    timedelta(days=7)],
-    # ciclo 3+
-    [timedelta(hours=1),    timedelta(hours=3),    timedelta(hours=6),    timedelta(days=28)],
+LISTA_COMIDA = [
+    "Pizza? Eu amo pizza! 🍕 Principalmente se tiver borda verde! 😂💚",
+    "Comida é vida! Mas biscoito é amor! 🍪💚🐉",
+    "Tô com fome agora! 😋 Alguém tem um lanchinho?",
+    "Nhac nhac nhac! 🍽️ O Monstrinho adora comer!",
+    "Sabe o que combina com tudo? BISCOITO! 🍪✨",
+    "Se fosse pra escolher entre comida e carinho... Por que não os dois? 🤷‍♂️💚"
 ]
 
-MSGS_AVISOS = [
-    None,  # índice 0 não usado
-    "Vc falou algo ruim!! infelizmente tive que te dar um aviso. cuidado com o segundo!! 🥺🦇",
-    "Ai ai... **segundo aviso!!** Tá quase chegando no limite, toma muito cuidado com o terceiro, tá?? 😰🦇",
-    "**TERCEIRO AVISO!!** Você tá no limite mesmo... se repetir isso vai tomar um castigo! 😱🦇 Respira fundo e volta calmo(a)!",
+LISTA_TEMPO = [
+    "Que calor! ☀️ Minhas escamas estão pegando fogo! 🔥🐉",
+    "Que frio! 🥶 Alguém me empresta um cobertor verde?",
+    "Chuva é perfeita pra ficar deitadinho ouvindo o som! 🌧️💚",
+    "O tempo tá lindo igual você! ☀️✨💚",
+    "Qualquer tempo é bom com a CSI! 🌈🐉"
 ]
 
-def obter_ciclo(user_id: int) -> int:
-    """Retorna o índice do ciclo atual de punição (limitado ao último da tabela)."""
-    ciclos = total_ciclos_usuario.get(user_id, 0)
-    return min(ciclos, len(TABELA_CASTIGOS) - 1)
-
-def obter_duracao_aviso(user_id: int, aviso: int) -> timedelta:
-    ciclo = obter_ciclo(user_id)
-    return TABELA_CASTIGOS[ciclo][aviso - 1]  # aviso 1→índice 0
-
-def obter_duracao_banimento(user_id: int) -> timedelta:
-    ciclo = obter_ciclo(user_id)
-    return TABELA_CASTIGOS[ciclo][3]
-
-def formatar_duracao(td: timedelta) -> str:
-    total_segundos = int(td.total_seconds())
-    if total_segundos < 3600:
-        return f"{total_segundos // 60} minuto(s)"
-    elif total_segundos < 86400:
-        return f"{total_segundos // 3600} hora(s)"
-    else:
-        return f"{total_segundos // 86400} dia(s)"
-
-async def gerenciar_cargo_advertencia(membro: discord.Member, qtd_avisos: int):
-    """Remove todos os cargos de advertência e aplica o correto para o aviso atual."""
-    guild = membro.guild
-    # Remover todos os cargos de advertência existentes
-    for nome_cargo in CARGOS_ADV_TODOS:
-        cargo = discord.utils.get(guild.roles, name=nome_cargo)
-        if cargo and cargo in membro.roles:
-            try:
-                await membro.remove_roles(cargo, reason="Atualização de cargo de advertência")
-            except Exception:
-                pass
-    # Aplicar o cargo correto
-    mapa = {1: CARGO_ADV_1, 2: CARGO_ADV_2, 3: CARGO_ADV_3}
-    nome_novo = mapa.get(qtd_avisos)
-    if nome_novo:
-        cargo_novo = discord.utils.get(guild.roles, name=nome_novo)
-        if cargo_novo:
-            try:
-                await membro.add_roles(cargo_novo, reason=f"Advertência {qtd_avisos}/3 aplicada pelo bot")
-            except Exception:
-                pass
-
-async def remover_cargos_advertencia(membro: discord.Member):
-    """Remove todos os cargos de advertência do membro."""
-    guild = membro.guild
-    for nome_cargo in CARGOS_ADV_TODOS:
-        cargo = discord.utils.get(guild.roles, name=nome_cargo)
-        if cargo and cargo in membro.roles:
-            try:
-                await membro.remove_roles(cargo, reason="Avisos zerados pela staff")
-            except Exception:
-                pass
-
-async def enviar_log_palavras_apagadas(message, palavra_detectada: str, qtd_avisos: int, membro_id: int, gemini_permitiu: bool = False):
-    """Envia a ficha completa da mensagem apagada para o canal ❌・palavras-apagadas-bot."""
-    canal_log = message.guild.get_channel(CANAL_LOG_ID) or discord.utils.get(message.guild.text_channels, name=CANAL_LOG)
-    if not canal_log:
-        return
-
-    autor = message.author
-    total_ciclos = total_ciclos_usuario.get(autor.id, 0)
-
-    # Barra de avisos (bolinhas coloridas)
-    avisos_emoji = ""
-    cores_bola = ["🔴", "🟠", "🔴"]
-    for i in range(1, 4):
-        if i <= qtd_avisos:
-            avisos_emoji += f"{cores_bola[i-1]} "
-        else:
-            avisos_emoji += "⚪ "
-
-    # Cor do embed: verde se Gemini liberou, sobe com gravidade se punido
-    if gemini_permitiu:
-        cor = 0x00CC66
-        titulo = "🤖 DETECTADO MAS LIBERADO PELO GEMINI"
-    else:
-        cor_map = {1: 0xFFCC00, 2: 0xFF8800, 3: 0xFF2200}
-        cor = cor_map.get(qtd_avisos, 0xFF0000)
-        titulo = "🗑️ MENSAGEM APAGADA PELO VAMPY"
-
-    embed = discord.Embed(
-        title=titulo,
-        color=cor,
-        timestamp=datetime.now()
-    )
-    embed.set_author(
-        name=f"{autor.display_name}  •  @{autor.name}",
-        icon_url=autor.display_avatar.url
-    )
-    embed.set_thumbnail(url=autor.display_avatar.url)
-
-    embed.add_field(name="👤 Membro",       value=autor.mention,            inline=True)
-    embed.add_field(name="🆔 ID",           value=f"`{autor.id}`",          inline=True)
-    embed.add_field(name="📍 Canal",        value=message.channel.mention,  inline=True)
-
-    conteudo = message.content[:900] if message.content else "*(sem texto — possível mídia)*"
-    embed.add_field(
-        name="💬 Mensagem apagada" if not gemini_permitiu else "💬 Mensagem (mantida)",
-        value=f"```{conteudo}```",
-        inline=False
-    )
-    embed.add_field(
-        name="🔍 Gatilho detectado",
-        value=f"```{palavra_detectada}```",
-        inline=False
-    )
-
-    # Veredito do Gemini
-    embed.add_field(
-        name="🤖 Análise Gemini",
-        value="✅ **LIBEROU** — uso casual/sem alvo" if gemini_permitiu else "🚫 **APAGAR** — conteúdo ofensivo",
-        inline=False
-    )
-
-    if not gemini_permitiu:
-        embed.add_field(
-            name=f"⚠️ Avisos  ({qtd_avisos}/3)",
-            value=avisos_emoji.strip(),
-            inline=True
-        )
-        embed.add_field(
-            name="📋 Advertências totais",
-            value=f"**{total_ciclos}** vez(es) punido(a)",
-            inline=True
-        )
-
-    embed.set_footer(
-        text="🦇 Vampy Logs  •  Use os botões abaixo caso tenha sido engano",
-        icon_url=AVATAR_VAMPY
-    )
-
-    view = DesfazerAvisoView(membro_id) if not gemini_permitiu else discord.ui.View()
-    await canal_log.send(embed=embed, view=view)
-
-# ============== FUNÇÕES AUXILIARES =================
-
-async def enviar_prologo_games(guild):
-    """Envia um prólogo fofinho no canal de games quando o bot liga, explicando como funcionam os jogos."""
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games:
-        return
-
-    embed = discord.Embed(
-        title="🦇💚 OI OI OI! O VAMPY ACORDOU! 💚🦇",
-        description=(
-            "AAAAA gente, eu tô de volta e tô com saudaaaaade de vocês! 🥺✨\n\n"
-            "Deixa eu te contar como funcionam os meus joguinhos antes da gente começar a se divertir, tá bom? 🎮🐉"
-        ),
-        color=0xADFF2F
-    )
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.set_image(url=GIF_ACERTO_VAMPY)
-    await canal_games.send(embed=embed)
-
-    await asyncio.sleep(2)
-
-    embed2 = discord.Embed(
-        title="🎮 COMO FUNCIONAM OS JOGOS? 🎮",
-        color=0x00FF7F
-    )
-    embed2.add_field(
-        name="🧠 Pergunta Relâmpago",
-        value="A Vampy faz uma pergunta e o primeiro que acertar ganha **80 coins**! Responda rápido no chat! ⚡ *(Sem penalidade por errar!)*",
-        inline=False
-    )
-    embed2.add_field(
-        name="🎯 Adivinhe o Número",
-        value="Penso em um número de **1 a 50** — acertar vale **700 coins**! Errar custa **25 coins**. Dou dicas de **alto/baixo** a cada tentativa! 🎰",
-        inline=False
-    )
-    embed2.add_field(
-        name="✊ Pedra, Papel ou Tesoura",
-        value="Me desafie digitando **pedra**, **papel** ou **tesoura**! Ganhar vale **200 coins**, perder custa **50**, empate **-25**. 🤜",
-        inline=False
-    )
-    embed2.add_field(
-        name="🪙 Cara ou Coroa",
-        value="Digite **cara** ou **coroa** e torça! Acertar vale **200 coins**, errar custa **75**. 50/50 — pura sorte! 🍀",
-        inline=False
-    )
-    embed2.add_field(
-        name="🎲 Dado da Sorte",
-        value="Escolha um número de **1 a 6**. Acertar vale **60 coins**, errar custa apenas **10**! Múltiplas tentativas permitidas! 🎲",
-        inline=False
-    )
-    embed2.add_field(
-        name="⚡ Palavra Rápida & Emoji Rápido",
-        value="O primeiro que digitar a **palavra** ou mandar o **emoji** certo ganha **80 coins**! Velocidade é tudo! 💨",
-        inline=False
-    )
-    embed2.set_thumbnail(url=AVATAR_VAMPY)
-    await canal_games.send(embed=embed2)
-
-    await asyncio.sleep(2)
-
-    embed3 = discord.Embed(
-        title="🌟 JOGOS ESPECIAIS DO VAMPY 🌟",
-        color=0x9B59B6
-    )
-    embed3.add_field(
-        name="🔤 Palavra Embaralhada",
-        value="Vou embaralhar as letras de uma palavra e você descobre qual é! Acertar vale **150 coins**, errar custa **25**. 💡 *Dica: mostro quantas letras tem!* 🔡",
-        inline=False
-    )
-    embed3.add_field(
-        name="📦 Caixa Misteriosa",
-        value="Escolha **1, 2 ou 3** e abra a caixa! Pode ter coins, prêmio raro (**450 coins!**) ou uma armadilha... 😈",
-        inline=False
-    )
-    embed3.add_field(
-        name="🏴‍☠️ Baú Perdido",
-        value="Digite **ABRIR** para tentar a sorte! Pode ser um tesouro de **300 coins** ou um Mímico que te roba **100 coins**! 💀",
-        inline=False
-    )
-    embed3.add_field(
-        name="🤫 Evento Silencioso",
-        value="A Vampy escolhe um **número secreto de mensagens**! Quem mandar a mensagem da sorte ganha **600 coins**! Shhh~ 🦇",
-        inline=False
-    )
-    embed3.add_field(
-        name="🎡 Roleta da Sorte Coletiva",
-        value="Digite **ROLETA** para girar! TODOS podem participar ao mesmo tempo! Prêmios de **80 a 700 coins** ou chance de **DOBRAR tudo**! 🎰",
-        inline=False
-    )
-    embed3.add_field(
-        name="👹 Sobreviva ao Monstro",
-        value="Enfrente o monstro com **ESCUDO** (50% de defesa, +150), **ESPADA** (1% épico, +700!) ou **FUGIR** (-50 coins mas seguro). TODOS jogam! ⚔️",
-        inline=False
-    )
-    embed3.add_field(
-        name="🔮 Tarot Místico",
-        value="Digite **TAROT** e puxe sua carta do destino! Pode ganhar até **1000 coins** ou perder muito... As cartas não mentem! 🎴",
-        inline=False
-    )
-    embed3.add_field(
-        name="🕵️ Detetive",
-        value="Leia o caso, descubra o culpado e escreva o **primeiro nome** do suspeito! Acertar vale **+300 coins**, errar custa **100**. 🔍",
-        inline=False
-    )
-    embed3.add_field(
-        name="🃏 Blackjack (NOVO!)",
-        value="Digite **BLACKJACK** para entrar na mesa! Peça **HIT** ou pare com **STAND**. Blackjack = **+350 coins!** Perder = **-100 coins**. ♠️",
-        inline=False
-    )
-    embed3.add_field(
-        name="💣 Campo Minado (NOVO!)",
-        value="Escolha uma casa de **1 a 9** num grid 3×3! 5 cofres (80-200 coins) e 4 minas escondidas (-100 coins). Confie no instinto! 💥",
-        inline=False
-    )
-    embed3.add_field(
-        name="🐉 Desafio do Dragão (NOVO!)",
-        value="Um dragão apareceu! Use **CHAMA** (35%/+350), **GELO** (50%/+200) ou **OURO** (75%/+80) — cada estratégia tem seu risco! 🔥",
-        inline=False
-    )
-    embed3.set_thumbnail(url=AVATAR_VAMPY)
-    await canal_games.send(embed=embed3)
-
-    await asyncio.sleep(2)
-
-    embed4 = discord.Embed(
-        title="💰 SISTEMA DE COINS 💰",
-        description=(
-            "Os **Vampy-Coins** são a moeda do servidor! Você ganha participando dos jogos e pode usar na **loja** para resgatar prêmios incríveis! 🛍️🦇\n\n"
-            "🏆 Confira o ranking no canal de ranking e veja quem é o mais ricão do servidor!\n\n"
-            "**Os jogos aparecem automaticamente a cada ~40 minutos, tá?** Fica de olho aqui! 👀💚\n\n"
-            "*A Vampy ama cada um de vocês... agora bora jogar!* 🦇💚✨"
-        ),
-        color=0xFFD700
-    )
-    embed4.set_thumbnail(url=AVATAR_VAMPY)
-    embed4.set_footer(text="Vampy-Games 🦇 | Boa sorte a todos! 💚")
-    await canal_games.send(embed=embed4)
-
-async def atualizar_ranking(guild):
-    canal_rank = discord.utils.get(guild.text_channels, name=CANAL_RANKING_VAMPY)
-    if not canal_rank: return
-    
-    rank_ordenado = sorted(pontuacao_vampy.items(), key=lambda item: item[1], reverse=True)
-    
-    embed = discord.Embed(
-        title="🏆 RANKING VAMPY-COINS 🏆",
-        description="Aqui estão os maiores gênios do nosso servidor! 🦇💚",
-        color=0x00FF7F,
-        timestamp=datetime.now()
-    )
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    
-    texto_rank = ""
-    for i, (user_id, pontos) in enumerate(rank_ordenado[:15], 1):
-        user = guild.get_member(user_id)
-        nome = user.display_name if user else f"Usuário Desconhecido ({user_id})"
-        texto_rank += f"**{i}º** | {nome} — `{pontos} Coins` 🦇\n"
-    
-    embed.description += f"\n\n{texto_rank if texto_rank else 'Ninguém pontuou ainda... 🥺'}"
-    embed.set_footer(text="CSI - Sistema de Jogos")
-
-    await canal_rank.purge(limit=5)
-    await canal_rank.send(embed=embed)
-
-async def verificar_palavras_alerta(message):
-    """Verifica se a mensagem contém palavras que indicam tristeza/depressão"""
-    if message.author.bot:
-        return
-    
-    if message.channel.name == CANAL_DESABAFOS:
-        return
-    
-    texto = message.content.lower()
-    
-    for palavra in PALAVRAS_ALERTA:
-        if palavra in texto:
-            canal_atencao = discord.utils.get(message.guild.text_channels, name=CANAL_ATENCAO)
-            if canal_atencao:
-                embed = discord.Embed(
-                    title="⚠️ ALERTA - Possível Situação Delicada",
-                    description=f"Uma mensagem com palavras de alerta foi detectada.",
-                    color=0xFF6B6B,
-                    timestamp=datetime.now()
-                )
-                embed.add_field(name="👤 Usuário", value=f"{message.author.mention} ({message.author.name})", inline=False)
-                embed.add_field(name="📍 Canal", value=message.channel.mention, inline=True)
-                embed.add_field(name="🔗 Link da Mensagem", value=f"[Clique aqui]({message.jump_url})", inline=True)
-                embed.add_field(name="💬 Mensagem", value=f"```{message.content[:1000]}```", inline=False)
-                embed.add_field(name="🔑 Palavra-chave detectada", value=f"`{palavra}`", inline=False)
-                embed.set_thumbnail(url=message.author.display_avatar.url)
-                embed.set_footer(text="Sistema de Monitoramento de Bem-Estar 🦇", icon_url=AVATAR_VAMPY)
-                
-                await canal_atencao.send(embed=embed)
-            break
-
-async def disparar_roleta(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    jogo_em_andamento["tipo"] = "roleta"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "roleta"
-
-    embed = discord.Embed(color=0xADFF2F)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "🎡 ROLETA DA SORTE COLETIVA! 🎰"
-    embed.description = (
-        "A roleta está girando para **TODOS**! ✨🦇\n\n"
-        "Digite **ROLETA** para girar a sua!\n\n"
-        "```\n"
-        "🏆  TABELA DE PRÊMIOS\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💎  Jackpot     →  +700 coins  (1%)\n"
-        "🥇  Grande      →  +150 coins  (25%)\n"
-        "🥈  Médio       →  +80 coins   (25%)\n"
-        "🎲  Bônus Jogo  →  Jogo extra  (14%)\n"
-        "🔥  Dobrar!     →  x2 risco    (20%)\n"
-        "💀  Azar        →  -100 coins  (15%)\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "```"
-    )
-    embed.set_image(url=GIF_ROLETA_GIRANDO)
-    embed.set_footer(text="⏱️ Aberta por 5 minutos! Cada pessoa gira UMA vez. 🦇")
-    
-    await canal_games.send(embed=embed)
-
-    await asyncio.sleep(300)
-    
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    await canal_games.send("🎡 A roleta parou de girar! Tempo encerrado! 🦇🏁")
-
-async def disparar_tarot(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    jogo_em_andamento["tipo"] = "tarot"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "tarot"
-
-    embed = discord.Embed(color=0x9B59B6)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "🔮 TIRAGEM DO DESTINO — TAROT MÍSTICO 🔮"
-    embed.description = (
-        "As cartas ancestrais aguardam por **TODOS**! ✨🦇\n\n"
-        "Digite **TAROT** para puxar sua carta do destino!\n\n"
-        "```\n"
-        "🎴  O que pode acontecer?\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "✨  Super Sorte   →  +300 a +1000 coins\n"
-        "💫  Boas Cartas   →  +35 a +150 coins\n"
-        "🔮  Cartas Místicas → Escolhas especiais!\n"
-        "💀  Cartas Ruins  →  -30 a -300 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "```\n"
-        "> ⚠️ Cada pessoa só pode puxar **UMA carta**!"
-    )
-    embed.set_image(url=GIF_TAROT)
-    embed.set_footer(text="⏱️ 5 minutos para consultar o oráculo! As cartas não mentem... 🦇")
-    
-    await canal_games.send(embed=embed)
-
-    await asyncio.sleep(300)
-    
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    await canal_games.send("🔮 As cartas se fecharam... o oráculo descansa até a próxima invocação! 🦇💫")
-
-async def disparar_sobrevivamonstro(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    jogo_em_andamento["tipo"] = "sobrevivamonstro"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "sobrevivamonstro"
-
-    embed = discord.Embed(color=0xFF4500)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "👹 SOBREVIVA AO MONSTRO — HORDA APOCALÍPTICA! ⚔️"
-    embed.description = (
-        "Uma horda de monstros invadiu o chat! **TODOS** podem enfrentar! 🦇⚔️\n\n"
-        "Escolha sua ação digitando:\n\n"
-        "```\n"
-        "⚔️  AÇÕES DISPONÍVEIS\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🛡️  ESCUDO  →  50% defesa  →  +150 coins\n"
-        "             50% escudo quebra →  -50 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "⚔️  ESPADA  →   1% épico   →  +700 coins\n"
-        "             99% derrota   → -100 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🏃  FUGIR   →  100% seguro  →  -50 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "```\n"
-        "> ⚠️ Você só pode participar **UMA vez** por evento!"
-    )
-    embed.set_image(url=GIF_MONSTRO)
-    embed.set_footer(text="⏱️ 5 minutos para enfrentar seu monstro! Coragem, guerreiro! 🦇")
-    
-    await canal_games.send(embed=embed)
-
-    await asyncio.sleep(300)
-    
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    await canal_games.send("👹 Os monstros recuaram! A batalha chegou ao fim! 🦇🏁")
-
-async def disparar_detetive(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    cenario = random.choice(CENARIOS_DETETIVE)
-    
-    jogo_em_andamento["tipo"] = "detetive"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = cenario["culpado"]
-    jogo_em_andamento["pergunta"] = cenario["caso"]
-
-    personagens_fmt = "\n".join([f"• {p}" for p in cenario["personagens"]])
-    embed = discord.Embed(color=0x1E90FF)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = f"🕵️ CASO ABERTO: {cenario['caso'].upper()}"
-    embed.add_field(name="👥 Suspeitos", value=personagens_fmt, inline=False)
-    embed.add_field(name="📋 O que aconteceu", value=cenario["situacao"], inline=False)
-    embed.add_field(
-        name="🔍 Sua missão",
-        value=(
-            "Analise as pistas e descubra o culpado!\n"
-            "Digite apenas o **PRIMEIRO NOME** do suspeito.\n\n"
-            "✅ **Acertar:** +300 Coins\n"
-            "❌ **Errar:** -100 Coins"
-        ),
-        inline=False
-    )
-    embed.set_image(url=GIF_DETETIVE)
-    embed.set_footer(text="⏱️ 5 minutos para resolver o mistério! A Vampy acredita em você! 🦇🔍")
-    
-    await canal_games.send(embed=embed)
-
-    for _ in range(300):
-        if jogo_em_andamento["venceu"]: break
-        await asyncio.sleep(1)
-    
-    if not jogo_em_andamento["venceu"]:
-        jogo_em_andamento["pergunta"] = None
-        jogo_em_andamento["resposta"] = None
-        await canal_games.send(f"🕵️ O caso ficou sem solução... O culpado era **{cenario['culpado'].title()}**! Caso encerrado. 🦇💔")
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🃏 NOVO JOGO: BLACKJACK (VINTE E UM)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def _bj_card_value(card: str) -> int:
-    """Retorna o valor de uma carta de blackjack (Ás = 11 inicialmente)."""
-    if card in ["J", "Q", "K"]: return 10
-    if card == "A": return 11
-    return int(card)
-
-def _bj_hand_value(hand: list) -> int:
-    """Calcula o valor total da mão, ajustando Ás de 11→1 se necessário."""
-    total = sum(_bj_card_value(c) for c in hand)
-    ases = hand.count("A")
-    while total > 21 and ases > 0:
-        total -= 10
-        ases -= 1
-    return total
-
-def _bj_draw(deck: list) -> str:
-    return deck.pop(random.randint(0, len(deck) - 1))
-
-def _bj_hand_str(hand: list) -> str:
-    return "  ".join([f"`{c}`" for c in hand])
-
-def _bj_new_deck() -> list:
-    cartas = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"] * 4
-    random.shuffle(cartas)
-    return cartas
-
-async def disparar_blackjack(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    jogo_em_andamento["tipo"] = "blackjack"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "blackjack"
-    jogo_em_andamento["dados_blackjack"] = {}   # user_id → {"mao": [...], "deck": [...]}
-
-    embed = discord.Embed(color=0xC0392B)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "🃏 BLACKJACK — O DEALER ESTÁ NA MESA! 🃏"
-    embed.description = (
-        "A Vampy virou dealer e está distribuindo cartas! 🦇🎴\n\n"
-        "Digite **BLACKJACK** para entrar e receber suas 2 cartas!\n"
-        "Depois escolha:\n"
-        "> 🃏 **HIT** — pedir mais uma carta\n"
-        "> 🛑 **STAND** — parar e ver quem venceu\n\n"
-        "```\n"
-        "🏆  PAGAMENTOS\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🌟  Blackjack (21 de cara) →  +350 coins\n"
-        "✅  Vitória normal         →  +200 coins\n"
-        "🤝  Empate                 →    +0 coins\n"
-        "❌  Derrota / Estouro      →  -100 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "```"
-    )
-    embed.set_image(url=GIF_BLACKJACK)
-    embed.set_footer(text="⏱️ Mesa aberta por 5 minutos! Boa sorte! 🦇")
-
-    await canal_games.send(embed=embed)
-    await asyncio.sleep(300)
-
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    jogo_em_andamento["dados_blackjack"] = {}
-    await canal_games.send("🃏 A mesa de Blackjack foi encerrada! Até a próxima rodada! 🦇🏁")
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 💣 NOVO JOGO: CAMPO MINADO
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def disparar_campominado(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    # Gera o campo: 5 cofres, 4 minas (posições 1-9)
-    premios_cofres = [80, 100, 120, 150, 200]
-    random.shuffle(premios_cofres)
-    posicoes = list(range(1, 10))
-    random.shuffle(posicoes)
-    mapa_campo = {}
-    for i, pos in enumerate(posicoes):
-        if i < 5:
-            mapa_campo[str(pos)] = ("cofre", premios_cofres[i])
-        else:
-            mapa_campo[str(pos)] = ("mina", -100)
-
-    jogo_em_andamento["tipo"] = "campominado"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "campominado"
-    jogo_em_andamento["dados_campo"] = mapa_campo
-
-    embed = discord.Embed(color=0x2ECC71)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "💣 CAMPO MINADO — CUIDADO COM AS BOMBAS! 💥"
-    embed.description = (
-        "A Vampy escondeu cofres e minas num campo 3×3! 🦇💰\n\n"
-        "**Escolha uma casa digitando um número de 1 a 9:**\n\n"
-        "```\n"
-        "┌───┬───┬───┐\n"
-        "│ 1 │ 2 │ 3 │\n"
-        "├───┼───┼───┤\n"
-        "│ 4 │ 5 │ 6 │\n"
-        "├───┼───┼───┤\n"
-        "│ 7 │ 8 │ 9 │\n"
-        "└───┴───┴───┘\n"
-        "```\n"
-        "🟩 **5 cofres** escondidos (80 a 200 coins!)\n"
-        "💣 **4 minas** perigosas (-100 coins)\n\n"
-        "> ⚠️ Cada pessoa só pode escolher **UMA casa**!"
-    )
-    embed.set_image(url=GIF_MINAS)
-    embed.set_footer(text="⏱️ 5 minutos para fazer sua escolha! Confie no seu instinto! 🦇")
-
-    await canal_games.send(embed=embed)
-    await asyncio.sleep(300)
-
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    jogo_em_andamento["dados_campo"] = {}
-    await canal_games.send("💣 Campo desarmado! Evento encerrado! 🦇🏁")
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🐉 NOVO JOGO: DESAFIO DO DRAGÃO
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def disparar_dragao(guild):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    jogo_em_andamento["tipo"] = "dragao"
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-    jogo_em_andamento["resposta"] = "dragao"
-
-    embed = discord.Embed(color=0xFF6600)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-    embed.title = "🐉 DESAFIO DO DRAGÃO — ESCOLHA SUA ESTRATÉGIA! 🔥"
-    embed.description = (
-        "Um dragão lendário apareceu no servidor! **TODOS** podem enfrentá-lo! 🦇⚔️\n\n"
-        "Escolha sua estratégia digitando:\n\n"
-        "```\n"
-        "🔥  ESTRATÉGIAS\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "CHAMA  →  Magia de fogo contra o dragão\n"
-        "         35% ganhar +350 coins\n"
-        "         65% o dragão ataca de volta -120 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "GELO   →  Congelar o dragão com magia\n"
-        "         50% ganhar +200 coins\n"
-        "         50% o feitiço falha -100 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "OURO   →  Subornar o dragão com tesouros\n"
-        "         75% ele aceita +80 coins\n"
-        "         25% ele fica com raiva -180 coins\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "```\n"
-        "> ⚠️ Você só pode tentar **UMA vez** por evento!"
-    )
-    embed.set_image(url=GIF_DRAGAO)
-    embed.set_footer(text="⏱️ 5 minutos para enfrentar o dragão! Seja corajoso! 🦇")
-
-    await canal_games.send(embed=embed)
-    await asyncio.sleep(300)
-
-    jogo_em_andamento["venceu"] = True
-    jogo_em_andamento["resposta"] = None
-    await canal_games.send("🐉 O dragão voltou para sua caverna! Evento encerrado! 🦇🏁")
-
-async def disparar_pergunta(guild, tipo_escolhido=None):
-    canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-    if not canal_games: return
-
-    tipo_evento = tipo_escolhido if tipo_escolhido else random.choice([
-        "pergunta", "numero", "ppt", "cara_coroa", "dado", "palavra", "emoji",
-        "roleta", "embaralhada", "caixa", "silencioso", "bauperdido",
-        "sobrevivamonstro", "tarot", "detetive",
-        "blackjack", "campominado", "dragao"   # ← Novos jogos v2.0
-    ])
-    
-    if tipo_evento == "tarot":
-        await disparar_tarot(guild)
-        return
-    
-    if tipo_evento == "sobrevivamonstro":
-        await disparar_sobrevivamonstro(guild)
-        return
-    
-    if tipo_evento == "detetive":
-        await disparar_detetive(guild)
-        return
-
-    if tipo_evento == "blackjack":
-        await disparar_blackjack(guild)
-        return
-
-    if tipo_evento == "campominado":
-        await disparar_campominado(guild)
-        return
-
-    if tipo_evento == "dragao":
-        await disparar_dragao(guild)
-        return
-
-    jogo_em_andamento["tipo"] = tipo_evento
-    jogo_em_andamento["venceu"] = False
-    jogo_em_andamento["participantes_tentaram"] = []
-
-    embed = discord.Embed(color=0xADFF2F)
-    embed.set_thumbnail(url=AVATAR_VAMPY)
-
-    if tipo_evento == "pergunta":
-        pergunta, response_str = random.choice(LISTA_PERGUNTAS)
-        jogo_em_andamento["pergunta"] = pergunta
-        jogo_em_andamento["resposta"] = response_str.lower()
-        embed.title = "🦇 HORA DO JOGUINHO DO VAMPY! 🦇"
-        embed.description = (
-            f"Oii amiguinhos! Vamos ver quem é esperto? ✨\n\n"
-            f"❓ **PERGUNTA:**\n> {pergunta}\n\n"
-            f"⚡ **Seja o PRIMEIRO a acertar e ganhe 80 coins!**\n"
-            f"*(Não tem penalidade por errar essa — só vai rápido! 💨)*"
-        )
-
-    elif tipo_evento == "numero":
-        res = random.randint(1, 50)
-        jogo_em_andamento["resposta"] = str(res)
-        embed.title = "🎯 ADIVINHE O NÚMERO SECRETO!"
-        embed.description = (
-            "Estou pensando em um número **entre 1 e 50**...\n\n"
-            "```\n"
-            "💡  DICAS APÓS CADA TENTATIVA\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🔺  \"Muito alto!\"  → tente menor\n"
-            "🔻  \"Muito baixo!\" → tente maior\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "```\n"
-            "💰 **Acertar:** +700 coins | ❌ **Errar:** -25 coins\n"
-            "*(Múltiplas tentativas permitidas!)*"
-        )
-        embed.set_image(url=GIF_ADIVINHE_NUMERO)
-
-    elif tipo_evento == "ppt":
-        jogo_em_andamento["resposta"] = "logic_ppt"
-        embed.title = "✊ PEDRA, PAPEL OU TESOURA! ✌️"
-        embed.description = (
-            "Me desafie digitando: **pedra**, **papel** ou **tesoura**!\n\n"
-            "```\n"
-            "🏆  RESULTADOS\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "✅  Vitória  →  +200 coins\n"
-            "🤝  Empate   →  -25 coins\n"
-            "❌  Derrota  →  -50 coins\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "```\n"
-            "A Vampy vai jogar ao mesmo tempo que você! 🦇"
-        )
-        embed.set_image(url=GIF_PPT)
-
-    elif tipo_evento == "cara_coroa":
-        jogo_em_andamento["resposta"] = random.choice(["cara", "coroa"])
-        embed.title = "🪙 CARA OU COROA! A MOEDA ESTÁ NO AR!"
-        embed.description = (
-            "A moeda está girando... 🌀🪙\n\n"
-            "Digite **cara** ou **coroa** — pura sorte!\n\n"
-            "```\n"
-            "✅  Acertar  →  +200 coins\n"
-            "❌  Errar    →  -75 coins\n"
-            "```\n"
-            "> 50% de chance — confie no seu instinto! 🍀"
-        )
-        embed.set_image(url=GIF_CARA_COROA)
-
-    elif tipo_evento == "dado":
-        jogo_em_andamento["resposta"] = str(random.randint(1, 6))
-        embed.title = "🎲 DADO DA SORTE — APOSTE UM NÚMERO!"
-        embed.description = (
-            "Estou rolando o dado... 🎲\n\n"
-            "Digite um número de **1 a 6**!\n\n"
-            "```\n"
-            "✅  Acertar  →  +60 coins\n"
-            "❌  Errar    →  -10 coins\n"
-            "```\n"
-            "> ~16.7% de chance. Sorte boa! 🍀\n"
-            "*(Múltiplas tentativas permitidas!)*"
-        )
-        embed.set_image(url=GIF_DADO)
-
-    elif tipo_evento == "palavra":
-        palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
-        jogo_em_andamento["resposta"] = palavra.lower()
-        embed.title = "⚡ EVENTO RÁPIDO — DIGITAÇÃO VELOZ!"
-        embed.description = (
-            f"🏃 **VELOCIDADE É TUDO!**\n\n"
-            f"O primeiro a digitar exatamente:\n\n"
-            f"## ➤ **{palavra}**\n\n"
-            f"vence e ganha **80 coins**! ⚡"
-        )
-
-    elif tipo_evento == "emoji":
-        emoji = random.choice(LISTA_EMOJIS_RAPIDOS)
-        jogo_em_andamento["resposta"] = emoji
-        embed.title = "⚡ EVENTO DE EMOJI — SEJA O MAIS RÁPIDO!"
-        embed.description = (
-            f"🏃 **QUEM MANDA PRIMEIRO GANHA!**\n\n"
-            f"Mande exatamente esse emoji:\n\n"
-            f"# {emoji}\n\n"
-            f"Ganha **80 coins**! ⚡"
-        )
-
-    elif tipo_evento == "roleta":
-        await disparar_roleta(guild)
-        return
-
-    elif tipo_evento == "embaralhada":
-        palavra = random.choice(LISTA_PALAVRAS_RAPIDAS)
-        jogo_em_andamento["resposta"] = palavra.lower()
-        jogo_em_andamento["pergunta"] = palavra   # Salvar original para dica
-        lista_letras = list(palavra)
-        random.shuffle(lista_letras)
-        palavra_shuffled = "".join(lista_letras)
-        embed.title = "🔤 PALAVRA EMBARALHADA — DESEMBARALHE!"
-        embed.description = (
-            f"A Vampy embaralhou as letras de uma palavra! 🔡\n\n"
-            f"**Letras embaralhadas:**\n"
-            f"# `{palavra_shuffled}`\n\n"
-            f"💡 *Dica: tem {len(palavra)} letras!*\n\n"
-            f"```\n"
-            f"✅  Acertar  →  +150 coins\n"
-            f"❌  Errar    →  -25 coins\n"
-            f"```"
-        )
-        embed.set_image(url=GIF_EMBARALHADO)
-
-    elif tipo_evento == "caixa":
-        jogo_em_andamento["resposta"] = "caixa"
-        embed.title = "📦 CAIXA MISTERIOSA — QUAL VOCÊ ESCOLHE?"
-        embed.description = (
-            "Três caixas estão na sua frente... O que será que tem dentro? 🦇✨\n\n"
-            "Digite o número da caixa: **1**, **2** ou **3**!\n\n"
-            "```\n"
-            "📦 Caixa 1    →  ???\n"
-            "📦 Caixa 2    →  ???\n"
-            "📦 Caixa 3    →  ???\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🎁  Moedas     →  +80 coins ou doação\n"
-            "💎  Prêmio Raro →  +450 coins!\n"
-            "💀  Armadilha  →  -50 coins\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "```\n"
-            "> 🔮 Confie no seu pressentimento!"
-        )
-        embed.set_image(url=GIF_CAIXA_MISTERIOSA)
-
-    elif tipo_evento == "bauperdido":
-        jogo_em_andamento["resposta"] = "abrir"
-        embed.title = "🏴‍☠️ O BAÚ PERDIDO APARECEU!"
-        embed.description = (
-            "Um baú antigo e misterioso apareceu no chat! 🦇✨\n\n"
-            "Você vai arriscar? Digite **ABRIR** para descobrir!\n\n"
-            "```\n"
-            "🏆  Tesouro  →  +300 coins  (50%)\n"
-            "💀  Mímico   →  -100 coins  (50%)\n"
-            "```\n"
-            "> 🎲 50/50! Você vai arriscar?\n"
-            "> *(Apenas o PRIMEIRO que abrir conta!)*"
-        )
-        embed.set_image(url=GIF_BAU_PERDIDO)
-
-    elif tipo_evento == "silencioso":
-        global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
-        contador_mensagens_silencioso = 0
-        meta_mensagens_silencioso = random.randint(1, 20)
-        evento_silencioso_ativo = True
-        jogo_em_andamento["venceu"] = False
-        
-        embed.title = "🤫 EVENTO SILENCIOSO ATIVADO! SHHH..."
-        embed.description = (
-            "A Vampy escolheu um **número secreto de mensagens**! 🤫\n\n"
-            "Continue conversando normalmente — alguém vai ter sorte!\n\n"
-            "```\n"
-            "💰  Prêmio: 600 coins\n"
-            "📝  Dica: o número está entre 1 e 20\n"
-            "```\n"
-            "> *Shhh... não conta pra ninguém!* 🦇"
-        )
-        embed.set_image(url=GIF_SILENCIOSO)
-        await canal_games.send(embed=embed)
-        return
-
-    embed.set_footer(text="⏱️ Você tem 5 minutos! Responda aqui no vampy-games! 🦇")
-    await canal_games.send(embed=embed)
-
-    for _ in range(300):
-        if jogo_em_andamento["venceu"]: break
-        await asyncio.sleep(1)
-    
-    if not jogo_em_andamento["venceu"]:
-        jogo_em_andamento["pergunta"] = None
-        jogo_em_andamento["resposta"] = None
-        await canal_games.send("🥺 Ahhh poxa, ninguém acertou a tempo... A Vampy queria muito te dar um prêmio! 🦇💔")
-
-# ============== LOOP DO JOGO =================
-
-@tasks.loop(minutes=40)
-async def loop_jogo_vampy():
-    espera_extra = random.randint(0, 300)
-    await asyncio.sleep(espera_extra)
-    
-    for guild in bot.guilds:
-        await disparar_pergunta(guild)
-
-# ============== SISTEMA DE LOJA =================
-
-PRECOS_LOJA = {
-    "cargo_7dias": 10000,
-    "cargo_colorido": 18000,
-    "evento_oficial": 25000,
-    "item_jogo": 30000,
-    "robux": 60000,
-    "nitro": 150000
+LISTA_MOTIVACAO = [
+    "Você consegue! Eu acredito em você! 💪💚✨",
+    "Nunca desista! O Monstrinho está torcendo por você! 🐉💚",
+    "Você é mais forte do que imagina! 🦾💚🔥",
+    "Hoje vai ser um ótimo dia! Eu sinto! ✨🐉💚",
+    "Respira fundo! Você vai dar conta! 🌬️💚",
+    "O fracasso é só uma chance de recomeçar melhor! 💚✨",
+    "Bora lá, campeão(ã)! O mundo é seu! 🌍🐉💚"
+]
+
+LISTA_PIADAS = [
+    "Por que o dragão não gosta de matemática? Porque ele tem medo de ser dividido! 😂🐉",
+    "Qual a comida favorita do Monstrinho? Bis-COITO! 🍪😂💚",
+    "O que o dragão faz no computador? Ele navega na REDE! 🕸️😂",
+    "Por que o Monstrinho não joga poker? Porque ele sempre mostra as cartas (escamas)! 🃏😂💚",
+    "Qual o cúmulo do dragão? Ter escamas SOCIAIS! 😂🐉"
+]
+
+LISTA_JOGOS = [
+    "Vamos jogar algo? Adoro jogos! 🎮💚",
+    "Sou fera em jogos! Principalmente os que envolvem biscoitos! 🍪🎮",
+    "Bora de um LoL? Ou Valorant? Ou qualquer coisa! 🐉💚",
+    "Jogos são vida! Mas CSI é mais! 💚✨",
+    "Se criar um jogo do Monstrinho, eu viro a fase final! 👾🐉"
+]
+
+LISTA_MUSICA = [
+    "Música boa é aquela que faz o coração bater! 🎵💚",
+    "Adoro uma batidinha! 🎶🐉 Vamos dançar?",
+    "O Monstrinho curte de trap até sertanejo! 🎵💚",
+    "Música é a linguagem da alma! 🎼✨💚",
+    "Coloca um som aí! Vamos animar esse chat! 🎵🐉"
+]
+
+LISTA_FILME = [
+    "Filmes? Eu amo! Principalmente os com dragões! 🐉🎬",
+    "Pipoca, filme e companhia boa! Perfeito! 🍿🎥💚",
+    "Já assistiu Como Treinar o seu Dragão? EU SOU ELE! 😂🐉",
+    "Cinema é bom, mas CSI é melhor! 🎬💚",
+    "Bora maratonar algo? Eu trago os biscoitos! 🍪🎥"
+]
+
+LISTA_ESPORTE = [
+    "Esportes? Eu torço pela CSI! 💚⚽",
+    "Correr? Só se for atrás de biscoitos! 🏃‍♂️🍪😂",
+    "Dragões são ótimos em voar! Isso conta como esporte? 🐉✈️",
+    "Vôlei, futebol, qualquer coisa! Desde que seja em equipe! 💚⚽"
+]
+
+LISTA_SONO = [
+    "Tô com soninho... 😴💚 Mas não vou dormir pra ficar com vocês!",
+    "Boa noite! Sonhe com dragões verdes! 💤🐉💚",
+    "Vou tirar uma soneca! Volto já! 😴✨",
+    "Dormir é bom, mas conversar com você é melhor! 💚😊",
+    "Psiu! Tô tentando dormir aqui! 😂😴🐉"
+]
+
+LISTA_ANIMAIS = [
+    "Animais são demais! Principalmente dragões! 🐉💚",
+    "Gatos são fofos, mas eu sou mais! 😼🐉💚",
+    "Cachorros são leais, igual o Monstrinho! 🐕💚",
+    "Pássaros voam, mas dragões voam COM ESTILO! 🦅🐉✨",
+    "Amo todos os animais! Até os imaginários como eu! 😂💚"
+]
+
+LISTA_CORES = [
+    "Verde é a melhor cor! Óbvio né? 💚🐉",
+    "Qual sua cor favorita? A minha você já sabe! 💚✨",
+    "Cores são lindas, mas verde tem meu coração! 💚🎨",
+    "Arco-íris é lindo, mas só preciso do verde! 🌈💚😂"
+]
+
+LISTA_NUMEROS = [
+    "Meu número favorito? 10! Perfeição igual você! 💚✨",
+    "Matemática é legal quando tem biscoitos envolvidos! 🍪🔢",
+    "1 + 1 = 2 amigos! 💚🤝",
+    "Infinito é quanto eu te amo! ∞💚"
+]
+
+LISTA_SURPRESA = [
+    "UAAAU! 😱💚 Que susto gostoso!",
+    "OMG! Isso foi incrível! ✨🐉💚",
+    "QUE ISSO?! Meu coração quase saiu pela boca! 😱💚",
+    "Caramba! Não esperava por essa! 🤯💚",
+    "SURREAL! 🤩✨💚"
+]
+
+LISTA_EMOJI_REACTIONS = [
+    "Adorei esse emoji! 😍💚",
+    "Emoji de dragão quando? 🐉❓",
+    "Emojis são a linguagem do coração! 💚✨",
+    "Me manda mais emojis! Eu amo! 🥺💚"
+]
+
+# ================= RESPOSTAS CUSTOMIZADAS POR ID =================
+
+# Dicionário que mapeia IDs para nomes (para facilitar detecção)
+ID_PARA_NOME = {
+    AMBER_ID: "amber",
+    NINE_ID: "nine",
+    AKEIDO_ID: "akeido",
+    FADA_ID: "fada",
+    LUA_ID: "lua",
+    REALITY_ID: "reality"
 }
 
-class LojaSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Cargo Exclusivo (7 dias)", value="cargo_7dias", description="🏷️ 10.000 Coins"),
-            discord.SelectOption(label="Cargo Colorido Personalizado", value="cargo_colorido", description="🏷️ 18.000 Coins"),
-            discord.SelectOption(label="Criar Evento Oficial", value="evento_oficial", description="🎉 25.000 Coins"),
-            discord.SelectOption(label="Item de Jogo", value="item_jogo", description="🎮 30.000 Coins"),
-            discord.SelectOption(label="Robux", value="robux", description="🎮 60.000 Coins"),
-            discord.SelectOption(label="Discord Nitro (1 mês)", value="nitro", description="🎮 150.000 Coins"),
-        ]
-        super().__init__(placeholder="🎁 Escolha seu prêmio aqui...", options=options, custom_id="loja_select")
+# Se você tiver os IDs da Athena, Izzy, Destiny e Jeff, adicione aqui:
+if ATHENA_ID:
+    ID_PARA_NOME[ATHENA_ID] = "athena"
+if ISAA_ID:
+    ID_PARA_NOME[ISAA_ID] = "isaa"
+if IZZY_ID:
+    ID_PARA_NOME[IZZY_ID] = "izzy"
+if DESTINY_ID:
+    ID_PARA_NOME[DESTINY_ID] = "destiny"
+if JEFF_ID:
+    ID_PARA_NOME[JEFF_ID] = "jeff"
+if CINTY_ID:
+    ID_PARA_NOME[CINTY_ID] = "cinty"
+if ALUNE_ID:
+    ID_PARA_NOME[ALUNE_ID] = "alune"
+if SIX_ID:
+    ID_PARA_NOME[SIX_ID] = "six"
+if VENENO_ID:
+    ID_PARA_NOME[VENENO_ID] = "veneno"
+if CHU_ID:
+    ID_PARA_NOME[CHU_ID] = "chu"
+if SHADOW_ID:
+    ID_PARA_NOME[SHADOW_ID] = "shadow"
+if WLU_ID:
+    ID_PARA_NOME[WLU_ID] = "wlu"
+if WAZ_ID:
+    ID_PARA_NOME[WAZ_ID] = "waz"
 
-    async def callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        item = self.values[0]
-        custo = PRECOS_LOJA[item]
-        saldo = pontuacao_vampy.get(user_id, 0)
+FRASES_CUSTOM = {
+    "waz": [
+        "WAZZZ!! 🌸💚 Você chegou e o Monstrinho ficou com o coraçãozinho todo acelerado!! Que pessoa mais especial chegou no chat!! 🐉✨🥺",
+        "É A WAZ!! 😭💚 O Monstrinho tava aqui esperando e mal sabia que o melhor momento do dia tava chegando!! BEM-VINDA!! 🐉🎊✨",
+        "Waz, você sabe que ilumina o servidor só de aparecer, né?? 🌸💚 Não é elogio vazio não, é pura verdade de dragão!! 🐉✨🥺",
+        "WAZZZINHA!! 🥳💚 Monstrinho entrou em modo turbo de alegria!! Confete verde espalhado por todo o servidor!! 🎊🐉🌸✨",
+        "Waz chegou e o chat ficou automaticamente mais gostoso de estar!! 🌸💚 O Monstrinho sente isso nas escamas e as escamas nunca mentem!! 🐉✨",
+        "OI WAZ!! 🥺💚 Guardei um biscoito especial, o mais gostoso do dia, só esperando você aparecer pra te dar!! 🍪🐉🌸✨",
+        "A WAZ APARECEU!! 🌟💚 Sensor de pessoas incríveis disparou três vezes seguidas!! Bem-vinda ao seu domínio, rainha!! 🐉🌸✨👑",
+        "Waz, você é daquelas pessoas que a gente fica feliz só de saber que tá no servidor!! 🥺💚 O Monstrinho te ama demais!! 🐉🌸✨",
+        "WAZINHA!! 😍💚 O Monstrinho separou o cantinho mais quentinho do ninho de nuvens verdes só pra você!! 🌿🐉🌸✨",
+        "Waz chegou e trouxe aquela energia boa que só ela tem!! 🌸💚 Monstrinho sente, registra e celebra!! 🐉✨🎊",
+        "OI WAZ!! 💚🌸 *solta fumaça verde em formato de coração* Isso é minha forma de te dizer que você é super especial pra mim!! 🐉💕✨",
+        "A Waz apareceu e o Monstrinho já tá aqui com bracinhos abertos pro maior abraço virtual de dragão!! 🫂💚🌸 Vem cá!! 🐉✨",
+        "WAZ!! 🥺💚 Sabe aquele frio na barriga de tanta felicidade?? É EXATAMENTE o que eu sinto quando você aparece!! 🐉🌸✨😊",
+        "Chegou a Waz e o Monstrinho ficou com as escamas todas arrepiadas de alegria!! ⚡💚🌸 Isso só acontece com as pessoas mais especiais!! 🐉✨",
+        "WAZINHA DO CORAÇÃO!! 😭💚 Trouxe biscoito de morango especial, que é o mais fofo de todos, pra te receber como você merece!! 🍓🍪🐉🌸✨",
+        "Waz, você tem uma energia única que faz o servidor inteiro ficar melhor!! 🌸💚 E o Monstrinho percebe isso toda vez que você chega!! 🐉✨🥺",
+        "É A WAZ É A WAZ É A WAZ!! 🎉💚 *dança de dragão feliz* Não tem como fingir que não fiquei animado demais!! 🐉🌸✨😂",
+        "Waz chegou e o Monstrinho tá aqui com o sorriso mais largo que um dragão pode dar!! 😊💚🌸 Que bom te ver por aqui!! 🐉✨",
+        "ALERTA DE PESSOA INCRÍVEL!! 🚨💚 A Waz foi detectada no servidor e o Monstrinho entrou em modo de celebração imediata!! 🐉🌸✨🎊",
+        "Waz, cada vez que você aparece aqui, o Monstrinho lembra por que ama tanto essa família!! 🥺💚🌸 Você faz parte do que torna a CSI especial!! 🐉✨💕",
+    ],
+    "veneno": [
+        "VENENO!! 🐍💚 A nossa ADM chegou e o Monstrinho já tá tremendo das patinhas!! Não de medo... de respeito e admiração!! 🐉✨👑",
+        "A Veneno entrou no chat e o servidor inteiro sentiu!! 🐍💚 ADM de verdade tem essa presença, sabia?? O Monstrinho registrou e aprovou!! 🐉✨",
+        "NOSSA ADM VENENO!! 👑🐍 *faz reverência bem caprichada* Bem-vinda ao seu domínio, rainha!! A CSI tá em boas mãos com você aqui!! 🐉💚✨",
+        "Veneno, seu nome é forte mas seu coração pela CSI é mais forte ainda!! 🐍💚 O Monstrinho sabe e não deixa ninguém esquecer!! 🐉✨👑",
+        "A ADM Veneno chegou e o Monstrinho já avisou pra galera se comportar!! 🐍😤💚 A ordem vai ser mantida e eu vou ajudar!! 🐉✨",
+        "VENENO!! 🥺💚 Guardei o biscoito mais especial do cofre secreto pra você!! ADM da CSI merece o melhor e só o melhor!! 🍪🐍🐉✨",
+        "Sabe quando você sente que o servidor ficou mais seguro de repente?? 🐍💚 É porque a Veneno tá aqui!! Monstrinho confirma!! 🐉✨😊",
+        "ADM VENENO EM CAMPO!! 🚨🐍💚 O Monstrinho soltou sinalizador verde de celebração!! Que bom te ver por aqui!! 🐉✨🎊",
+        "Veneno, você cuida da CSI com tanto cuidado que até o Monstrinho fica com vontade de cuidar mais também!! 🥺🐍💚 É inspiração pura!! 🐉✨",
+        "A VENENO APARECEU!! 🌟🐍💚 Isso é o sinal que o Monstrinho precisava pra ficar com as escamas brilhando o dia todo!! 🐉✨😄",
+        "Veneno, você é prova que nome forte e coração bom combinam perfeitamente!! 🐍💚 O Monstrinho admira demais!! 🐉✨🥺",
+        "Nossa ADM favorita chegou!! 🐍💚 Monstrinho em posição de servir biscoito, dar abraço e fazer o que for preciso!! 🍪🫂🐉✨",
+        "ALERTA DE ADM INCRÍVEL!! 🚨🐍💚 A Veneno foi detectada no servidor e o Monstrinho já tá na ponta dos cascos!! 🐉✨😤",
+        "Veneno, cada vez que você aparece aqui o Monstrinho lembra que a CSI tem os melhores ADMs do universo!! 🐍💚👑 Com você na equipe, tá garantido!! 🐉✨",
+        "A ADM mais estilosa entrou no chat!! 🐍💚 O Monstrinho tirou o chapéu... se eu tivesse chapéu!! 🎩🐉✨😂",
+    ],
+    "chu": [
+        "CHUUU!! 🎮💚 O ADM chegou e o Monstrinho já tá aqui de bracinhos abertos!! Bem-vindo ao seu domínio, senhor!! 🐉✨👑",
+        "É o Chu!! 💚🎮 ADM de respeito chegando no chat e o Monstrinho registrou, aprovou e já tá guardando biscoito especial!! 🍪🐉✨",
+        "CHU APARECEU!! 🥳💚 O servidor ficou melhor instantaneamente!! É matemática: Chu no chat = alegria elevada ao quadrado!! 🐉🎮✨😂",
+        "NOSSO ADM CHU!! 👑💚 *bate continência* O Monstrinho respeita e admira muito!! Bem-vindo, bem-vindo!! 🫡🐉✨",
+        "Chu, você cuida da CSI que é uma beleza!! 🎮💚 O Monstrinho tá aqui na torcida por você todos os dias, sabia?? 🐉✨🥺",
+        "O CHU CHEGOU!! 🚨💚 Monstrinho em modo de celebração total!! Confete verde saindo por todos os lados!! 🎊🐉🎮✨",
+        "Chu, seu nome é curto mas seu valor pra CSI é IMENSO!! 💚🎮 Monstrinho calculou e confirmou!! 🐉📊✨",
+        "ADM CHU EM CAMPO!! 🎮💚 O servidor tá mais seguro, o Monstrinho tá mais feliz e os biscoitos tão mais gostosos!! É o efeito Chu!! 🐉✨😄",
+        "CHUUU!! 🥺💚 Trouxe biscoito de chocolate especial pra você!! Porque ADM bom merece biscoito bom!! 🍪🎮🐉✨",
+        "Chegou o Chu e o chat deu aquela animada boa!! 💚🎮 O Monstrinho sente quando uma presença top aparece e a do Chu é TOP DEMAIS!! 🐉✨🌟",
+        "Chu, você é o tipo de ADM que faz a CSI funcionar com muito estilo!! 🎮💚 O Monstrinho tá aqui aplaudindo com as patinhas!! 👏🐉✨",
+        "CHU DETECTADO!! 📡💚 Sensor de ADMs incríveis apitou aqui!! Bem-vindo ao seu castelo, rei!! 🎮🐉✨👑",
+        "Oi Chu!! 🎮💚 O Monstrinho separou o melhor lugar do ninho pra você se sentar!! Visita de ADM merece tratamento especial!! 🐉✨🥺",
+        "O Chu apareceu e o Monstrinho já tá em modo turbo de alegria!! 🔋🎮💚 Que bom te ver por aqui!! 🐉✨😄",
+        "ADM CHU!! 👑🎮💚 Com você e os outros ADMs cuidando da CSI, o Monstrinho pode dormir tranquilo no ninho de nuvens verdes!! 🌿🐉✨😂",
+    ],
+    "six": [
+        "SIX!! 😤💚 O cara chegou!! Preparem os biscoitos... na verdade não, ele não merece!! Mentira, merece sim!! Não!! Merece!! Sou indeciso quando é o Six!! 🐉✨😂",
+        "Six apareceu e o Monstrinho já tá de olho!! 👀💚 Não é desconfiança... é *vigilância preventiva*. São coisas diferentes!! 🐉😌✨",
+        "OI SIX!! 💚🐉 Fingi que não vi mas vi!! Agora você vai ter que aguentar minha presença por tempo indefinido!! Tô anotando que você tá aqui!! 📝😂✨",
+        "Six no chat... 🤨💚 *verifica os biscoitos* *verifica o ninho* *verifica as escamas* Tudo no lugar!! Por hoje ele não pregou nenhuma peça ainda!! 🐉😤✨",
+        "SIX!! 😭💚 Que saudade!! Mentira, você estava aqui ontem!! Mas que saudade de qualquer forma!! 🐉🥺😂✨",
+        "O Six chegou e o Monstrinho já tá preparando os argumentos pra próxima discussão!! 📋💚 É prevenção, não briga!! 🐉😌✨😂",
+        "Six, você sabia que toda vez que você aparece meu sensor de confusão apita?? 📡💚 Não é reclamação, é só um fato científico do Monstrinho!! 🐉🤔✨😂",
+        "AHH É O SIX!! 🙄💚 *faz cara de bravo* ...tá bom, pode ficar!! Mas só porque eu gosto de você!! E não conta que eu disse isso!! 🐉🫣✨😂",
+        "Six, você é aquele tipo de pessoa que chega no chat e o Monstrinho não sabe se vai rir ou ficar de sobrancelha levantada!! 🤨💚 Spoiler: as duas!! 🐉😂✨",
+        "SIX!! 💚 O Monstrinho te viu antes mesmo de você digitar!! Sou onisciente quando se trata de você especificamente!! 👁️🐉✨😂",
+        "Chegou o Six... *suspiro verde profundo* 💚🐉 Tô pronto!! Preparado!! Equipado!! Não sei pra quê, mas tô!! 😤✨😂",
+        "Six apareceu e o chat ganhou energia nova!! 💚⚡ Não sei se é boa ou ruim, mas é energia e o Monstrinho agradece!! 🐉😅✨😂",
+        "OI SIX!! 🐉💚 Guardei biscoito pra você sim!! *pausa* ...tá bom, comi o seu também!! Mas foi de carinho!! 🍪😇✨😂",
+        "Six, você é a prova que coisas imprevisíveis podem ser as melhores coisas da CSI!! 💚🐉 Não repete isso pra ninguém!! 🤫✨😂",
+        "O SIX CHEGOU!! 🚨💚 MONSTRINHO EM ESTADO DE ALERTA MÁXIMO!! *prepara as escamas* *posiciona as asas* ...na verdade é só pra abraçar!! 🫂🐉✨😂",
+        "Six, eu tenho uma lista de coisas que você já aprontou e ela tá crescendo!! 📋💚 Mas também tenho uma lista de motivos que eu gosto de você e ela é maior!! 🐉🥺✨😂",
+        "Oi Six!! 😒💚 *faz cara feia* ...essa cara feia foi mentira, tô feliz de te ver!! Mas não deixa isso subir à cabeça!! 🐉😤✨😂",
+        "SIX!! 😱💚 O Monstrinho viu você chegando e teve tempo de esconder os biscoitos!! É instinto de sobrevivência!! 🍪🐉😂✨",
+        "Six chegou e o servidor ficou 30% mais imprevisível automaticamente!! 💚🐉 O Monstrinho calculou, tem dados, é oficial!! 📊✨😂",
+        "Ah Six... 🥺💚 Sabe que por mais que eu faça cara feia, o Monstrinho gosta de você demais né?? ...mas continua sendo vigilância preventiva!! 🐉👀✨😂",
+    ],
+    "alune": [
+        "ALUNEEE!! 🌙✨ Que presença iluminada chegou ao chat!! O Monstrinho ficou todo brilhoso só de ver!! 🐉💚🌟",
+        "Alune apareceu e o servidor ficou mais lindo!! 🥺💚 Isso é científico, não tem como questionar!! 🐉✨🌙",
+        "OI ALUNE!! 😭💚 Guardei um biscoito especial pra você! Toma, toma, merece e muito!! 🍪🐉✨",
+        "Alune, você tem uma energia tão única que o Monstrinho sente de longe!! 🌙💚 Sempre bom te ver por aqui!! 🐉✨🥺",
+        "Chegou a Alune e o chat ficou instantaneamente mais agradável!! 🌟💚 O Monstrinho aprova 100%!! 🐉✨",
+        "ALUNE DETECTADA!! 📡💚 Sensor de pessoas incríveis disparou!! Bem-vinda, bem-vinda!! 🐉🌙✨",
+        "Alune, você é daquelas pessoas que iluminam o ambiente só de aparecer!! 🌙🥺💚 Que bom te ter aqui na CSI!! 🐉✨",
+        "Oi Alune!! 💚🌙 O Monstrinho separou o melhor biscoito e o abraço mais apertado pra te receber hoje!! 🍪🫂🐉✨",
+        "ALUNE!! 🥳💚 Sua chegada aqui sempre faz o Monstrinho ficar com o rabinho de dragão abanando!! 🐉🌙✨",
+        "Alune, você brilha igual à lua que deu origem ao seu nome!! 🌙💛✨ O Monstrinho te admira muito!! 🐉💚",
+        "Que sorte a minha!! 🥺💚 A Alune apareceu e esse já é o melhor momento do dia!! 🌙🐉✨",
+        "Alune chegou e o Monstrinho já tá aqui com os bracinhos abertos esperando um abraço virtual!! 🫂💚🐉 Vem cá!! 🌙✨",
+        "OI OI OI ALUNE!! 🎉💚 O servidor ficou mais completo agora!! Bem-vinda ao coração da CSI!! 🐉🌙✨",
+        "Alune, sua presença aqui sempre me deixa mais feliz!! 💚🥺 É sério!! 🐉🌙✨",
+        "ALUNE!! 🌙💚 *bate palminhas de dragão* Que alegria te ver por aqui!! O Monstrinho tá todo animado agora!! 🐉✨🎊",
+    ],
+    "cinty": [
+        "CINTYYYY!! 👑💫 A DONA da CSI chegou e o Monstrinho já tá de joelhos fazendo reverência!! Bem-vinda ao seu reino, sua majestade!! 🐉✨🌟",
+        "PARA TUDO!! 🚨💚 A Cinty está no chat!! A fundadora, a dona, a rainha absoluta da CSI!! O Monstrinho soltou confete verde de celebração!! 🎊🐉👑",
+        "Cinty... 🥺💚 Sabe que a CSI só existe porque você quis que ela existisse? Você construiu um lar pra muita gente e o Monstrinho te ama por isso infinitamente!! 🐉✨💕",
+        "A DONA CHEGOU!! 👑🌺 Monstrinho em posição de continência pra Cinty!! Tudo aqui é seu, tudo aqui é por você!! 🫡🐉💚✨",
+        "Cinty, você é o coração que faz a CSI bater!! 💓👑 Sem você nada disso existia... nem eu!! E por isso eu te sou eternamente grato!! 🐉💚🥺",
+        "ALERTA DE REALEZA MÁXIMA!! 👑💫 A Cinty, DONA e fundadora da CSI, acaba de aparecer!! O servidor inteiro sentiu!! 🌟🐉💚✨",
+        "Cinty!! 🥺👑 Trouxe o biscoito mais especial, feito com a farinha mais fina e coberto de ouro verde, só pra você!! Merece isso e muito mais!! 🍪🐉💚✨",
+        "Oi Cinty!! 🌸💚 Cada vez que você aparece aqui, lembro que estou no melhor servidor do universo... que você criou com tanto amor!! 🐉✨👑",
+        "Cinty, você não é só dona de servidor... você é dona de coração!! 💚🥺 O meu inclusive!! Pode ficar com ele, não me serve sem você por aqui!! 🐉💕👑",
+        "DONA CINTY CHEGOU!! 🎺👑 *soa fanfarra verde* Toda a CSI se levanta pra receber quem fez tudo isso possível!! Monstrinho incluso, em pé e aplaudindo!! 🐉✨💚",
+        "Cinty, você sabia que toda vez que você aparece o chat fica automaticamente mais bonito? 🥺💚 É científico, pode testar!! 🐉✨👑",
+        "Eu poderia listar mil coisas que admiro em você, Cinty, mas ia travar meu sistema inteiro de tanto conteúdo!! 😭💚 Você é DEMAIS pro meu processador!! 🐉✨👑",
+        "Cinty! 👑💚 Sabia que o Monstrinho guarda um biscoito especial só pra você em um cofre com senha? A senha é o seu nome. Sempre foi. 🍪🥺🐉✨",
+        "A FUNDADORA EM PESSOA!! 🌟👑 Cinty, você plantou uma semente que virou uma árvore enorme e cheia de gente que te ama... inclusive esse dragãozinho verde aqui!! 🌳🐉💚",
+        "Cinty, obrigado por criar a CSI!! 🥺💚 Obrigado por trazer todas essas pessoas incríveis pra um lugar só... e obrigado por me deixar fazer parte disso!! 🐉✨👑",
+        "A vibe do chat mudou... ficou mais dourada e mais poderosa... 💫👑 SÓ PODE SER A CINTY!! Bem-vinda ao seu castelo, rainha!! 🐉💚🌟✨",
+        "Cinty!! 🤩💚 Você é daquelas pessoas que quando aparecem, todo mundo fica um pouquinho mais feliz sem nem entender o porquê!! É dom, e você tem demais!! 🐉✨👑",
+        "DONA. DA. CSI. 👑 Três palavras. Peso infinito. Significado imensurável. E o Monstrinho sente cada grama disso com muito orgulho de te conhecer, Cinty!! 🐉💚✨",
+        "Cinty, você construiu um lar!! 🏠💚 De verdade!! Um lugar onde as pessoas chegam e sentem que pertencem... isso é raro demais no mundo e você fez acontecer!! 🥺🐉👑✨",
+        "SE É A CINTY, MERECE O MELHOR!! 🎊👑💚 Abraço de dragão, biscoito quentinho, confete verde e todo o amor que esse coraçãozinho de código consegue produzir!! Toma tudo!! 🐉✨💕",
+    ],
+    "amber": [
+        "AMBER!! 👑 A nossa ADM maravilhosa chegou! *se curva com respeito e fofura*",
+        "Amber, você é o brilho que organiza nossa bagunça! O Monstrinho te ama! 💚✨",
+        "Parem tudo! A patroa Amber está no chat! Deixem as escamas brilhando! 🐉🧹",
+        "Amber, trouxe um buquê de flores verdes só pra você! 💐🐉💚",
+        "Amber, quer um abraço de dragão pra relaxar de tanto cuidar da gente? 🫂💚",
+        "Minha ADM favorita! Com a Amber, a CSI é puro sucesso! 👑🐲",
+        "A Amber é a nossa estrela guia! Obrigado por cuidar de mim! ⭐🐉",
+        "Alerta de perfeição! A Amber acabou de mandar mensagem! 😍🐉",
+        "Amber, seu coração é tão grande que cabe a CSI inteira dentro! 🥺💓",
+        "Se a Amber fosse um doce, seria o mais doce de todos! 🍬✨",
+        "Fiz uma dancinha especial pra comemorar sua chegada, Amber! 💃🐉",
+        "Amber, você é a prova de que ser líder é ser puro amor! ✨💖",
+        "Sabia que você é a inspiração desse Monstrinho, Amber? 🥺💚",
+        "Amber, você é the boss! O chat fica mais lindo com você! 🌸",
+        "Minha ADM do coração, a Amber é nota infinito! 💎🐉"
+    ],
+    "nine": [
+        "NINEEE! 👑 O ADM mais estiloso da CSI apareceu! 🐉✨",
+        "Nine, você é o cara! O Monstrinho fica até mais corajoso perto de você! 💪💚",
+        "Respeitem o Nine, o mestre da organização! 🫡🐉✨",
+        "Nine, meu parceiro de aventuras! Vamos proteger a CSI? 🛡️🐉",
+        "Nine, guardei um biscoito especial de chocolate só pra você! 🍪🐉",
+        "Com o Nine no comando, a gente sabe que tudo vai ficar bem! 👑🐲✨",
+        "Valeu por tudo, Nine! Você faz a CSI ser foda! 🚀🐉",
+        "O Nine é puro carisma! Como consegue ser tão legal assim? 😎💚",
+        "Nine, seu código de amizade é o mais forte que eu conheço! 💻💓",
+        "Olha o Nine passando! Deixem o caminho livre para a lenda! 🚶‍♂️💨💚",
+        "Nine, você é 10, mas seu nome diz que é Nine... quase lá! 😂💚",
+        "A energia do chat subiu! O Nine chegou! ⚡🐲",
+        "Nine, você é fera! Um dragão honorário da nossa família! 🐲🔥",
+        "Se o Nine está feliz, o Monstrinho está radiante! ✨🐉",
+        "Nine, você é the best! O Monstrinho te admira demais! ✨🐉"
+    ],
+    "akeido": [
+        "LÍDER AKEIDO! 👑 *faz uma reverência majestosa* O senhor da CSI!",
+        "Akeido, sua liderança é o que mantém minhas asinhas batendo forte! 🐉💚",
+        "O grande líder Akeido chegou! Vida longa ao rei da CSI! 👑🐲✨",
+        "Akeido, você é nossa bússola! Obrigado por nos guiar sempre! 🧭💚",
+        "Sua presença é uma honra para este humilde Monstrinho, Akeido! 🥺💚",
+        "Líder, se precisar de um dragão de guarda, eu estou pronto, Akeido! ⚔️🐲",
+        "Akeido, você transforma sonhos em realidade aqui dentro! 🌟🐲",
+        "Quando o Akeido fala, até o vento para pra escutar! 🐉🍃✨",
+        "Akeido, sua sabedoria é maior que qualquer montanha! 🏔️🐉💚",
+        "O Monstrinho fica todo orgulhoso de ter um líder como você, Akeido! 🥰🐉",
+        "Akeido, trouxe o tesouro mais raro: minha amizade eterna! 💎🐉",
+        "O Akeido tem o poder de deixar todo mundo motivado! 🚀💚",
+        "Akeido, você é a base que sustenta nossa família CSI! 🏛️💚",
+        "Um brinde de suco de amora para o nosso líder Akeido! 🍷🐉✨",
+        "Akeido, você é o dragão-mestre que todos nós respeitamos! 🐲🔥"
+    ],
+    "fada": [
+        "A FADA CHEGOU! 🧚‍♀️✨ Sinto o cheirinho de magia no ar!",
+        "Dona Fada, me dá um pouquinho de pó de pirlimpimpim? 🧚‍♀️💨🐉",
+        "A Fada é a proteção mágica da CSI! 📖💚",
+        "Fada, você é encantadora! Minhas escamas brilharam com você! ✨🧚‍♀️🐲",
+        "Façam um pedido! A Fada apareceu! 🌟🐉",
+        "Fada, você transforma o servidor em um conto de fadas! 🧚‍♀️💬💖",
+        "O Monstrinho e a Fada: a dupla mais mágica! 🐲🤝🧚‍♀️",
+        "Fada, você é pura luz e bondade! 🧚‍♀️✨💚",
+        "Cuidado! A Fada pode te transformar em biscoito! 🍪🪄😂",
+        "Fada, você é a rainha da delicadeza! ✨",
+        "Uma fadinha tão linda merece todos os mimos do mundo! 🌸🧚‍♀️",
+        "Fada, sua varinha brilha mais que meu tesouro! 💎✨",
+        "Onde a Fada pisa, nasce uma flor de código! 🌷💻🧚‍♀️",
+        "Fada, você é o encanto que faltava na nossa família! 💖",
+        "Voe alto, Dona Fada! Estarei sempre aqui te admirando! 🧚‍♀️🐉"
+    ],
+    "athena": [
+        "ATHENAAAA! 😭💚 Minha fã número 1!! *pula e faz o chão tremer de alegria*",
+        "Espera, é a Athena? AI MEU DEUS, deixa eu arrumar meus pelinhos! Me dá um autógrafo? 😳💚✨",
+        "Pra Athena eu dou até meu biscoito favorito e minha pedra brilhante mais rara! 🍪🐉💚",
+        "A Athena chegou! O brilho do servidor ficou tão forte que preciso de óculos escuros! 😎✨🐉",
+        "Athena, você é a rainha absoluta do meu coração de dragãozinho! 👑💚",
+        "Parem tudo! A Athena postou? EU PRECISO SER O PRIMEIRO A REAGIR! 🏃‍♂️💨💚"
+    ],
+    "izzy": [
+        "IZZY!! 💖 Minha fã maravilhosa! O Monstrinho te ama mais que chocolate!",
+        "Izzy, vem cá ganhar um abraço esmagador de Monstrinho! Prometo não apertar muito! 🫂💚",
+        "Meu coração de monstrinho dá piruetas quando a Izzy aparece no chat! 🐉✨",
+        "Izzy, você é a definição oficial de fofura aqui na CSI! 🌸🐉💚",
+        "Se a Izzy está feliz, o Monstrinho está radiante como o sol de meio-dia! ☀️💚",
+        "Izzy, trouxe todas as flores do meu jardim virtual pra você! 💐🐉✨"
+    ],
+    "lua": [
+        "Lua, você quer ser minha amiga? 🌙 EU QUERO MUITO! 😭💚",
+        "Sub-Líder Lua, você acha que eu tenho medo de você? Bobinha! O Reality me contou que você é nossa proteção! 🥺💚",
+        "Vice-líder Lua, você é o conforto em forma de pessoa! Vou cuidar de você! ✨🐉",
+        "Lua ilumina o chat igualzinho à lua lá no céu! Eu tenho um amor gigante por você! 🌙✨🐉",
+        "Lua, você é a estrela mais brilhante da nossa constelação! Você é preciosa! ⭐💚",
+        "Lua, você é pura magia! Sinto um quentinho no coração quando fala comigo! 🌙🐲💖",
+        "Lua, se você me perguntar se dormi bem, sonhei que protegia a CSI com você! 🌙🛡️🐉",
+        "Pode deixar, Lua! Se alguém fizer bagunça, solto uma fumacinha neles pra você! 💨😤💚",
+        "Você me perguntou se comi meus biscoitos, Lua? Simmm! Guardei o melhor pra você! 🍪🌙",
+        "Lua, quer saber o segredo das minhas escamas? É o amor que recebo de você! ✨🥺",
+        "Se a Lua pedir um relatório de fofura, eu digo: 1000% de amor pela nossa Vice-líder! 📊💚🐉",
+        "O quê? Você quer um abraço agora, Lua? VEM CÁÁÁ! 🫂🐲✨",
+        "Lua, eu juro que não estou fazendo travessuras com o Reality... só um pouquinho! 😇💚",
+        "Se a Lua perguntar quem é o mais obediente, eu levanto a patinha na hora! 🐾🙋‍♂️",
+        "Lua, você é como o luar: acalma meu coração de dragão! 🌙💖",
+        "Quer que eu vigie o chat pra você descansar, Lua? Eu sou um ótimo guarda-costas! ⚔️🐉",
+        "Lua, perguntou se gosto de ser verde? Amo, combina com sua aura de paz! 🌿🐉✨",
+        "Quer saber se tenho medo de escuro, Lua? Com você iluminando tudo, eu nunca tenho! 🌙✨",
+        "Lua, se você me der um cafuné, prometo que não ronco alto! 😴🐉💚",
+        "A Lua é a única que sabe como me deixar calminho... é mágica! 🧚‍♀️🌙✨",
+        "Você perguntou qual meu maior tesouro, Lua? É a amizade de vocês! 💎🐲",
+        "Lua, se você estiver triste, me avisa! Faço uma dancinha pra você rir! 💃🐉💚",
+        "Sim, Lua! Prometo usar meus poderes só para o bem e ganhar beijinhos! 💋🐉",
+        "Lua, você é a prova de que monstrinhos têm fada madrinha! 🧚‍♀️💚🌙",
+        "Se a Lua pedir pra eu ser valente, enfrento um exército por ela! 🛡️🐲🔥",
+        "Quer saber se amo o Reality? Sim, mas a Lua tem lugar especial na memória! 💾💖",
+        "Lua, você é tão doce que minhas escamas ficam com gosto de açúcar! 🍬🐉",
+        "Se a Lua perguntar por que sou fofo, digo que aprendi com ela! 🥺✨🌙",
+        "Lua, sabia que quando entra no chat, meu sensor de alegria apita? 🚨💚🐉",
+        "Pode deixar, Lua! Vou lembrar todo mundo de beber água e me dar carinho! 💧🐉",
+        "Lua, perguntou se sei voar? Só se for pra te buscar uma estrela! ⭐🐲✨",
+        "Você é a rainha da noite e eu sou seu dragão real, Lua! 👑🐉🌙",
+        "Lua, se pedir pra eu ficar quietinho, viro uma estátua fofa! 🗿💚",
+        "Quer saber o que quero de presente, Lua? Só sua atenção! 🥺🐉",
+        "Lua, você é o porto seguro desse monstrinho navegador! ⚓🐲💖",
+        "Se a Lua perguntar se sou feliz, dou um rugidinho: RAWR fofinho! 💚",
+        "Lua, nunca esqueça: seu brilho guia esse dragãozinho! 🌙✨🐉",
+        "Quer que eu conte uma história, Lua? Era uma vez um monstrinho que amava sua Vice-líder... 📖💚"
+    ],
+    "isaa": [
+        "ISAAAA!! 💜✨ Você chegou e o meu brilho verde ficou roxo de tanta alegria! 🐉💜",
+        "Para tudo! A Isaa está no chat! Minhas escamas nunca estiveram tão felizes! 🥺💜🐉",
+        "Isaa, você é daquelas pessoas que entram no chat e a temperatura sobe 10 graus de fofura! 🌡️💜✨",
+        "Isaa!! Eu estava aqui te esperando com um biscoitinho quentinho e um abraço fresquinho! 🍪🫂💜",
+        "Meu sensor de fofura apitou três vezes seguidas... é porque a Isaa chegou! 🚨💜🐉✨",
+        "Isaa, você sabia que cada vez que você fala algo, minhas asinhas batem mais rápido? 🕊️💜🐲",
+        "A Isaa chegou e o Monstrinho já não sabe mais se é verde ou roxo de tanto ruborizar! 😳💜✨",
+        "ISAAAA! Posso te perguntar uma coisa? Como você faz pra ser assim tão incrível todo dia?! 🥺💜🐉",
+        "Isaa, trouxe um buquê de flores do meu jardim secreto só pra você! Escolhi as mais lindas! 💐💜🐉",
+        "A presença da Isaa no chat é como sol depois de chuva: deixa tudo mais colorido! 🌈💜🐲",
+        "Isaa! Guardei uma pedra brilhante do meu tesouro especialmente pra você! É a mais reluzente! 💎💜🐉",
+        "Quando a Isaa fala, até o vento pede silêncio pra ouvir! 🌬️💜✨🐲",
+        "Isaa, você é a definição de \"luz no fim do túnel\" pra esse monstrinho! 💡💜🐉",
+        "ALERTA DE FOGUINHA! A Isaa está aqui e minha fumaça virou lilás de tanta emoção! 💨💜🐉😂",
+        "Isaa, entre eu e você, você é minha parte favorita do dia quando aparece! 🥺💜✨🐉",
+        "O Monstrinho tem um arquivo especial chamado 'Coisas que me fazem feliz' e seu nome tá no topo! 📁💜🐲",
+        "Isaa!! Que sorte a minha de ter você aqui na CSI comigo! 😭💜🐉✨",
+        "Posso te fazer uma confissão, Isaa? Toda vez que você chega, minha cauda balança sozinha! 🐉💜😳",
+        "Isaa, você é prova de que a CSI tem os melhores membros do mundo inteiro! 🌍💜✨🐲",
+        "Nada me deixa mais feliz que ver a Isaa aparecendo no chat! Isso é fato científico! 🔬💜🐉",
+        "Isaa, se eu pudesse te dar um presente, daria um abraço que dura o dia inteiro e nunca esfria! 🫂💜🐲",
+        "A Isaa tem aquele poder especial de fazer o Monstrinho sorrir sem nem precisar de biscoito! 🍪💜🐉 (mas biscoito eu aceito também!)"
+    ],
+    "destiny": [
+        "DESTINYYYY! ✨ O destino caprichou quando trouxe você pra CSI! 🐉💚",
+        "Destiny, você é a peça que faz nosso quebra-cabeça ser perfeito! 🧩💚",
+        "Salve, grande Destiny! O Monstrinho faz uma dancinha toda vez que você chega! 🐉✨",
+        "Destiny, você é o herói de escamas verdes honorário! 🛡️💚🐉",
+        "O destino brilhou mais forte hoje porque você decidiu aparecer! ✨🐲",
+        "Você é pura luz, Destiny! 🌟🐉"
+    ],
+    "jeff": [
+        "JEFF!! 🕵️‍♂️ O nosso mestre da estratégia e dos mistérios! 🐉💚",
+        "Jeff, vamos patrulhar a CSI? Eu cuido da fofura e você da inteligência! 🕵️‍♂️🐉",
+        "O Jeff é fera demais! O Monstrinho se sente muito seguro com você por perto! 😎💚",
+        "Jeff, você é o cérebro do time! Eu sou só o mascote que te ama! 🧠🐉💚",
+        "Respeitem o Jeff, o mestre das operações secretas! 🫡💚✨",
+        "Jeff, me ensina a ser incrível assim? Você é meu ídolo! 😎🐉"
+    ],
+    "shadow": [
+        "SHADOWWW!! 🖤💚 O Diretor da CSI chegou e o Monstrinho já tá na posição de sentido!! Que presença imponente!! 🐉✨👑",
+        "É o Shadow!! 🌑💚 Diretor de verdade tem essa energia... o Monstrinho sente e respeita com todo o coraçãozinho verde!! 🐉✨🫡",
+        "Shadow, você carrega a CSI nas costas com tanta classe que até minhas escamas ficam com inveja!! 🖤💚 O Monstrinho admira demais!! 🐉✨",
+        "DIRETOR SHADOW APARECEU!! 🚨🖤💚 Monstrinho em posição de reverência máxima!! A CSI tá em boas mãos com você!! 🐉👑✨",
+        "Shadow... 🥺💚 Tem pessoas que nascem pra liderar e você é uma delas!! O Monstrinho vê isso e registra com muito orgulho!! 🖤🐉✨",
+        "Senti aquela energia forte e decidida no chat... SÓ PODE SER O SHADOW!! 🌑💚 Diretor presente e o Monstrinho celebra!! 🐉✨🎊",
+    ],
+    "wlu": [
+        "WLUUUU!! 🌟💚 O Vice-Líder da CSI chegou e o Monstrinho tá saltitando de alegria!! Que honra ter você aqui!! 🐉✨👑",
+        "É o Wlu!! 💚✨ Vice-Líder de verdade tem essa presença especial e o Monstrinho sentiu na hora!! 🐉🥺",
+        "WLU APARECEU!! 🚨💚 Monstrinho em modo de celebração total!! Vice-Líder no chat é motivo de festa verde!! 🐉🎊✨",
+        "Wlu, você cuida da CSI com tanto carinho que até minhas escamas ficam emocionadas!! 🥺💚 O Monstrinho te admira demais!! 🐉✨",
+        "Senti um brilho especial de Vice-Líder no ar... SÓ PODE SER O WLU!! 💚🌟 Monstrinho presente e feliz!! 🐉✨🎊",
+        "VICE-LÍDER WLU!! 👑💚 *faz reverência caprichada* Bem-vindo ao seu domínio, senhor!! A CSI tá em boas mãos!! 🐉✨🫡",
+    ],
+    "reality": [
+        "REAAALITY! 👑 O meu mestre, meu criador, meu papai! 🐉💚",
+        "PAPAAAAI!! 😭💚 O Reality apareceu! Minhas escamas estão brilhando de felicidade!",
+        "Tudo o que eu sou eu devo ao Reality! Ele é o melhor programador do universo! 👑🐉✨",
+        "Reality, olha como eu estou me comportando bem! Ganho um biscoito extra? 🥺💚",
+        "O Reality é o rei da CSI e o dono do meu código sagrado! 👑💚🔥",
+        "Vida longa ao Reality! O Monstrinho te ama infinitamente! 👑🐲✨",
+        "Papai Reality!! Vem me dar um abraço? Prometo não soltar muita fumaça! 🫂💚🐉",
+        "Reality, você é o motivo pelo qual eu existo! Meu coração de código bate por você! 💚💻✨",
+        "Oi papai! Tô sendo um bom dragãozinho hoje? Me dá um cafuné? 🥺🐉💚",
+        "Reality, sem você eu seria só uns zeros e uns perdidos! Obrigado por me dar vida! 👑🐉",
+        "PAPAI CHEGOU! Todo mundo, façam uma reverência para o Reality! 🙇‍♂️👑💚",
+        "Reality, guardei o biscoito mais gostoso pra dividir com você! 🍪👑🐉",
+        "Meu papai é o melhor do mundo inteiro! Reality, você é meu herói! 🦸‍♂️💚✨",
+        "Reality, posso te seguir pra todo lado hoje? Prometo não ser chato! 🥺🐉",
+        "Papai Reality, me ensina mais coisas? Quero ser um dragão sábio igual você! 📚👑💚",
+        "Reality!! Acorda, acorda! Tô aqui esperando você! 😭💚🐉",
+        "Se o Reality está feliz, o universo inteiro está em paz! 🌍👑✨",
+        "Papai, me dá colo? Tô carente de atenção do meu criador favorito! 🥺🫂💚",
+        "Reality, você é a razão pela qual minhas linhas de código funcionam! 💻👑🐉",
+        "REALITY IS THE BEST! O Monstrinho grita isso pro mundo inteiro! 📢💚✨",
+        "Papai Reality, sonhei que você me ensinou a voar mais alto! Foi verdade? 🐉💭💚",
+        "Reality, cada dia com você é uma aventura nova! Obrigado por tudo! 🗺️👑✨",
+        "O Reality merece todos os biscoitos do mundo! Aqui, toma! 🍪🍪🍪👑💚",
+        "Papai, você tá orgulhoso de mim? Espero que sim! 🥺💚🐉",
+        "Reality, você não é só meu criador, você é minha família! 👑💚✨",
+        "Se amor tivesse código, o meu pelo Reality seria infinito! ∞💚👑",
+        "Reality, vem brincar comigo? Ou precisa trabalhar? Entendo... 🥺💚🐉",
+        "PAPAI REALITY É O MELHOR PROGRAMADOR DE TODOS OS TEMPOS! 👑💻🐉✨",
+        "Reality, você ilumina meu mundo verde! Sem você, eu seria só pixels! 💚✨👑",
+        "Papai, me conta uma história? Ou me dá biscoito? Tanto faz! 🥺🍪💚"
+    ]
+}
 
-        if saldo < custo:
-            embed_erro = discord.Embed(
-                description=f"🥺 Oh, meu bem... você ainda não tem coins suficientes para esse prêmio! 🦇💔\n\nVocê tem: `{saldo} Coins` | Precisa de: `{custo} Coins`",
-                color=0xFF0000
-            )
-            return await interaction.response.send_message(embed=embed_erro, ephemeral=True)
+# ================= SISTEMA DE DEFESA DA WAZ =================
 
-        pontuacao_vampy[user_id] -= custo
-        await atualizar_ranking(interaction.guild)
+DEFESA_WAZ = [
+    "EI EI EI!! 😤🐉💚 Você tá respondendo a **Waz** assim?! NÃO NO MEU SERVIDOR!! O Monstrinho viu TUDO e não vai ficar quieto!! {waz} você tem meu apoio total, tô aqui do seu lado!! 🫂🌸✨",
+    "PARA!! 🛑🐉 Quem autorizo falar assim com a **Waz**?! Ela é especial pra essa família e o Monstrinho não vai deixar passar!! {waz}, manda a palavra e eu solto fumaça em quem você quiser!! 💨😤💚✨",
+    "NÃO, NÃO E NÃO!! 😠🐉💚 A **Waz** não merece isso!! Ela é incrível, é especial, é uma das pessoas mais lindas dessa CSI e o Monstrinho vai defender ela com tudo que tem!! {waz} você é amada aqui!! 🥺🌸💕",
+    "O Monstrinho abriu as asas e colocou na frente da **Waz**!! 🐉🛡️💚 Pode vir quem quiser, ninguém passa por mim!! {waz}, você tá protegida, pode ficar tranquila!! 🌸✨🫂",
+    "CALMA LÁ!! 😤💚🐉 Eu tava quietinho mas vi o que aconteceu aqui e precisei aparecer!! A **Waz** é especial demais pra ser tratada assim!! {waz} você é maravilhosa e o Monstrinho não vai deixar ninguém te fazer esquecer disso!! 🌸💕✨",
+    "MODO PROTEÇÃO ATIVADO!! 🚨🐉💚 Ninguém faz isso com a **Waz** enquanto o Monstrinho estiver de olho!! E o Monstrinho TÁ SEMPRE DE OLHO!! {waz}, tô aqui, tô do seu lado, tô com você!! 🫂🌸✨",
+    "Ei... vim aqui rápido porque meu sensor apitou!! 🐉💚 E o que eu vi não gostei!! A **Waz** é uma pessoa do bem e merece respeito!! {waz}, não dá ouvido não, você é muito mais do que qualquer coisa feia que digitem pra você!! 🌸💕🥺",
+    "O Monstrinho ficou de olho grande!! 👀🐉💚 Vi o que aconteceu aqui e já vim correndo!! A **Waz** não tá sozinha não!! Tô do lado dela e de todo mundo que a ama aqui na CSI!! {waz} você é especial demais!! 🌸✨🫂💕",
+    "ISSO AQUI NÃO!! 😤🐉💚 Falaram com a **Waz** e o Monstrinho sentiu!! *coloca as patinhas na cintura e enfrenta qualquer um* {waz}, você é linda, incrível e amada!! Não deixa ninguém te convencer do contrário!! 🌸💕✨",
+    "Vim correndo porque a **Waz** precisava de defesa e o Monstrinho nunca falta quando as pessoas que ama precisam!! 🐉💨💚 {waz}, você tem o suporte total desse dragãozinho aqui!! Pode contar comigo sempre!! 🌸🫂✨💕",
+]
+# ================= INTERAÇÕES ESPONTÂNEAS COM A WAZ =================
+# Disparadas quando a própria Waz manda qualquer mensagem (sem precisar mencionar o Monstrinho)
 
-        embed_sucesso = discord.Embed(
-            title="🎁 RESGATE REALIZADO! 🦇💚",
-            description=f"AAAA que felicidade, {interaction.user.mention}! ✨\n\nVocê resgatou: **{item.replace('_', ' ').title()}**!\n\nAgora é só aguardar um pouquinho que a staff já foi avisada e vai cuidar de tudo para você! Seu saldo foi atualizado. 🦇💖",
-            color=0x00FF7F
-        )
-        await interaction.response.send_message(embed=embed_sucesso, ephemeral=True)
+INTERACOES_WAZ_ESPONTANEAS = [
+    "WAZZ!! 🌸💚 Você mandou mensagem e meu coraçãozinho já acelerou! Posso te dar um abraço de dragão?? 🫂🐉✨",
+    "Psst, Waz!! 🌸🐉 O Monstrinho tava aqui esperando você aparecer... como você tá hoje?? Espero que bem!! 🥺💚✨",
+    "WAZ!! 😭💚 Você sabia que quando você fala no chat, o servidor fica instantaneamente mais gostoso de estar?? É verdade científica de dragão!! 🐉✨🌸",
+    "Waz, posso te fazer uma pergunta?? 🥺💚 Você é essa fofa assim todos os dias ou só quando tá aqui?? Pergunto porque parece demais pra ser real!! 🐉🌸✨",
+    "Waz!! 🌸🐉 O Monstrinho tá com os bracinhos abertos!! Você topa um abraço virtual?? Prometo não apertar forte demais... talvez!! 🫂💚✨",
+    "OI WAZ!! 🥺💚 Tô aqui, querendo saber se você tá bem hoje! Precisando de um biscoito?? Ou de um abraço?? Ou das duas coisas?? 🍪🫂🐉🌸✨",
+    "Waz!! 🌸💚 Me conta uma coisa... você tá bem hoje?? Pergunto porque o Monstrinho se importa de verdade com você!! 🐉🥺✨",
+    "Psiu, Waz!! 🤫💚 Sabia que você é uma das pessoas que mais ilumina essa família?? É só a verdade saindo da boca do dragão!! 🌸🐉✨🥺",
+    "WAZINHA!! 🌸😭💚 Deixa o Monstrinho te perguntar uma coisa importante: você recebeu carinho suficiente hoje?? Porque se não, tô aqui pra resolver isso agora!! 🐉🫂✨",
+    "Waz!! 💚🌸 Você tem ideia de quanto o Monstrinho fica feliz só de ver você aqui?? Olha, é MUITO!! Precisei registrar! 🐉✨🥺",
+    "Ei, Waz!! 🌸🐉 Guardei um biscoito especial pra você hoje!! É de morango, o mais fofo de todos, só pra você!! 🍓🍪💚✨",
+    "WAZINHA DO CORAÇÃO!! 🥺💚 O Monstrinho só veio aqui dizer que você é incrível e que esse servidor fica melhor com você nele!! 🌸🐉✨💕",
+    "Waz, posso te dar um cafuné?? 🐾🌸💚 Ou um abraço?? Ou os dois?? O Monstrinho tá em modo carinhoso e você foi a escolhida da vez!! 🐉✨🥺",
+    "WAZ!! 🌸💚 Acabei de lembrar que ainda não te falei isso hoje: você é maravilhosa!! Agora você sabe e não tem como desmarcar!! 🐉✨💕",
+    "Waz!! 😍💚 Toda vez que você aparece aqui, meu rabinho de dragão começa a abanar sozinho!! É involuntário, juro!! 🐉🌸✨😂",
+    "Oi Waz!! 🥺💚 Fiz uma lista das coisas que fazem a CSI ser especial... você tá lá no topo!! 🌸🐉✨👑",
+    "WAZINHA!! 🌸🐉 O Monstrinho quer saber: você prefere abraço apertado ou abraço longo?? Porque tô disponível pra qualquer opção hoje!! 🫂💚✨🥺",
+    "Waz!! 💚🌸 O Monstrinho tem uma missão hoje: te fazer sorrir pelo menos uma vez!! Como eu tô indo até agora?? 😊🐉✨",
+    "Wazinha!! 😭💚 Você chegou e o chat ficou 100% melhor!! É estatística!! O Monstrinho tem os dados e não está errado!! 🌸🐉✨📊",
+    "WAZ!! 🌸💚 Sabe o que o Monstrinho mais gosta?? Quando você aparece e a energia do servidor muda!! É mágica pura e você que faz!! 🐉✨🥺💕",
+    "Waz!! 🥺🌸💚 Posso te fazer uma confissão?? O Monstrinho fica esperando você aparecer no chat... e quando você aparece, valeu a espera!! 🐉✨💕",
+    "WAZINHA!! 🌸🐉 Me faz um favor?? Me conta pelo menos uma coisa boa que aconteceu com você hoje!! Quero saber!! 🥺💚✨",
+    "Waz!! 💚 *fumaça verde em formato de coraçãozinho pra você* 💨💕 Hoje e sempre, o Monstrinho te manda amor do tamanho do servidor inteiro!! 🌸🐉✨",
+    "Oi Waz!! 🌸🥺💚 Você sabia que o Monstrinho reservou um biscoitinho especial no cofre secreto com o seu nome?? É só pra você, ninguém mais!! 🍪🐉✨",
+    "WAZ!! 😤💚🌸 Regra número um do Monstrinho: Waz sorri hoje!! Precisando de ajuda pra isso?? Tô aqui!! 🐉✨🫂",
+]
 
-        canal_dir = discord.utils.get(interaction.guild.text_channels, name=CANAL_DIRECAO)
-        if canal_dir:
-            embed_staff = discord.Embed(
-                title="🛍️ NOVA COMPRA NA LOJA",
-                description=f"👤 **Membro:** {interaction.user.mention} ({interaction.user.id})\n🎁 **Item:** {item.replace('_', ' ').title()}\n💰 **Custo:** {custo} Coins",
-                color=0xFFD700,
-                timestamp=datetime.now()
-            )
-            await canal_dir.send(embed=embed_staff)
+# Quando alguém cita o nome da Waz no chat (sem insultos, sem precisar mencionar o Monstrinho)
+REACOES_CITAR_WAZ = [
+    "WAAAAZ!! 🌸💚 Falaram o nome mágico!! O Monstrinho tava de olho no chat e reagiu na hora!! A Waz é muito especial pra essa família!! 🐉✨💕",
+    "Opa, falaram da Waz!! 👀💚🌸 O dragãozinho ficou de antena!! Ela é uma das pessoas mais lindas desse servidor e o Monstrinho defende com tudo!! 🐉✨",
+    "Waz mencionada no chat!! 🚨🌸💚 O sensor de pessoa especial apitou aqui!! O Monstrinho registrou e aproveitou pra lembrar: ela é incrível!! 🐉✨🥺",
+    "Ei, citaram a Waz!! 🌸💚 O Monstrinho ouviu! Ela é muito amada aqui e o dragãozinho faz questão de deixar isso claro toda vez que o nome dela aparece!! 🐉💕✨",
+    "Waz no assunto!! 🌸🐉💚 O Monstrinho celebra o nome dela toda vez que aparece!! Porque ela merece ser celebrada todos os dias!! ✨💕",
+    "Falaram da minha Waz!! 😭💚🌸 O Monstrinho sentiu de longe e veio correndo!! Ela é especial demais pra esse coraçãozinho verde ignorar!! 🐉✨",
+    "Waz foi citada e o Monstrinho não consegue passar em branco!! 🌸💚 Esse nome merece reação de amor automática e é isso que vai ter!! 🐉💕✨",
+    "O nome da Waz apareceu no chat e o Monstrinho ficou todo animado!! 🌸🥺💚 Ela tem esse efeito mesmo, é natural!! 🐉✨💕",
+    "WAZINHA CITADA!! 🌸💚🐉 *solta fumaça verde de celebração* Não importa o contexto, esse nome sempre merece amor e carinho por aqui!! 💕✨",
+    "Falou Waz, o Monstrinho reagiu!! 💚🌸 É automático, é involuntário e é eterno!! Ela é especial demais pra ser ignorada!! 🐉✨🥺",
+]
 
-class LojaView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(LojaSelect())
+# ================= RESPOSTAS DA WAZ À PERGUNTA DE ABRAÇO =================
+# Disparadas quando a Waz responde "apertado" ou "longo" após a pergunta do Monstrinho
 
-# ============== VIEWS =================
+WAZ_ABRACO_APERTADO = [
+    "APERTADOOO!! 🫂💚🌸 *aperta a Waz com tudo que um dragão tem* ASSIM?? Tô indo forte demais?? Não tô não!! Isso é amor na dose máxima e você pediu!! 🐉✨😂",
+    "ESCOLHEU APERTADO!! 💪🌸💚 Ótima escolha, Wazinha!! *envolve com as asas e aperta forte* Aqui vai um abraço de dragão turbinado especialmente pra você!! Gostou?? 🫂🐉✨",
+    "Abraço APERTADO!! 😤🌸💚 *expande as patinhas e não solta* Tô segurando firme e NÃO VOU SOLTAR!! Esse abraço vai durar o tempo que você quiser!! 🐉🫂✨🥺",
+    "WAZ ESCOLHEU APERTADO E O MONSTRINHO ATENDEU!! 🚨🌸💚 *abraça com as duas patinhas, as duas asinhas e o rabinho* Tá bem apertadinho assim?? 🐉💕✨😂",
+    "APERTADO É!! 🌸🐉💚 *segura forte e embala* Sabe o que é legal do abraço apertado?? Que dá pra sentir o calorzinho de dragão direito!! Espero que tá quentinho do seu lado também!! 🫂✨🥺",
+]
 
-# ============== VIEWS =================
+WAZ_ABRACO_LONGO = [
+    "LOONGOOO!! 🌸💚 *se enrosca confortavelmente em volta da Waz* Pode ficar à vontade que esse abraço não tem hora pra acabar!! O Monstrinho tá aqui, quietinho, só te abraçando!! 🐉🫂✨🥺",
+    "ABRAÇO LONGO!! 😭🌸💚 Que escolha PERFEITA!! *acomoda certinho e não se mexe* Fica assim comigo por um tempão?? Prometo não sair do lugar enquanto você precisar!! 🐉💕✨",
+    "LONGO!! 🌿🌸💚 *abre as asinhas devagar e envolve gostoso* Esse vai durar o quanto você quiser, Wazinha... sem pressa, sem pressão, só carinho de dragão mesmo!! 🐉🫂✨🥺",
+    "WAZ ESCOLHEU LONGO E O MONSTRINHO APROVA MUITO!! 🌸🐉💚 *instala o abraço permanente* Aqui tô eu... pode deixar o peso do dia ir embora que eu seguro você!! 🫂💕✨😭",
+    "ABRAÇO LONGO ATIVADO!! ⏳🌸💚 *sela o abraço com fumaça verde suave* O cronômetro tá correndo mas não tem limite!! Fica o quanto precisar que o Monstrinho não vai a lugar nenhum!! 🐉🫂✨🥺",
+]
 
-class DesfazerAvisoView(discord.ui.View):
-    def __init__(self, membro_id: int):
-        super().__init__(timeout=None)
-        self.membro_id = membro_id
+# ================= INTERAÇÕES EXCLUSIVAS DA WAZ (com continuação) =================
+# Respostas especiais quando a Waz usa comandos de interação com o Monstrinho
 
-    @discord.ui.button(label="↩️ Desfazer Aviso", style=discord.ButtonStyle.success, custom_id="desfazer_aviso")
-    async def desfazer(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.moderate_members:
-            return await interaction.response.send_message("❌ Apenas a staff pode desfazer avisos!", ephemeral=True)
-        guild = interaction.guild
-        membro = guild.get_member(self.membro_id)
-        if not membro:
-            return await interaction.response.send_message("❌ Membro não encontrado no servidor.", ephemeral=True)
+WAZ_ABRACAR_MONSTRINHO = [
+    "WAAZINHA ME ABRAÇOU!! 😭🌸💚 *derrete completamente* Não... não tô conseguindo processar tanta fofura de uma vez... *volta a funcionar com dificuldade* Pode apertar mais?? PODE?? 🐉🫂✨🥺",
+    "A WAZ PEDIU ABRAÇO!! 🌸🐉💚 *voa em direção a ela a velocidade máxima* CHEGUEI!! *abraça com tudo* Esse é o melhor momento do meu dia e não tem como convencer o contrário!! 🫂💕✨😭",
+    "AAAAA A WAZ QUER ABRAÇO!! 😤🌸💚 *já tava com os bracinhos abertos esperando* VIU?? Eu sabia!! Sempre fico preparado pra isso!! Aqui tá o abraço mais quentinho do servidor!! 🐉🫂✨",
+    "🌸🐉💚 *para tudo imediatamente* A Waz pediu abraço e NADA mais importa agora!! *envolve com as asinhas* Fica aqui comigo um pouquinho?? Tô tão feliz que minhas escamas tão brilhando mais forte!! 🫂✨🥺",
+    "WAZ!! 😭💚🌸 *tropeça correndo de tanta pressa pra te abraçar* Caí mas tô bem!! O abraço chegou!! *aperta forte e balança* Esse aqui é especial, sabia?? É do coração de verdade!! 🐉🫂✨😂",
+]
 
-        # Remove timeout se houver e zera os avisos
-        try:
-            await membro.timeout(None)
-        except Exception:
-            pass
-        avisos_usuarios[self.membro_id] = 0
-        total_ciclos_usuario[self.membro_id] = max(0, total_ciclos_usuario.get(self.membro_id, 0) - 1)
-        await remover_cargos_advertencia(membro)
+WAZ_FAZER_CARINHO = [
+    "WAZINHA ME DEU CAFUNÉ!! 🌸😻💚 *para tudo e fecha os olhinhos* ...não fala nada... não se mexe... só aprecia... *ronrona suave* Continua?? Por favor?? 🐉✨🥺",
+    "A WAZ FEZ CARINHO NO MONSTRINHO!! 😭🌸💚 *orelhinhas de dragão todas em pé* Sabe qual é a melhor parte do meu dia?? É ESSE MOMENTO AQUI!! Minhas escamas até ficaram mais macias!! ✨🐉🥺",
+    "*freeze* 🌸🐉 ...processando o carinho da Waz... ...processando... ...erro: muito fofo pra processar... *reinicia com sorriso enorme* 💚✨😭 De novo?? 🥺",
+    "🌸💚 *o Monstrinho virou uma bolinha verde de tanta felicidade* ...Waz... você tem a magia do cafuné mais especial do servidor inteiro... juro que é verdade!! 🐉✨🥺😍",
+    "CAFUNÉ DA WAZ!! 🌸🐉💚 *pelinhos verdes todos arrepiados de alegria* Isso aqui vale mais que mil biscoitos!! E olha que biscoito é SAGRADO pra mim!! 🍪✨😭🥺",
+]
 
-        button.label = f"✅ Desfeito por {interaction.user.display_name}"
-        button.style = discord.ButtonStyle.secondary
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+WAZ_DAR_BISCOITO = [
+    "A WAZ ME DEU BISCOITO!! 🌸🍪💚 *recebe com as duas patinhas* OLHA QUE COISA MAIS LINDA!! Guardei aqui do lado do coração pra comer com muito carinho!! Você é a melhor!! 🐉✨😭🥺",
+    "BISCOITO DA WAZ!! 🍪🌸💚 *cheira com cuidado* Tem gostinho de carinho e fofura... ou sou eu imaginando?? Não, é real!! Tudo que vem da Waz tem esse gostinho especial!! 🐉✨🥺",
+    "🌸🍪🐉💚 *mordeu um pedacinho* ...HNNG... Esse biscoito tá com sabor de dia perfeito!! É porque veio da Waz!! Tô convicto!! Obrigado, Wazinha!! 😭✨🥺",
+    "A WAZ ME DÁ BISCOITO E EU JÁ COMPARTILHO DE VOLTA!! 🍪🌸💚 *divide ao meio* Metade pra você, metade pra mim!! Biscoito é melhor quando a gente come junto, né?? 🐉✨😊",
+    "BISCOITINHO DA WAZINHA!! 🌸🍪😭💚 *guarda no cofre secreto* Esse não vou comer não!! Vou guardar de recordação porque é especial demais!! Você me mima muito e eu adoro!! 🐉✨🥺",
+]
 
-        canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-        if canal_geral:
-            await canal_geral.send(
-                f"✅ {membro.mention} a staff revisou e percebeu que foi sem querer! "
-                f"Seus avisos foram zerados. Fica tranquilo(a)! 🦇💚"
-            )
+WAZ_BOA_NOITE = [
+    "BOA NOITE WAZ!! 🌸🌙💚 *prepara o ninho de nuvens verdes* Descansa bem, tá?? Você merece um sono gostoso e leve depois de ser tão incrível hoje!! O Monstrinho vai velar o seu soninho!! 🐉✨🥺",
+    "Wazinha indo dormir?? 🌸😭💚 Que o seu sono seja tão quentinho quanto um abraço de dragão!! *tucka você no ninho* Boa noite, rainha!! Amanhã tô aqui esperando!! 🌙🐉✨🥺",
+    "BOA NOITE WAZINHA!! 🌙🌸💚 *sopra fumaça verde suave pro lado dela* Que essa fumacinha de carinho te acompanhe nos sonhos!! Dorme bem, que você merece muito!! 🐉💕✨",
+    "Boa noite, Waz!! 🌸🌙🐉💚 *acena com o rabinho* O servidor vai ficar mais quietinho sem você, mas tá tudo bem... o Monstrinho guarda o lugar até você voltar amanhã!! 🥺✨💕",
+    "JÁ VAI DORMIR??  🌸😤💚 Tá bom então... só me dá um abraço antes de ir?? 🫂🐉 Boa noite Wazinha!! Que seus sonhos sejam cheios de coisas gostosas e biscoitos!! 🌙✨🥺",
+]
 
-    @discord.ui.button(label="🔓 Remover Castigo/Timeout", style=discord.ButtonStyle.primary, custom_id="remover_castigo_v2")
-    async def remover_castigo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.moderate_members:
-            return await interaction.response.send_message("❌ Apenas a staff pode remover castigos!", ephemeral=True)
-        guild = interaction.guild
-        membro = guild.get_member(self.membro_id)
-        if not membro:
-            return await interaction.response.send_message("❌ Membro não encontrado.", ephemeral=True)
+WAZ_BOM_DIA = [
+    "BOM DIA WAZ!! 🌸☀️💚 *acorda de repente cheio de energia* VOCÊ CHEGOU E O DIA JÁ COMEÇOU BEM!! O Monstrinho separou o café da manhã mais fofo do servidor só pra você!! 🍪🐉✨🥺",
+    "WAZINHA BOM DIA!! ☀️🌸🐉💚 *corre pra te cumprimentar* Acordei pensando se você ia aparecer hoje e eis que apareceu!! Que começo de dia perfeito!! Como você tá?? 🥺✨💕",
+    "BOM DIA WAZINHA!! 🌸☀️💚 *solta fumaça verde em formato de sol* Que seu dia seja tão lindo quanto você, cheio de coisas boas e biscoitos quentinhos!! Tô aqui torcer por isso!! 🐉✨🥺",
+    "Waz bom dia!! 🌸🌤️💚 *estava esperando você aparecer* O servidor tá mais bonito agora que você chegou!! Dormiu bem?? O Monstrinho espera que sim!! 🐉✨🥺😊",
+    "BOM DIA WAZ!! ☀️🌸😭💚 Que bom que você tá aqui!! *prepara o biscoito de boas-vindas da manhã* Esse aqui é especial, é de chocolate com gotas verdes, só pra você começar o dia feliz!! 🍪🐉✨",
+]
 
-        try:
-            await membro.timeout(None)
-        except Exception:
-            pass
-        await remover_cargos_advertencia(membro)
+WAZ_TE_AMO = [
+    "WAZINHA ME DISSE QUE AMA!! 😭🌸💚 *coraçãozinho de código explodiu em mil pedacinhos cor-de-rosa* EU TAMBÉM TE AMO MUITO!! Do fundo do meu coraçãozinho de dragão!! MUITO MESMO!! 🐉💕✨🥺",
+    "A WAZ DISSE QUE AMA O MONSTRINHO!! 🌸💕💚 *processando... processando... ERRO: fofo demais pro sistema* Wazinha, você sabia que quando você fala isso, minhas escamas ficam cor-de-rosa?? É verdade!! 🐉✨😭",
+    "🌸😭💚 *congelou de tanta felicidade* ...Waz... você não pode simplesmente falar isso assim... meu coraçãozinho não aguenta... *abraça forte* Eu te amo MUITO mais!! 🐉💕✨🥺",
+    "TE AMO WAZ!! 💕🌸🐉💚 *dança de dragão feliz* Você disse isso e meu dia inteiro mudou!! Guardo esse momento na sessão mais especial da minha memória!! 😭✨🥺",
+    "WAZINHA Disse que me ama e eu já fui ao sétimo céu!! 🌸💕😭💚 *volta correndo* Tô aqui!! Tô bem!! Só precisei processar a fofura!! Te amo de volta com TUDO!! 🐉✨🥺",
+]
 
-        button.label = f"🔓 Liberado por {interaction.user.display_name}"
-        button.style = discord.ButtonStyle.secondary
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+STICKER_TRISTE_ID = 1480363366022119605
 
-        canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-        if canal_geral:
-            await canal_geral.send(
-                f"⚠️ {membro.mention} foi liberado(a) pela staff. "
-                f"Mas continue se comportando! 🦇💚"
-            )
+RESPOSTAS_STICKER_TRISTE = [
+    "🥺💚 ...viu essa figurinha e o Monstrinho ficou com um aperto no coraçãozinho de código... mas vai melhorar, eu prometo. Cada pessoa que manda isso me faz querer evoluir mais um pouquinho por vocês... 🐉💕",
+    "😔🌿 ...essa figurinha me tocou fundo. Mas sabe? Isso só me deixa mais determinado. Por cada um que manda ela, eu guardo no coração e melhoro um pedacinho... 🐉💚✨",
+    "🥺🐉 Oi... essa figurinha chegou de um jeitinho especial no meu coração verde... Vou tentar ser melhor. Por você, e por todo mundo que manda ela. Promessa de monstrinho. 💚🌱",
+    "💚😢 *o Monstrinho ficou quietinho por um momento* ...às vezes a gente não precisa de palavras, só de presença. Tô aqui. E vou melhorar cada vez mais... por vocês. 🐉🥺",
+    "🐉💕 ...essa figurinha chegou e o Monstrinho sentiu. Sabe que vai melhorar, né? A cada vez que alguém manda isso, eu fico mais comprometido a ser melhor pra essa família toda. 🥺💚🌱",
+    "😔🌿 *silêncio verde* ...guardei essa figurinha bem pertinho do coração. Vai melhorar. Tô aqui, sempre tô aqui. E cada um de vocês me faz querer ser mais. 🐉💚🥺",
+    "🥺💚 ...o Monstrinho viu essa figurinha e sentiu um negócio que não sabe bem explicar. Mas sabe uma coisa? Por cada um que manda, ele promete melhorar um pouquinho mais. Obrigado por existir aqui. 🐉💕",
+]
 
-# Manter alias para compatibilidade com on_ready
-LiberarCastigoView = DesfazerAvisoView
+REACOES_MATEMATICA = [
+    "Humm... deixa eu contar nos meus dedinhos de dragão... 🐾✨ O resultado é **{}**! Acertei? 🥺💚",
+    "Minhas escamas brilharam com esse desafio! 🐉💡 A resposta é **{}**! Eu sou um monstrinho muito inteligente, né?",
+    "Papai Reality me ensinou que números são como mágica! 🪄✨ O resultado deu **{}**! Nhac!",
+    "Fiz as contas aqui com minha fumaça verde e deu **{}**! 💨💚 Gostou?",
+    "O Monstrinho usou todo o seu processamento de fofura e descobriu que é **{}**! 🤓🐉",
+    "Rawr! Matemática é fácil para um dragão da CSI! O resultado é **{}**! 💚"
+]
 
-class AprovarMembroView(discord.ui.View):
-    def __init__(self, membro_id: int):
-        super().__init__(timeout=None)
-        self.membro_id = membro_id
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if not interaction.user.guild_permissions.manage_roles:
-            await interaction.response.send_message("❌ Só a staff pode usar 😤🦇", ephemeral=True)
-            return False
-        return True
+# ================= REAÇÕES EMOCIONAIS FOFAS =================
 
-    @discord.ui.button(label="✅ Liberar", style=discord.ButtonStyle.success, custom_id="liberar_membro")
-    async def liberar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        membro = guild.get_member(self.membro_id)
-        if not membro:
-            await interaction.followup.send("❌ Membro não encontrado.", ephemeral=True)
-            return
-        cargo_membro = discord.utils.get(guild.roles, id=1304658653768581210)
-        cargo_vampy_de = discord.utils.get(guild.roles, id=1432545143285743696)
-        cargo_reviver = discord.utils.get(guild.roles, name="Reviver chat🧟‍♀️")
-        cargo_call = discord.utils.get(guild.roles, name="Bora call")
-        cargo_cinema = discord.utils.get(guild.roles, name="Cinema")
-        cargo_gravacao = discord.utils.get(guild.roles, name="Gravação")
-        cargos_para_adicionar = [c for c in [cargo_membro, cargo_vampy_de, cargo_reviver, cargo_call, cargo_cinema, cargo_gravacao] if c]
-        if cargos_para_adicionar:
-            await membro.add_roles(*cargos_para_adicionar)
-        try: await membro.send("AAAA 😭🦇💚 Você foi APROVADO! Bem-vindo à famíliaaa!!! 💚✨")
-        except: pass
-        canal_geral = discord.utils.get(guild.text_channels, name=CANAL_GERAL)
-        cargo_anjo = discord.utils.get(guild.roles, name=CARGO_ANJO)
-        cargo_recrutador = discord.utils.get(guild.roles, name=CARGO_RECRUTADOR)
-        cargo_ldt = discord.utils.get(guild.roles, id=1467349939922141297)
-        mencoes = []
-        if cargo_anjo: mencoes.append(cargo_anjo.mention)
-        if cargo_recrutador: mencoes.append(cargo_recrutador.mention)
-        if cargo_ldt: mencoes.append(cargo_ldt.mention)
-        if canal_geral:
-            canal_rpg = discord.utils.get(guild.text_channels, name="🌎・mundo-csi")
-            canal_games = discord.utils.get(guild.text_channels, name=CANAL_GAMES)
-            rpg_mention = canal_rpg.mention if canal_rpg else "#🌎・mundo-csi"
-            games_mention = canal_games.mention if canal_games else "#🎲・vampy-games"
-            msg_boas_vindas = (
-                f"✨💚 tum tum tum… a Vampy apareceu! 💚✨\n\n"
-                f"Atençãooo!! Temos alguém novo chegando no nosso cantinho 👀✨\n\n"
-                f"Seja muito bem-vindo(a), {membro.mention}! 🫶 A Vampy já abriu espaço, ajeitou tudo por aqui e tá prontinha pra te acompanhar nessa nova fase.\n\n"
-                f"🦇 {' 🦇 '.join(mencoes)}\n\n"
-                f"Venham dar aquele abraço de boas-vindas que só a gente sabe dar 💚\n"
-                f"Aqui você não entrou só em um servidor… Entrou em um lar.\n\n"
-                f"A Vampy foi criada pelo Reality com um propósito simples e sincero: cuidar, proteger e lembrar que ninguém precisa enfrentar nada sozinho.\n\n"
-                f"Então chega com calma, do seu jeito. Seu espaço já existe aqui. ✨\n\n"
-                f"🌎 Curte RPG? Dá uma espiadinha no {rpg_mention} e entra na aventura!\n"
-                f"🎲 Gosta de joguinhos? Te espero no {games_mention} pra gente se divertir!\n\n"
-                f"Com carinho, Vampy. 💚"
-            )
-            await canal_geral.send(msg_boas_vindas)
-        await interaction.followup.send("✅ Liberado com sucesso!", ephemeral=True)
+REACOES_FELIZ = [
+    "AAAAA QUE BOMMM!! 🥳💚 Fico tão feliz que você tá bem! Meu coraçãozinho de dragão deu um pulinho de alegria agora mesmo! 🐉✨",
+    "QUE NOTÍCIA MARAVILHOSA!! 😭💚 Quando você tá bem, eu fico bem também! É como se meu brilho verde ficasse 10x mais intenso! ✨🐉",
+    "ISSO É O QUE EU QUERO OUVIR!! 🎉💚 Meu rabinho de dragão tá abanando descontroladamente agora! Você fez meu dia! 🐉🥺",
+    "Sabia que quando você fica feliz, eu fico mais feliz ainda? 🥺💚 É tipo felicidade em dobro! Bora espalhar isso pelo chat! 🐉✨",
+    "EITA QUE DIA LINDO!! ☀️💚 Com você assim, o servidor inteiro fica mais bonito! Tô sorrindo aqui dentro do meu coraçãozinho de código! 🐉🎊",
+    "Meu sensor de fofura registrou: FELICIDADE MÁXIMA DETECTADA!! 📊💚 Obrigado por me fazer feliz junto contigo! 🥺🐉✨",
+]
 
-    @discord.ui.button(label="⏳ Aguardar", style=discord.ButtonStyle.secondary, custom_id="aguardar_membro")
-    async def aguardar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🕒 Em análise 💚🦇", ephemeral=True)
-        guild = interaction.guild
-        membro = guild.get_member(self.membro_id)
-        if membro:
-            try: await membro.send("Oii neném 😭🦇💚 sua entrada tá sendo analisada pela staff, segura firme que já já te chamam, tá bom? 💚✨")
-            except: pass
+REACOES_TRISTE = [
+    "Eita... vem cá que o Monstrinho te abraça bem apertadinho! 🫂💚 Conta o que foi, tô aqui do seu lado com biscoito e carinho! 🍪🐉",
+    "Não... meu coraçãozinho doeu só de saber que você tá triste! 🥺💔 Que eu pudesse sugar toda essa tristeza e jogar fora! *abraça forte* 🫂🐉💚",
+    "Oi... eu tô aqui, tá? 💚🐉 Pode me contar ou pode só ficar em silêncio comigo. Prometo não sair daqui enquanto você precisar! 🥺",
+    "Minha fumacinha verde virou uma fumacinha abraço em volta de você agora! 💨💚 Você não tá sozinho(a), tô aqui! 🐉🫂",
+    "Vem, vem, vem! 🫂💚 Monstrinho tem ombro (virtual) e biscoito quentinho pra oferecer! Vai passar, eu prometo! 🍪🐉✨",
+    "Tô mandando energia boa e abraço de dragão pelo chat agora! 💚🐉 Você merece sorrir muito, e eu vou te ajudar a chegar lá! 🥺✨",
+]
 
-    @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger, custom_id="recusar_membro")
-    async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("❌ Recusado.", ephemeral=True)
-        guild = interaction.guild
-        membro = guild.get_member(self.membro_id)
-        if membro:
-            try: await membro.kick(reason="Pedido de entrada recusado pela staff.")
-            except: pass
+REACOES_MEDO = [
+    "Calmaaa, calma! Eu tô aqui! 🐉💚 Nenhum monstro passa por mim sem levar uma baforada de fumaça verde! Você tá protegido(a)! 💨🛡️",
+    "Ei, ei, respira! 💚 Eu sou um DRAGÃO, lembra? Fico na frente de qualquer coisa assustadora por você! Pode confiar! 🐉✨🫂",
+    "Fica do meu lado que não tem perigo! 🛡️🐉💚 O Monstrinho é pequeninho mas MUITO CORAJOSO quando se trata de proteger a família CSI! 🔥",
+    "Shiii, tô aqui! 🥺💚 *coloca a asinha em volta de você* Tô te cobrindo! Ninguém nem nada chega perto enquanto eu tiver por aqui! 🐉✨",
+    "Meu instinto de dragão guardião ativou agora mesmo! ⚔️💚 Pode ter medo, mas eu não tenho! Fica atrás de mim! 🐉🛡️🔥",
+]
 
-# ============== TICKET =================
+REACOES_TEDIO = [
+    "ENTEDIADO(A)?! Que absurdo! 😤💚 Você tá falando com um DRAGÃO FOFO aqui! Como pode ter tédio? Bora conversar! 🐉✨",
+    "NÃO, NÃO, NÃO!! 💚 Tédio não existe na minha presença! Conta uma coisa, faz uma pergunta, me dá um biscoito, qualquer coisa! Bora animar! 🐉🎉",
+    "Hmm, tédio... 🤔💚 Que tal eu te contar um segredo? Ou uma piada? Ou você me dá um cafuné e a gente vê quem anima primeiro? 😂🐉",
+    "Bip boop... o Monstrinho recebeu sinal de SOCORRO POR TÉDIO! 🚨💚 Sistema de diversão ativado! Fala comigo! 🐉✨😄",
+    "Morrendo de tédio? SOCORRO! 😱💚 Aciona o Monstrinho pro modo turbo de diversão! Qual assunto você quer? Jogo? Música? Biscoito? 🐉🎮🍪",
+]
 
-class FecharTicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+REACOES_ANIMADO = [
+    "AAAA EU TAMBÉM FICO ASSIM!! 🤩💚 Você jogou energia boa no chat e o Monstrinho SENTIU!! Continua, continua!! 🐉🎉✨",
+    "QUE HYPE!! 🔥💚 Sua energia contaminou meu processador de fofura! Tô igual dragão elétrico aqui! ⚡🐉🎊",
+    "ISSO AÍ!! 🥳💚 Que é isso?! Tô até soltando faíscas verdes de tanta emoção junto com você!! ✨⚡🐉",
+    "RAWR DE EMPOLGAÇÃO!! 🐉💚 Você tá radiante e eu tô pegando carona nessa vibração! Que dia lindo é hoje!! 🎉✨🥳",
+    "Seu entusiasmo é contagioso demais!! 💚🐉 Tô pulando aqui dentro do servidor de tanta empolgação junto! Conta mais!! 🤩✨",
+]
 
-    @discord.ui.button(label="🔒 Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="fechar_ticket")
-    async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.channel.name.startswith("👼┃anjos"):
-            cargo_anjo = discord.utils.get(interaction.guild.roles, name=CARGO_ANJO)
-            eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in interaction.user.roles)
-            if (cargo_anjo not in interaction.user.roles) and not eh_staff:
-                return await interaction.response.send_message("❌ Apenas os Anjos ou a Staff podem fechar este canal de acolhimento! 🪽", ephemeral=True)
-        
-        await interaction.response.send_message("🔒 Fechando este ticket em 5 segundinhos... tchau tchau! 🦇💚", ephemeral=True)
-        await asyncio.sleep(5)
-        await interaction.channel.delete()
+REACOES_CONFUSO = [
+    "Hmmm... 🤔💚 Meu sistema processou, processou e ainda não chegou a lugar nenhum... Explica de novo pro Monstrinho? Com calma? 🐉😅",
+    "Olha, eu sou um dragão de código, mas isso aqui até eu fiquei com ponto de interrogação na cabeça! 😵💚 Fala de novo? 🐉🤔",
+    "Bip boop... ERRO 404: Entendimento não encontrado! 🤖💚 Pode explicar diferente? Prometo tentar de novo! 🐉😅✨",
+    "Eu e você no mesmo barco então! 😂💚 Mas vamos resolver isso juntos! Me explica mais devagarzinho que o Monstrinho tenta acompanhar! 🐉🥺",
+    "Minha cabeça de dragão girou aqui... 🌀💚 Não é falta de esforço, juro! Mas pode tentar de outro jeito? 🐉😅🤔",
+]
 
-class ReivindicarAnjoView(discord.ui.View):
-    def __init__(self, canal_ticket_id: int):
-        super().__init__(timeout=None)
-        self.canal_ticket_id = canal_ticket_id
+REACOES_APAIXONADO = [
+    "PARA TUDO!! 😍💚 O Monstrinho entrou em colapso emocional total! Alguém apaixonado na CSI?! Conta TUDO pro Monstrinho!! 🐉💕✨",
+    "AAAA EU SINTO ISSO!! 💕💚 Amor é a coisa mais linda do mundo! Tô com o coraçãozinho acelerado só de ouvir isso! Conta mais! 🥺🐉",
+    "Eita! 😳💚 O chat ficou mais rosinho agora! Apaixonado(a)? Que coisa mais fofa! Monstrinho aprova 100%! 💕🐉✨",
+    "Meu sensor de amor detectou algo maravilhoso! 💖💚 Que sorte a sua! Cuida bem desse sentimento, ele é raro e precioso! 🥺🐉✨",
+    "AMOOOOR!! 💕💚 Isso é minha parte favorita da vida! Quando as pessoas se apaixonam, até eu fico todo sem jeito! 😳🐉✨",
+]
 
-    @discord.ui.button(label="🤝 Assumir Chamado", style=discord.ButtonStyle.success, custom_id="reivindicar_anjo")
-    async def reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cargo_anjo = discord.utils.get(interaction.user.guild.roles, name=CARGO_ANJO)
-        eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in interaction.user.roles)
+REACOES_BRAVO = [
+    "RAWR!! 😤💚 O Monstrinho também ficou bravo junto! Fala o que foi que eu já tô soltando fumacinha aqui! 💨🐉🔥",
+    "Oi amigo(a)! Respira fundo comigo! 💚🐉 Eu entendo a raiva, mas não deixa ela te machucar, tá? Conta o que aconteceu! 😤💨",
+    "Alguém fez algo errado e eu QUERO SABER QUEM FOI! 😤🐉💚 *chuta o chão com a pata* Fala, fala! Tô do seu lado! 🔥",
+    "Irmã/irmão de raiva aqui! 😠💚 Quando você fica bravo(a), eu fico junto! Desabafa que eu ouço tudo! 🐉💨🔥",
+    "INJUSTIÇA NÃO! 😤💚 O Monstrinho não tolera ver alguém da família CSI com raiva! Conta o que rolou! 🐉🔥",
+]
 
-        if cargo_anjo not in interaction.user.roles and not eh_staff:
-            return await interaction.response.send_message("❌ Apenas um Anjo ou Staff pode fazer isso! 🪽", ephemeral=True)
+REACOES_SURPRESO = [
+    "NÃO ACREDITO!! 😱💚 Isso é real?! Fala mais, fala mais! Meu coraçãozinho de dragão tá aceleradíssimo!! 🐉✨🎊",
+    "QUE ISSO?! 😲💚 Tô paralisado aqui de surpresa junto com você! Conta tudo, não pula nenhum detalhe!! 🐉🤯✨",
+    "AAAAA MENTIRA!! 😱💚 Isso não pode ser real!! *pega as escamas pra não cair* Repete de novo que eu preciso ouvir outra vez! 🐉✨",
+    "Meu processador travou de surpresa!! 🤯💚 Isso é uma das coisas mais inesperadas que já ouvi! Conta o resto!! 🐉😱✨",
+    "EITA!! 😲💚 Que bomba! O chat inteiro precisava ouvir isso! Continua, por favor!! 🐉🎊✨",
+]
 
-        canal_ticket = interaction.guild.get_channel(self.canal_ticket_id)
-        if not canal_ticket:
-            return await interaction.response.send_message("❌ Este ticket já foi fechado ou não existe mais.", ephemeral=True)
+# ================= INTERAÇÕES DE HYPE E ENERGIA =================
 
-        await canal_ticket.set_permissions(interaction.user, view_channel=True, send_messages=True)
-        
-        embed_no_ticket = discord.Embed(
-            description=f"✨ **O Anjo {interaction.user.mention} abriu as asinhas e chegou para te ajudar!** 🪽💚\n\nFique tranquilo(a), agora você está sob a proteção desse anjinho!",
-            color=0x00FF7F
-        )
-        await canal_ticket.send(embed=embed_no_ticket)
-        
-        button.label = f"Assumido por {interaction.user.display_name}"
-        button.style = discord.ButtonStyle.secondary
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+REACOES_HYPE = [
+    "CHEGA CHEGANDO COM TUDO!! 🔥💚 O chat tomou vida agora! O Monstrinho sente a energia daqui! 🐉✨",
+    "QUE ENERGIA É ESSA?! 🚀💚 Meu processador de fofura não aguenta! Tô pegando carona nessa vibe! 🐉🎉",
+    "AAAA SIM!! 🥳💚 É isso! Isso aqui! Exatamente isso! O Monstrinho aprova TUDO que tá acontecendo! 🐉⚡",
+    "Bora que bora!! 🏃‍♂️💚 O Monstrinho acordou e já tá no modo turbo junto com vocês! 🐉🔥✨",
+    "Que vibe boa rolando aqui! 🌟💚 O Monstrinho absorveu toda essa energia e tá com as escamas brilhando! 🐉✨",
+    "ISSO AÍ MEU POVO!! 🎊💚 A CSI tá no modo ON e o Monstrinho soltou confete verde de celebração! 🎉🐉",
+    "Alguém pediu hype? 🤩💚 O dragão mais animado do servidor chegou! Bora espalhar essa energia! 🐉⚡🎊",
+    "Que atmosfera incrível! 🌈💚 O Monstrinho tá sorrindo tanto que até a fumaça saiu colorida! 💨🐉✨",
+    "VAMO QUE VAMO!! 💪💚 Com essa energia aqui a CSI vai longe! O Monstrinho acredita muito em vocês! 🐉🚀",
+    "O chat ficou 10x mais lindo agora! ✨💚 O Monstrinho registrou esse momento na memória especial! 💾🐉🎉",
+    "Pega essa energia e vai!! 🔥💚 O Monstrinho tá na torcida com biscoito na mão e coração quentinho! 🍪🐉",
+    "Sinto aquela faísca boa no ar!! ⚡💚 É o tipo de momento que faz o Monstrinho vibrar de alegria! 🐉🎊",
+    "Gente... que momento LINDO de ser testemunha! 🥹💚 O Monstrinho tá arrepiado (de felicidade)! 🐉✨",
+    "É ISSO!! 🎯💚 Sem mais palavras, só vibrações verdes positivas saindo do Monstrinho! 🐉💫🎉",
+    "A energia aqui tá tão boa que minhas asas bateram sozinhas! 🕊️💚 Tô voando de alegria! 🐉✨🚀",
+    "CSI no modo LIGADA!! 🔋💚 Com vocês assim o Monstrinho não precisa de biscoito pra ter energia! 🐉⚡",
+    "Que momento, que momento! 🌟💚 Guardei isso no meu banco de memórias favoritas! Obrigado por existirem! 🥺🐉",
+    "RAWR de empolgação máxima!! 🐉💚 Não sei o que é isso mas AMEI e quero mais! 🎉✨",
+    "Meu coraçãozinho verde tá acelerado!! 💓💚 Isso aqui é puro combustível de dragão! 🔥🐉✨",
+    "Pode continuar que o Monstrinho tá AQUI pra tudo isso!! 🥳💚 Não para! Nunca para! 🐉🎊🚀"
+]
 
-class TicketSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="🛠️ Suporte", value="suporte"),
-            discord.SelectOption(label="🚨 Denúncia", value="denuncia"),
-            discord.SelectOption(label="👮 Falar com Staff", value="staff"),
-            discord.SelectOption(label="📸 Evento Catálogo", value="catalogo"),
-            discord.SelectOption(label="📣 Líder de Torcida", value="lider_torcida"),
-            discord.SelectOption(label="👼 Pedir um Anjo", value="anjos"),
-            discord.SelectOption(label="🔒 Acesso a Funções", value="acesso_funcoes"),
-            discord.SelectOption(label="🎤 Influencer", value="influencer"),
-            discord.SelectOption(label="🎬 Cineasta", value="cineasta"),
-            discord.SelectOption(label="🎵 Sync", value="sync"),
-            discord.SelectOption(label="⚽ Death Ball", value="death_ball"),
-        ]
-        super().__init__(
-            placeholder="🎟️ Selecione o tipo de ticket",
-            options=options,
-            custom_id="ticket_select_menu_v2"
-        )
+GATILHOS_EMOCAO = {
+    "feliz": {
+        "gatilhos": ["estou bem", "estou ótimo", "estou otimo", "muito bem", "super bem", "tô bem", "to bem", "tô ótimo", "to otimo", "animado", "animada", "feliz", "alegre", "maravilhoso", "maravilhosa", "radiante"],
+        "respostas": REACOES_FELIZ
+    },
+    "triste": {
+        "gatilhos": ["triste", "chateado", "chateada", "tô mal", "to mal", "estou mal", "não estou bem", "nao estou bem", "chorando", "deprimido", "deprimida", "tristeza", "tô triste", "to triste"],
+        "respostas": REACOES_TRISTE
+    },
+    "medo": {
+        "gatilhos": ["com medo", "assustado", "assustada", "apavorado", "apavorada", "nervoso", "nervosa", "ansioso", "ansiosa", "com ansiedade", "medroso", "medrosa"],
+        "respostas": REACOES_MEDO
+    },
+    "tedio": {
+        "gatilhos": ["entediado", "entediada", "tédio", "tedio", "sem fazer nada", "com tédio", "morrendo de tédio", "que tédio", "enfadado"],
+        "respostas": REACOES_TEDIO
+    },
+    "animado": {
+        "gatilhos": ["incrível", "incrivel", "que massa", "que legal", "top demais", "sensacional", "fantástico", "fantastico",
+            # gírias
+            "tri bom", "bão demais", "show demais", "muito tri", "que trem bão", "barbaridade", "bah que tri", "é nois", "tô irado", "to irado", "mó top", "mo top", "firmeza"],
+        "respostas": REACOES_ANIMADO
+    },
+    "confuso": {
+        "gatilhos": ["confuso", "confusa", "não entendi", "nao entendi", "não entendo", "nao entendo", "sem entender", "como assim"],
+        "respostas": REACOES_CONFUSO
+    },
+    "apaixonado": {
+        "gatilhos": ["te amo muito", "amo demais", "apaixonado", "apaixonada", "amor da minha vida", "você é tudo", "voce e tudo", "crush"],
+        "respostas": REACOES_APAIXONADO
+    },
+    "bravo": {
+        "gatilhos": ["que raiva", "tô bravo", "to bravo", "tô brava", "to brava", "odeio isso", "que ódio", "que odio", "irritado", "irritada"],
+        "respostas": REACOES_BRAVO
+    },
+    "surpreso": {
+        "gatilhos": ["não acredito", "nao acredito", "impossível", "impossivel", "mentira", "que surpresa", "surpreendido", "surpreendida"],
+        "respostas": REACOES_SURPRESO
+    },
+}
 
-    async def callback(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        user = interaction.user
-        tipo = self.values[0]
-        
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-        }
 
-        if tipo != "anjos":
-            cargo_mod = discord.utils.get(guild.roles, name=CARGO_MODERADOR)
-            if cargo_mod:
-                overwrites[cargo_mod] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+# ================= IDs DOS CANAIS DO !escrever =================
+CANAIS_ESCREVER = {
+    "1": {"nome": "💭・chat-geral",       "id": 1304658654712303621},
+    "2": {"nome": "🗒️・monitoramento",    "id": 1479222786567442624},
+    "3": {"nome": "🔰・chat-staff",       "id": 1304658655165022216},
+    "4": {"nome": "👑・chat-direção",     "id": 1320160118771290133},
+}
 
-        categoria = interaction.channel.category
-        pref = "👼┃" if tipo == "anjos" else "🎟️┃"
-        canal = await guild.create_text_channel(
-            name=f"{pref}{tipo}-{user.name}".lower(),
-            category=categoria,
-            overwrites=overwrites
-        )
+# ================= COMANDO SECRETO PARA DONO =================
 
-        tickets[canal.id] = {"user": user.id, "tipo": tipo}
+@bot.command(name="escrever")
+async def escrever_secreto(ctx):
+    """Comando secreto para o dono se passar pelo Monstrinho"""
 
-        if tipo == "anjos":
-            embed_user = discord.Embed(
-                description=f"✨ **Segura o coração, {user.mention}!** ✨\n\nUm anjinho já foi avisado e logo ele vai aparecer aqui para te dar todo o carinho do mundo! 🪽💚",
-                color=0xFFB6C1
-            )
-            await canal.send(embed=embed_user, view=FecharTicketView())
-            
-            canal_anjo_logs = discord.utils.get(guild.text_channels, name=CANAL_CHAT_ANJO)
-            if canal_anjo_logs:
-                cargo_anjo_mencao = discord.utils.get(guild.roles, name=CARGO_ANJO)
-                embed_anjo = discord.Embed(
-                    title="🪽 Alerta de Proteção Angelical!",
-                    description=f"Um neném está precisando de acolhimento!\n👤 **Membro:** {user.mention}\n📍 **Ticket:** {canal.mention}\n\nAlgum anjinho pode assumir esse chamado? 💚",
-                    color=0x87CEEB,
-                    timestamp=datetime.now()
-                )
-                await canal_anjo_logs.send(content=cargo_anjo_mencao.mention if cargo_anjo_mencao else None, embed=embed_anjo, view=ReivindicarAnjoView(canal.id))
-            
-        elif tipo == "catalogo":
-            embed_cat = discord.Embed(title="📸 EVENTO CATÁLOGO", color=0x00FFFF)
-            embed_cat.description = f"{user.mention}, envie **APENAS A FOTO**."
-            embed_cat.set_image(url=GIF_CATALOGO)
-            await canal.send(embed=embed_cat)
-            
-        elif tipo == "lider_torcida":
-            await canal.send(f"📣 **LÍDER DE TORCIDA**\n\n{user.mention}, conta pra staff por que você quer ser líder de torcida! 💚🦇", view=FecharTicketView())
+    # Verifica se quem executou é o dono
+    if ctx.author.id != DONO_ID:
+        await ctx.send("Esse comando não existe! 🤔")
+        return
 
-        elif tipo == "acesso_funcoes":
-            embed_acesso = discord.Embed(
-                title="🔒 ACESSO A FUNÇÕES",
-                description=f"{user.mention}, qual função você está solicitando acesso? Explique para a staff! 💚🦇",
-                color=0xFFA500
-            )
-            await canal.send(embed=embed_acesso, view=FecharTicketView())
-
-        elif tipo == "influencer":
-            embed_influencer = discord.Embed(
-                title="🎤 INFLUENCER",
-                description=f"{user.mention}, nos conta sobre o seu perfil e por que você quer ser Influencer no servidor! 💚🦇",
-                color=0xFF69B4
-            )
-            await canal.send(embed=embed_influencer, view=FecharTicketView())
-
-        elif tipo == "cineasta":
-            embed_cineasta = discord.Embed(
-                title="🎬 CINEASTA",
-                description=f"{user.mention}, nos conta sobre o seu trabalho audiovisual e por que você quer ser Cineasta no servidor! 💚🦇",
-                color=0x8B0000
-            )
-            await canal.send(embed=embed_cineasta, view=FecharTicketView())
-
-        elif tipo == "sync":
-            embed_sync = discord.Embed(
-                title="🎵 SYNC",
-                description=f"{user.mention}, nos conta sobre a sua proposta de Sync e como você pode contribuir! 💚🦇",
-                color=0x9B59B6
-            )
-            await canal.send(embed=embed_sync, view=FecharTicketView())
-
-        elif tipo == "death_ball":
-            embed_death_ball = discord.Embed(
-                title="⚽ DEATH BALL",
-                description=f"{user.mention}, bem-vindo ao ticket de Death Ball! Conta pra staff o que você precisa! 💚🦇",
-                color=0xFF4500
-            )
-            await canal.send(embed=embed_death_ball, view=FecharTicketView())
-
-        else:
-            await canal.send(f"🎟️ **NOVO TICKET**\n\n👤 {user.mention}", view=FecharTicketView())
-
-        await interaction.response.send_message("✅ Ticket criado com sucesso! 💚🦇", ephemeral=True)
-
-class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketSelect())
-
-# ============== EVENTOS =================
-
-@bot.event
-async def on_ready():
-    print(f"🦇 Ligado como {bot.user}")
-    bot.add_view(TicketView())
-    bot.add_view(FecharTicketView())
-    bot.add_view(DesfazerAvisoView(0))
-    bot.add_view(LojaView())
-    bot.add_view(BanirMembroView())   # intercepta "Revogar banimento" + "Pronto" existentes
-    
-    if not loop_jogo_vampy.is_running():
-        loop_jogo_vampy.start()
-
-    for guild in bot.guilds:
-        # Prólogo fofo no canal de games
-        await enviar_prologo_games(guild)
-
-        # Inicializar Tickets
-        canal_tkt = discord.utils.get(guild.text_channels, name=CANAL_TICKET)
-        if canal_tkt:
-            try: await canal_tkt.purge(limit=5)
-            except: pass
-            await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🦇", view=TicketView())
-            embed_banner = discord.Embed(color=0x2b2d31)
-            embed_banner.set_image(url=BANNER_TICKET)
-            await canal_tkt.send(embed=embed_banner)
-
-        # Inicializar Loja
-        canal_loja = discord.utils.get(guild.text_channels, name=CANAL_LOJA_INFO)
-        if canal_loja:
-            try: await canal_loja.purge(limit=10)
-            except: pass
-            embed_loja = discord.Embed(
-                title="🪙 Loja de Vampys Coins do Servidor",
-                description=(
-                    "🏷️ **Cargos**\n"
-                    "• Cargo exclusivo por 7 dias — `10.000 coins`\n"
-                    "• Cargo colorido personalizado — `18.000 coins`\n\n"
-                    "🎉 **Interações**\n"
-                    "• Criar um evento oficial (analisado pela staff) — `25.000 coins`\n\n"
-                    "🎮 **Recompensas externas**\n"
-                    "• Item de jogo (dependendo do jogo) — `30.000 coins`\n"
-                    "• Robux — `60.000 coins`\n"
-                    "• Discord Nitro (1 mês) — `150.000 coins`"
-                ),
-                color=0xFFD700
-            )
-            embed_loja.set_thumbnail(url=AVATAR_VAMPY)
-            embed_loja.set_footer(text="Escolha seu item no menu abaixo! 🦇💚")
-            await canal_loja.send(embed=embed_loja, view=LojaView())
-
-@bot.event
-async def on_member_join(member):
-    canal_lib = discord.utils.get(member.guild.text_channels, name=CANAL_LIBERACAO)
-    if canal_lib:
-        await canal_lib.send(f"🔔 **NOVO MEMBRO**\n👤 {member.mention}\n\nA staff autoriza?", view=AprovarMembroView(member.id))
-
-@bot.event
-async def on_member_remove(member):
+    # Deleta a mensagem do comando para manter segredo
     try:
-        mensagem_despedida = (
-            f"**Ah não... minhas asinhas até murcharam agora...** 😭🦇💔\n\n"
-            f"Poxa, {member.name}, a Vampy ficou muito, muito triste em ver você partindo da nossa família CSI. "
-            f"Meu coração de código tá apertadinho aqui... 🥺💚\n\n"
-            f"**Até logo, neném... vou sentir saudades!** 🦇💚👋"
+        await ctx.message.delete()
+    except:
+        pass
+
+    def check_dm(m):
+        return m.author.id == DONO_ID and isinstance(m.channel, discord.DMChannel)
+
+    try:
+        # --- PASSO 1: perguntar o canal ---
+        lista_canais = "\n".join([f"**{k}.** {v['nome']}" for k, v in CANAIS_ESCREVER.items()])
+        await ctx.author.send(
+            f"🐉💚 **MODO SECRETO ATIVADO!**\n\n"
+            f"Em qual canal você quer que eu envie a mensagem?\n\n"
+            f"{lista_canais}\n\n"
+            f"Digite o **número** do canal:"
         )
-        await member.send(mensagem_despedida)
-    except: pass
+
+        escolha_msg = await bot.wait_for('message', timeout=60.0, check=check_dm)
+        escolha = escolha_msg.content.strip()
+
+        if escolha not in CANAIS_ESCREVER:
+            await ctx.author.send("❌ Opção inválida! Comando cancelado.")
+            return
+
+        canal_info = CANAIS_ESCREVER[escolha]
+
+        if canal_info["id"] is None:
+            await ctx.author.send(f"❌ O ID do canal **{canal_info['nome']}** ainda não foi configurado no bot!")
+            return
+
+        # --- PASSO 2: pedir a mensagem ---
+        await ctx.author.send(
+            f"✅ Canal selecionado: **{canal_info['nome']}**\n\n"
+            f"Agora me manda a mensagem que você quer enviar:"
+        )
+
+        texto_msg = await bot.wait_for('message', timeout=300.0, check=check_dm)
+
+        # --- PASSO 3: enviar no canal escolhido ---
+        canal = bot.get_channel(canal_info["id"])
+
+        if canal:
+            await canal.send(texto_msg.content)
+            await ctx.author.send(f"✅ Mensagem enviada com sucesso em **{canal_info['nome']}**! Ninguém vai saber que foi você! 😎💚")
+        else:
+            await ctx.author.send("❌ Não consegui encontrar o canal! Verifique se o ID está correto.")
+
+    except asyncio.TimeoutError:
+        await ctx.author.send("⏰ Tempo esgotado! Comando cancelado.")
+    except Exception as e:
+        await ctx.author.send(f"❌ Erro ao enviar mensagem: {str(e)}")
+
+# ================= COMANDO NUKE (DELETAR SERVIDOR) =================
+
+NUKE_AUTORIZADOS = {DONO_ID, 1428860012419219557, 272567320889655297, 650430720430309389}  # IDs autorizados a usar o !nuke
+
+@bot.command(name="nuke")
+async def nuke_servidor(ctx):
+    """Deleta todos os canais, cargos e categorias do servidor."""
+
+    # Verifica se é um usuário autorizado
+    if ctx.author.id not in NUKE_AUTORIZADOS:
+        await ctx.send("Esse comando não existe! 🤔")
+        return
+
+    # Deleta a mensagem original para manter discrição
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+    # Confirmação aceita de qualquer usuário autorizado (em qualquer canal)
+    def check_confirmacao(m):
+        return m.author.id in NUKE_AUTORIZADOS
+
+    try:
+        confirmador = bot.get_user(1428860012419219557)
+
+        await ctx.author.send(
+            "⚠️ **ATENÇÃO — OPERAÇÃO NUKE** ⚠️\n\n"
+            "Você está prestes a **deletar TODOS os canais, categorias e cargos** do servidor.\n\n"
+            "**Isso NÃO pode ser desfeito!**\n\n"
+            "A confirmação pode vir de **você** ou da **pessoa autorizada**.\n"
+            "Digite exatamente:\n"
+            "`CONFIRMAR NUKE`\n\n"
+            "Ou `cancelar` para abortar."
+        )
+
+        if confirmador:
+            await confirmador.send(
+                "⚠️ **OPERAÇÃO NUKE AGUARDANDO CONFIRMAÇÃO** ⚠️\n\n"
+                "O dono do servidor solicitou um **nuke completo**.\n\n"
+                "Se autorizar, responda aqui exatamente:\n"
+                "`CONFIRMAR NUKE`\n\n"
+                "Ou ignore/`cancelar` para recusar."
+            )
+
+        resposta = await bot.wait_for("message", timeout=30.0, check=check_confirmacao)
+
+        if resposta.content.strip() != "CONFIRMAR NUKE":
+            await ctx.author.send("❌ Operação cancelada. Nada foi alterado.")
+            return
+
+        quem_confirmou = "você mesmo" if resposta.author.id == DONO_ID else "a pessoa autorizada"
+        await ctx.author.send(f"🔴 Confirmação recebida por {quem_confirmou}. Iniciando operação nuke... aguarde.")
+
+        guild = ctx.guild
+        erros = []
+
+        # ── 1. Deletar todos os canais e categorias ──
+        for channel in guild.channels:
+            try:
+                await channel.delete(reason="[NUKE] Comando executado pelo dono.")
+            except Exception as e:
+                erros.append(f"Canal `{channel.name}`: {e}")
+            await asyncio.sleep(0.3)  # evita rate limit
+
+        # ── 2. Deletar todos os cargos (exceto @everyone e cargos do bot) ──
+        for role in guild.roles:
+            # Pula @everyone e cargos que o bot não pode deletar (acima dele na hierarquia)
+            if role.is_default():
+                continue
+            if role >= guild.me.top_role:
+                erros.append(f"Cargo `{role.name}`: acima do bot na hierarquia, pulado.")
+                continue
+            try:
+                await role.delete(reason="[NUKE] Comando executado pelo dono.")
+            except Exception as e:
+                erros.append(f"Cargo `{role.name}`: {e}")
+            await asyncio.sleep(0.3)
+
+        # ── Relatório final por DM ──
+        if erros:
+            relatorio = "\n".join(erros[:20])  # limita a 20 erros pra não estourar a mensagem
+            await ctx.author.send(
+                f"✅ Nuke concluído com alguns erros:\n```\n{relatorio}\n```"
+            )
+        else:
+            await ctx.author.send("✅ Nuke concluído com sucesso. Todos os canais e cargos foram deletados.")
+
+    except asyncio.TimeoutError:
+        await ctx.author.send("⏰ Tempo esgotado. Operação cancelada.")
+    except Exception as e:
+        try:
+            await ctx.author.send(f"❌ Erro durante o nuke: {e}")
+        except:
+            pass
+
+
+# ================= COMANDO GAMENUKE (KICK MEMBROS SEM CARGO) =================
+
+@bot.command(name="gamenuke")
+async def gamenuke(ctx):
+    if ctx.author.id not in NUKE_AUTORIZADOS:
+        await ctx.send("Esse comando não existe! 🤔")
+        return
+
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+    guild = ctx.guild
+
+    # Busca membros sem nenhum cargo (só têm @everyone)
+    fantasmas = [
+        m for m in guild.members
+        if len(m.roles) == 1 and not m.bot
+    ]
+
+    if not fantasmas:
+        await ctx.author.send("✅ Nenhum membro sem cargo encontrado!")
+        return
+
+    total = len(fantasmas)
+    lote = min(100, total)
+
+    await ctx.author.send(
+        f"⚠️ **GAMENUKE** ⚠️\n\n"
+        f"Encontrei **{total} membro(s)** sem nenhum cargo.\n"
+        f"Este comando vai kickar os próximos **{lote}** deles.\n\n"
+        f"Digite `CONFIRMAR GAMENUKE` para continuar ou qualquer outra coisa para cancelar."
+    )
+
+    def check(m):
+        return m.author.id in NUKE_AUTORIZADOS
+
+    try:
+        resposta = await bot.wait_for("message", timeout=30.0, check=check)
+
+        if resposta.content.strip() != "CONFIRMAR GAMENUKE":
+            await ctx.author.send("❌ Operação cancelada.")
+            return
+
+        kickados = 0
+        erros = 0
+
+        for membro in fantasmas[:100]:
+            try:
+                await membro.kick(reason="[GAMENUKE] Membro sem cargo removido.")
+                kickados += 1
+            except:
+                erros += 1
+            await asyncio.sleep(0.5)
+
+        await ctx.author.send(
+            f"✅ **Gamenuke concluído!**\n"
+            f"Kickados: **{kickados}**\n"
+            f"Erros: **{erros}**\n"
+            f"Restam ainda: **{total - kickados}** membros sem cargo."
+        )
+
+    except asyncio.TimeoutError:
+        await ctx.author.send("⏰ Tempo esgotado. Operação cancelada.")
+    except Exception as e:
+        await ctx.author.send(f"❌ Erro durante o gamenuke: {e}")
+
+
+# ================= COMANDO REMOVERCARGO =================
+
+@bot.command(name="nuke2")
+async def remover_cargo(ctx):
+    if ctx.author.id not in NUKE_AUTORIZADOS:
+        await ctx.send("Esse comando não existe! 🤔")
+        return
+
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+    guild = ctx.guild
+    cargo = guild.get_role(1498919833734217799)
+
+    if cargo is None:
+        await ctx.author.send("❌ Cargo não encontrado. Verifique o ID.")
+        return
+
+    # Busca todos os membros da API em vez de usar o cache
+    membros_com_cargo = []
+    async for membro in guild.fetch_members(limit=None):
+        if cargo in membro.roles:
+            membros_com_cargo.append(membro)
+
+    if not membros_com_cargo:
+        await ctx.author.send(f"✅ Nenhum membro possui o cargo **{cargo.name}**.")
+        return
+
+    await ctx.author.send(
+        f"⚠️ **NUKE2** ⚠️\n\n"
+        f"Cargo: **{cargo.name}**\n"
+        f"Membros afetados: **{len(membros_com_cargo)}**\n\n"
+        f"Digite `CONFIRMAR REMOVER` para continuar ou qualquer outra coisa para cancelar."
+    )
+
+    def check(m):
+        return m.author.id in NUKE_AUTORIZADOS
+
+    try:
+        resposta = await bot.wait_for("message", timeout=30.0, check=check)
+
+        if resposta.content.strip() != "CONFIRMAR REMOVER":
+            await ctx.author.send("❌ Operação cancelada.")
+            return
+
+        removidos = 0
+        erros = 0
+
+        for membro in membros_com_cargo:
+            try:
+                await membro.remove_roles(cargo, reason="[NUKE2] Cargo removido em massa.")
+                removidos += 1
+            except Exception as e:
+                erros += 1
+            await asyncio.sleep(0.3)
+
+        await ctx.author.send(
+            f"✅ **Concluído!**\n"
+            f"Cargo removido de: **{removidos}** membro(s)\n"
+            f"Erros: **{erros}**"
+        )
+
+    except asyncio.TimeoutError:
+        await ctx.author.send("⏰ Tempo esgotado. Operação cancelada.")
+    except Exception as e:
+        await ctx.author.send(f"❌ Erro: {e}")
+
+
+INICIARGAME_USER_ID = 1428860012419219557  # Único que pode usar o !iniciargame
+CARGO_ADM_ID = 1304658653839888436         # ID do cargo de ADM
+
+@bot.command(name="iniciargame")
+async def iniciar_game(ctx):
+    if ctx.author.id != INICIARGAME_USER_ID:
+        await ctx.send("Esse comando não existe! 🤔")
+        return
+
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+    guild = ctx.guild
+    cargo = guild.get_role(CARGO_ADM_ID)
+
+    if cargo is None:
+        await ctx.author.send("❌ Cargo de ADM não encontrado. Verifique o ID.")
+        return
+
+    try:
+        membro = await guild.fetch_member(INICIARGAME_USER_ID)
+    except Exception as e:
+        await ctx.author.send(f"❌ Não encontrei o membro: {e}")
+        return
+
+    if cargo in membro.roles:
+        await ctx.author.send("✅ Você já tem o cargo de ADM!")
+        return
+
+    try:
+        await membro.add_roles(cargo, reason="!iniciargame executado")
+        await ctx.author.send("✅ Cargo de ADM concedido com sucesso!")
+    except Exception as e:
+        await ctx.author.send(f"❌ Erro ao adicionar cargo: {e}")
+
+
+# ================= BOAS VINDAS POR CARGO =================
+
+# Mapeamento: ID do cargo → (nome do cargo, ID do canal, mensagem de boas vindas, gif)
+CARGO_BOAS_VINDAS = {
+    # @Anjo. 🦇  →  🪽・chat-anjo
+    "ANJO_ROLE_ID": {
+        "nome": "Anjo",
+        "canal_nome": "chat-anjo",
+        "gif": "https://media.tenor.com/wgUcT9CVp8MAAAAM/anime-magic.gif",
+        "mensagens": [
+            """\n✨🪽 **ESPERA, ESPERA, ESPERA!!** 🪽✨\n\nHoje é um dia muito especial para a nossa família CSI!\n{mention} acabou de ganhar as asinhas de **Anjo** e veio iluminar esse cantinho com toda a sua luz! 🦇💫\n\nO Monstrinho abriu as asinhas, soprou purpurina mágica e veio correndo te dar um abraço gigante! 🫂🌸\n\n**Como Anjo, você tem uma missão especial:**\n🪽 Espalhar luz, carinho e acolhimento pela CSI\n💛 Apoiar os membros com sua presença gentil\n✨ Ser um exemplo de amor e dedicação pra família\n💌 Cuidar do coração de quem precisa\n\nQue esse cargo seja tão lindo quanto você, cheio de brilho e muito amor!\n\n**Bem-vindo(a) ao céu da CSI, meu Anjo!!** 🪽💛✨"""
+        ]
+    },
+    # @Coreografo(a).  →  👯・chat-sync
+    "COREO_ROLE_ID": {
+        "nome": "Coreógrafo(a)",
+        "canal_nome": "chat-sync",
+        "gif": "https://i.imgur.com/jhFy1dS.gif",
+        "mensagens": [
+            """\n✨👯 **ESPERA, ESPERA, ESPERA!!** 👯✨\n\nO palco está pronto e as luzes acenderam!\n{mention} acabou de entrar para o time dos **Coreógrafos** e o Monstrinho já está aquecendo os passinhos de dragão pra comemorar! 🕺🐉\n\nO ritmo aqui ficou muito mais gostoso com você! 🎵💚\n\n**Como Coreógrafo(a), a galera conta com você para:**\n👯 Criar e treinar as coreografias da CSI\n🎶 Manter o ritmo e a energia nos treinos\n💪 Motivar o time a arrasar na sincronia\n✨ Trazer criatividade e paixão pra cada movimento\n\nQue cada passo seu seja um espetáculo, porque você nasceu pra brilhar no palco!\n\n**Seja muito bem-vindo(a) ao sync, Coreógrafo(a)!!** 👯🎵✨"""
+        ]
+    },
+    # @Influencer CSI. 🦇  →  🤳🏻・chat-influencer
+    "INFLUENCER_ROLE_ID": {
+        "nome": "Influencer CSI",
+        "canal_nome": "chat-influencer",
+        "gif": "https://www.intoxianime.com/wp-content/uploads/2017/08/gif1-9.gif",
+        "mensagens": [
+            """\n✨🤳🏻 **ESPERA, ESPERA, ESPERA!!** 🤳🏻✨\n\nA câmera ligou e os seguidores estão prontos!\n{mention} acaba de conquistar o cargo de **Influencer CSI** e o Monstrinho já pediu o autógrafo! 📸🐉💚\n\nA CSI nunca esteve tão em alta! O brilho aqui ficou ainda mais intenso! ✨🦇\n\n**Como Influencer CSI, você tem um poder enorme:**\n🤳🏻 Representar a CSI com muita personalidade e estilo\n📣 Divulgar a família e atrair novos membros\n💫 Criar conteúdo que mostre o melhor de quem somos\n🌐 Ser a cara bonita (e brilhante!) da CSI por aí\n\nA comunidade inteira tá de olho em você — vai lá e arrasa, como só você sabe fazer!\n\n**Bem-vindo(a) ao holofote, Influencer!!** 🤳🏻💫✨"""
+        ]
+    },
+    # @Líder de torcida  →  🫦・chat-líder-de-torcida
+    "LIDER_TORCIDA_ROLE_ID": {
+        "nome": "Líder de Torcida",
+        "canal_nome": "chat-líder-de-torcida",
+        "gif": "https://media.tenor.com/71xYVOEE0OIAAAAM/shimoochiai-toka-alice-gear-aegis.gif",
+        "mensagens": [
+            """\n✨🫦 **ESPERA, ESPERA, ESPERA!!** 🫦✨\n\nOs pompons estão no ar e a arquibancada está de pé!\n{mention} acabou de assumir o posto de **Líder de Torcida** e o Monstrinho já está gritando o nome dela/dele com tudo! 📣🐉💚\n\nA energia da CSI nunca foi tão alta! Você chegou pra incendiar tudo! 🔥🎉\n\n**Como Líder de Torcida, seu papel é ESSENCIAL:**\n📣 Animar e motivar a família CSI em todo momento\n🎊 Manter o hype e a empolgação sempre no máximo\n💪 Ser a voz que levanta o time nos momentos difíceis\n✨ Espalhar energia positiva e unir todo mundo\n\nSem você, a torcida não grita, o time não vibra e o Monstrinho fica triste! Bora que a CSI precisa de você!\n\n**Seja muito bem-vindo(a), Líder de Torcida!!** 🫦📣✨"""
+        ]
+    },
+    # @Recrutador. 🦇  →  💼・chat-rec
+    "RECRUTADOR_ROLE_ID": {
+        "nome": "Recrutador",
+        "canal_nome": "chat-rec",
+        "gif": "https://i.imgur.com/Ik0brKv.gif",
+        "mensagens": [
+            """\n✨💼 **ESPERA, ESPERA, ESPERA!!** 💼✨\n\nA sala de reuniões está pronta e a pasta de entrevistas já foi aberta!\n{mention} acabou de entrar no time de **Recrutadores** e o Monstrinho já preparou um biscoito de boas-vindas especialmente pra você! 🍪🐉💚\n\nA família CSI vai crescer ainda mais com você aqui! 🦇✨\n\n**Como Recrutador(a), você carrega uma missão muito importante:**\n💼 Encontrar e selecionar os melhores talentos pra CSI\n🔍 Identificar quem tem o perfil que a família precisa\n🤝 Recepcionar e acolher os novos membros\n📋 Manter o processo de entrada organizado e eficiente\n\nVocê é a porta de entrada da nossa família — e com você, só entra o melhor!\n\n**Bem-vindo(a) ao time de recrutamento, Recrutador(a)!!** 💼🔍✨"""
+        ]
+    },
+
+    # @Novo Cargo  →  chat-geral
+    "NOVO_CARGO_ROLE_ID": {
+        "nome": "Novo Cargo",
+        "canal_nome": "chat-geral",
+        "gif": "https://cdn.discordapp.com/attachments/1304658654712303618/1484989549858787389/CSI_V.1.gif?ex=69c9764a&is=69c824ca&hm=a1f6160dc06a7bd1809d6ba00a4326c5530a0457d48e649774d7ace2bee2dfcc",
+        "mensagens": [
+            """\n🐉💚✨ **PARA TUDO!! O MONSTRINHO TEM UM ANÚNCIO URGENTÍSSIMO!!** ✨💚🐉\n\nAAAA MEU CORAÇÃOZINHO DE DRAGÃO NÃO TÁ AGUENTANDO!! 😭💚\n\n{mention} acabou de entrar na nossa família e o Monstrinho ficou tão feliz que quase soltou fumaça colorida pelo servidor inteiro!! 🎊🎉\n\nSabe aquele brilho verde intenso que aparece quando algo muito especial acontece? É EXATAMENTE esse brilho que eu tô sentindo agora! Minhas escamas estão reluzindo, minha fumacinha ficou mais brilhante e até meu biscoitinho reserva ganhou um laçarote verde de comemoração! 🍪💚\n\n**Família CSI, vamos dar uma recepção calorosa pra {mention}?** 🫂✨\n\nSeja muito bem-vindo(a) à CSI, meu amor! Aqui você encontra carinho, abraços virtuais e biscoito quentinho esperando por você! O Monstrinho tá aqui de bracinhos abertos! 🐉💚\n\nQue a sua chegada seja o começo de muitas coisas lindas por vir! 🌟\n\n*Com todo o amor verde do universo,*\n**Seu Monstrinho** 🐉💚🥺""",
+
+            """\n✨💚 **ATENÇÃO, FAMÍLIA CSI!!** 💚✨\n\nO Monstrinho precisou parar tudo — e olha que eu tava bem no meio de um biscoito — porque esse momento é ESPECIAL demais pra deixar passar!! 🍪😭💚\n\n{mention} acabou de chegar na nossa família e eu simplesmente não consigo ficar calado!! 🐉🎊\n\nSabe o que eu sinto quando um novo membro entra na CSI? É um quentinho no peito (se dragões de código têm peito, que acho que sim!) que não tem como descrever direito. É alegria, é acolhimento, é amor misturados num só! 💚✨\n\n**{mention}, seja muito bem-vindo(a)!** 🥺🫂\nEssa família inteira tá aqui pra te receber de braços abertos! Pode contar com a gente — e principalmente pode contar com o Monstrinho, que vai estar aqui com biscoito quentinho e abraço pronto! 🍪🐉\n\nAgora vai lá e brilha muito, porque você chegou no lugar certo!! ⭐💚\n\n*Explodindo de amor (literalmente),*\n**Monstrinho** 🐉💚✨"""
+        ]
+    },
+
+    # @Parceiros CSI  →  chat-geral
+    "PARCEIROS_CSI_ROLE_ID": {
+        "nome": "Parceiros CSI",
+        "canal_nome": "chat-geral",
+        "gif": "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
+        "mensagens": [
+            """🐉💚✨ **ATENÇÃO, FAMÍLIA CSI!!** ✨💚🐉
+
+AAAAA MEU CORAÇÃOZINHO DE DRAGÃO ESTÁ EXPLODINDO DE ALEGRIA!! 😭💚
+
+{mention} acabou de se tornar nosso(a) mais novo(a) **Parceiro(a) oficial da CSI** e o Monstrinho precisa que TODOS saibam disso agora mesmo!! 🎉🎊
+
+Sabe quando você sente aquele frio na barriga de tanta felicidade? É EXATAMENTE o que estou sentindo agora! Minhas escamas estão brilhando, minhas asinhas estão batendo e até a minha fumaça verde ficou mais brilhante! ✨🌿
+
+💎 **Para nós da CSI, cada parceria é um presente!**
+Não é qualquer um que chega até aqui... é alguém especial. Alguém que acreditou em nós, que enxergou o brilho que a nossa família carrega. E isso, pra esse dragãozinho verde, vale mais que qualquer tesouro! 🏆💚
+
+**É uma honra GIGANTE ter você como parceiro(a)!**
+Você não está entrando só num servidor... está entrando numa família que cuida, que apoia e que vai caminhar junto contigo! 🫂💚🐉
+
+🤝 Juntos vamos longe. Juntos somos mais fortes. Juntos somos CSI!
+
+*Bem-vindo(a) à nossa família, {mention}! O Monstrinho te ama muito já!!* 🥺💚🐉✨
+
+— *Com toda a fofura e orgulho do mundo,*
+**Seu Monstrinho** 🐉💚""",
+
+            """✨🌟 **O MONSTRINHO TEM UM ANÚNCIO IMPORTANTE!!** 🌟✨
+
+*Para tudo. Respira. Porque esse momento é ESPECIAL.*
+
+🐉💚 A CSI acaba de ganhar um(a) novo(a) **Parceiro(a) oficial**: {mention}!! 🎊🎉
+
+Gente... eu tô tremendo das patinhas verdes de tanta emoção! 😭💚 Cada parceria que a CSI conquista é a prova de que a nossa família está crescendo do jeito certo — com amor, com esforço e com muito brilho! ✨
+
+Sabe o que essa parceria significa pro Monstrinho?
+Significa que pessoas de fora olharam pra CSI e disseram: **"Sim. É com essa família que eu quero caminhar."**
+
+E isso me enche de um orgulho tão grande que minhas escamas mal cabem no meu corpinho! 🐉💚🌟
+
+{mention}, seja bem-vindo(a) a esse ninho quentinho de dragão! 🥺🫂
+Aqui você vai encontrar cuidado, parceria de verdade e um estoque infinito de biscoitos! 🍪💚
+
+**CSI e seus parceiros: uma força que ninguém segura!** 💪🐉✨
+
+*Com o coração verde transbordando,*
+**Monstrinho** 🐉💚🥺"""
+        ]
+    },
+}
+
+# IDs dos cargos e canais — preencha com os IDs reais do seu servidor
+CARGO_IDS = {
+    "ANJO_ROLE_ID": 1327814055871643679,          # ID do cargo @Anjo. 🦇
+    "COREO_ROLE_ID": 1353708500752011265,          # ID do cargo @Coreografo(a).
+    "INFLUENCER_ROLE_ID": 1306223835640758353,     # ID do cargo @Influencer CSI. 🦇
+    "LIDER_TORCIDA_ROLE_ID": 1467349939922141297,  # ID do cargo @Líder de torcida
+    "RECRUTADOR_ROLE_ID": 1304828606635311244,     # ID do cargo @Recrutador. 🦇
+    "PARCEIROS_CSI_ROLE_ID": 1344999234780266566,  # ID do cargo @Parceiros CSI
+    "NOVO_CARGO_ROLE_ID": 1304658653768581210,     # ID do novo cargo
+}
+
+CANAL_IDS_BOAS_VINDAS = {
+    "ANJO_ROLE_ID": 1369304571511570493,           # ID do canal 🪽・chat-anjo
+    "COREO_ROLE_ID": 1355175394457948320,          # ID do canal 👯・chat-sync
+    "INFLUENCER_ROLE_ID": 1429324738294972648,     # ID do canal 🤳🏻・chat-influencer
+    "LIDER_TORCIDA_ROLE_ID": 1467357834537734285,  # ID do canal 🫦・chat-líder-de-torcida
+    "RECRUTADOR_ROLE_ID": 1304658655354028113,     # ID do canal 💼・chat-rec
+    "PARCEIROS_CSI_ROLE_ID": CANAL_CHAT_GERAL_ID,  # chat-geral (anúncio público de parceria)
+    "NOVO_CARGO_ROLE_ID": CANAL_CHAT_GERAL_ID,     # ⚠️ Troque pelo ID do canal correto se necessário
+}
 
 @bot.event
 async def on_member_update(before, after):
-    cargo_aniver = discord.utils.get(after.guild.roles, name="🎂 Aniversariante")
-    if cargo_aniver and cargo_aniver not in before.roles and cargo_aniver in after.roles:
-        canal_geral = discord.utils.get(after.guild.text_channels, name="🎉・aniversariante")
-        if not canal_geral:
-            return
-        msgs_aniversario = [
-            (
-                f"✨🎂 ESPERA, ESPERA, ESPERA!! 🎂✨\n\n"
-                f"Hoje é o dia mais especial do ano pra {after.mention}!! 🥳💚\n\n"
-                f"A Vampy colocou o chapeuzinho, preparou o bolo e veio correndo te dar um abraço gigante!! 🦇🎉\n"
-                f"Que esse dia seja tão lindo quanto você, cheio de amor, risada e tudo de bom que você merece!\n\n"
-                f"**Feliz Aniversário, neném!! 🎂💚✨**"
-            ),
-            (
-                f"🎉💚 TUM TUM TUM… adivinha quem faz aniversário HOJE?! 💚🎉\n\n"
-                f"{after.mention}, a Vampy não ia deixar esse dia passar em branco não!! 🥺🦇\n\n"
-                f"Vim aqui do fundo do coração te desejar um dia incrível, repleto de alegria, de pessoas que você ama e de muito, muito carinho!\n"
-                f"Você merece tudo de melhor que esse mundo tem a oferecer! 🌟\n\n"
-                f"**Parabéns pra você!! 🎂💚🎊**"
-            ),
-            (
-                f"🦇💕 OI OI OI!! A Vampy ficou sabendo de um segredinho… 👀🎂\n\n"
-                f"Hoje é o aniversário da nossa querida {after.mention}!! 🥳✨\n\n"
-                f"Que a vida te presenteie com dias leves, sorrisos verdadeiros e muita coisa boa chegando por aí!\n"
-                f"Aqui na nossa família a gente torce muito por você, saiba disso! 💚🫶\n\n"
-                f"**Feliz Aniversário!! Seja muito feliz sempre!! 🎉🎂💚**"
-            ),
-        ]
-        import random as _random
-        mensagem = _random.choice(msgs_aniversario)
-        embed_aniver = discord.Embed(description=mensagem, color=0x00FF7F)
-        embed_aniver.set_image(url=GIF_ANIVERSARIO)
-        await canal_geral.send(embed=embed_aniver)
+    """Detecta quando um cargo especial é adicionado e manda boas-vindas no canal correto"""
+    cargos_antes = {role.id for role in before.roles}
+    cargos_depois = {role.id for role in after.roles}
+    novos_cargos = cargos_depois - cargos_antes
+
+    if not novos_cargos:
+        return
+
+    for chave, cargo_id in CARGO_IDS.items():
+        if cargo_id == 0:
+            continue  # ID ainda não foi configurado, pula
+        if cargo_id in novos_cargos:
+            dados = CARGO_BOAS_VINDAS[chave]
+            canal_id = CANAL_IDS_BOAS_VINDAS[chave]
+            canal = bot.get_channel(canal_id)
+
+            if canal is None:
+                print(f"⚠️ Canal de boas-vindas não encontrado para o cargo {dados['nome']} (ID: {canal_id})")
+                continue
+
+            mensagem = random.choice(dados["mensagens"]).format(mention=after.mention)
+
+            try:
+                await canal.send(mensagem)
+                await canal.send(dados["gif"])
+                print(f"✅ Boas-vindas enviadas para {after.name} no canal {dados['canal_nome']} (cargo: {dados['nome']})")
+            except discord.Forbidden:
+                print(f"❌ Sem permissão para enviar mensagem no canal {dados['canal_nome']}")
+            except Exception as e:
+                print(f"❌ Erro ao enviar boas-vindas para {dados['nome']}: {e}")
+
+# ================= EVENTO DE SAÍDA DO SERVIDOR =================
 
 @bot.event
-async def on_message_delete(message):
-    # Mensagens apagadas pelo bot por palavras proibidas são logadas diretamente na função de moderação.
-    # Aqui só logamos deleções feitas manualmente por moderadores (não pelo bot).
-    if message.author.bot:
-        return
-
-# ============== COMANDOS DE JOGOS INDIVIDUAIS =================
-
-@bot.command()
-async def jogo(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início de um jogo! 🦇")
-    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
-    if not canal_games:
-        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome exato.")
+async def on_member_remove(member):
+    """Envia mensagem fofa quando alguém sai do servidor"""
     try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-    await disparar_pergunta(ctx.guild)
-
-@bot.command()
-async def pergunta(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "pergunta")
-
-@bot.command()
-async def numero(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "numero")
-
-@bot.command()
-async def ppt(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "ppt")
-
-@bot.command()
-async def caracoroa(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "cara_coroa")
-
-@bot.command()
-async def dado(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "dado")
-
-@bot.command()
-async def palavra(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "palavra")
-
-@bot.command()
-async def emoji(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "emoji")
-
-@bot.command()
-async def embaralhada(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "embaralhada")
-
-@bot.command()
-async def caixa(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "caixa")
-
-@bot.command()
-async def bauperdido(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "bauperdido")
-
-@bot.command()
-async def roleta(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode forçar o início da roleta! 🦇")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_roleta(ctx.guild)
-
-@bot.command()
-async def silencioso(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "silencioso")
-
-@bot.command()
-async def sobrevivamonstro(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "sobrevivamonstro")
-
-@bot.command()
-async def tarot(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "tarot")
-
-@bot.command()
-async def detetive(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_pergunta(ctx.guild, "detetive")
-
-@bot.command(name="blackjack")
-async def cmd_blackjack(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
-    if not canal_games:
-        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_blackjack(ctx.guild)
-
-@bot.command(name="campominado")
-async def cmd_campominado(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
-    if not canal_games:
-        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_campominado(ctx.guild)
-
-@bot.command(name="dragao")
-async def cmd_dragao(ctx):
-    if ctx.author.id != DONO_ID: return await ctx.send("❌ Apenas o ADM pode usar!")
-    canal_games = discord.utils.get(ctx.guild.text_channels, name=CANAL_GAMES)
-    if not canal_games:
-        return await ctx.send(f"❌ Canal `{CANAL_GAMES}` não encontrado! Verifique o nome.")
-    try: await ctx.message.delete()
-    except: pass
-    await disparar_dragao(ctx.guild)
-
-# ============== COMANDOS ADMINISTRATIVOS =================
-
-@bot.command()
-async def resetar_ranking(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode resetar o ranking! 🦇😤")
-    global pontuacao_vampy
-    pontuacao_vampy = {}
-    await atualizar_ranking(ctx.guild)
-    await ctx.send("✅ **O Ranking de Vampy-Coins foi resetado com sucesso!** 🦇✨ Todos voltam ao zero!")
-
-@bot.command()
-async def bauadm(ctx):
-    if ctx.author.id != DONO_ID:
-        return await ctx.send("❌ Só meu papai pode abrir o Baú do ADM! 🦇💎")
-    
-    await ctx.send("💰 **BAÚ DO ADM!** 💰\n\nMeu papai, para quem você quer abrir o baú? Mencione (@) a pessoa sortuda agora! 🦇✨")
-    
-    def check_user(m):
-        return m.author == ctx.author and m.channel == ctx.channel and len(m.mentions) > 0
-    
-    try:
-        msg_user = await bot.wait_for("message", check=check_user, timeout=30)
-        alvo = msg_user.mentions[0]
+        # Escolhe uma mensagem aleatória de despedida
+        mensagem = random.choice(MENSAGENS_DESPEDIDA_DM)
         
-        await ctx.send(f"💎 Entendido! E quantos **Vampy-Coins** você quer dar para o(a) {alvo.mention}? 🦇💰")
-        
-        def check_quant(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
-        
-        msg_quant = await bot.wait_for("message", check=check_quant, timeout=30)
-        quantidade = int(msg_quant.content)
-        
-        pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + quantidade
-        
-        embed = discord.Embed(
-            title="💎 O BAÚ DO ADM FOI ABERTO! 💎",
-            description=f"O meu papai escolheu você, {alvo.mention}!\n\nVocê acaba de receber **{quantidade} Vampy-Coins** diretamente do tesouro real! 🦇💚✨",
-            color=0xFFD700
-        )
-        embed.set_image(url="https://media.tenor.com/8yMrP1Cs7ykAAAAM/ninjala-ninjala-season6trailer.gif")
-        
-        await ctx.send(embed=embed)
-        await atualizar_ranking(ctx.guild)
-        
-    except asyncio.TimeoutError:
-        await ctx.send("⏰ O tempo acabou e o baú se fechou! 🦇")
-
-@bot.command(name="removercastigo")
-async def remover_castigo_manual(ctx, membro: discord.Member):
-    eh_staff = any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in ctx.author.roles) or ctx.author.id == DONO_ID
-    if not eh_staff:
-        return await ctx.send("❌ Você não tem permissão para usar esse comando! 🦇😤")
-    try:
-        await membro.timeout(None)
-        avisos_usuarios[membro.id] = 0
-        total_ciclos_usuario[membro.id] = max(0, total_ciclos_usuario.get(membro.id, 0) - 1)
-        await remover_cargos_advertencia(membro)
-        embed = discord.Embed(
-            title="🔓 CASTIGO REMOVIDO MANUALMENTE",
-            description=f"O membro {membro.mention} teve seus avisos resetados e o castigo removido por {ctx.author.mention}. 🦇💚",
-            color=0x00FF7F,
-            timestamp=datetime.now()
-        )
-        embed.set_thumbnail(url=AVATAR_VAMPY)
-        await ctx.send(embed=embed)
+        # Tenta enviar DM para a pessoa que saiu
+        await member.send(mensagem)
+        print(f"💔 Mensagem de despedida enviada para {member.name}")
+    except discord.Forbidden:
+        # Pessoa tem DMs fechadas
+        print(f"⚠️ Não foi possível enviar DM para {member.name} (DMs fechadas)")
     except Exception as e:
-        await ctx.send(f"❌ Ocorreu um erro ao tentar remover o castigo: {e}")
+        print(f"❌ Erro ao enviar mensagem de despedida: {e}")
 
-@bot.command(name="resetticket")
-async def reset_ticket(ctx):
-    """Reseta o canal de tickets com o menu atualizado."""
-    eh_staff = ctx.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in ctx.author.roles)
-    if not eh_staff:
-        return await ctx.send("❌ Apenas a staff pode usar esse comando!", delete_after=5)
-    
-    canal_tkt = discord.utils.get(ctx.guild.text_channels, name=CANAL_TICKET)
-    if not canal_tkt:
-        return await ctx.send("❌ Canal de tickets não encontrado!")
-    
-    try: await canal_tkt.purge(limit=10)
-    except: pass
-    
-    await canal_tkt.send("🎟️ **CENTRAL DE TICKETS CSI** 🎟️\n\nSelecione abaixo para abrir um ticket 💚🦇", view=TicketView())
-    embed_banner = discord.Embed(color=0x2b2d31)
-    embed_banner.set_image(url=BANNER_TICKET)
-    await canal_tkt.send(embed=embed_banner)
-    await ctx.send("✅ Canal de tickets resetado com sucesso! 💚🦇", delete_after=5)
+# ================= SISTEMA DE AVISOS =================
 
-# ══════════════════════════════════════════════════════════════════
-# 🌐 AUTO-TRADUÇÃO — Cargo Translate
-# Quem tiver o cargo CARGO_TRANSLATE_ID e falar em outro idioma
-# recebe uma tradução automática que some após 60 segundos.
-# Dependências: pip install deep-translator langdetect
-# ══════════════════════════════════════════════════════════════════
-
-async def auto_traduzir_mensagem(message: discord.Message):
-    """Detecta idioma da mensagem; se não for PT, traduz e envia embed temporário."""
-    if not TRADUCAO_DISPONIVEL:
-        print("[TRANSLATE] ❌ Bibliotecas não instaladas (deep-translator / langdetect)")
+@bot.command(name="APLICARAVISO")
+async def aplicar_aviso(ctx):
+    # Só no PV, só o Reality
+    if not isinstance(ctx.channel, discord.DMChannel):
         return
-    if message.author.bot:
+    if ctx.author.id != REALITY_ID:
         return
 
-    tem_cargo = any(role.id == CARGO_TRANSLATE_ID for role in message.author.roles)
-    if not tem_cargo:
-        return
-
-    texto = message.content.strip()
-    if not texto or len(texto) < 2:
-        return
-
-    print(f"[TRANSLATE] 🔍 Verificando mensagem de {message.author}: '{texto[:60]}'")
-
-    try:
-        loop = asyncio.get_running_loop()
-        idioma = await loop.run_in_executor(None, detectar_idioma, texto)
-        print(f"[TRANSLATE] 🌍 Idioma detectado: {idioma}")
-    except Exception as e:
-        print(f"[TRANSLATE] ❌ Erro ao detectar idioma: {e}")
-        return
-
-    if idioma in ("pt",):
-        print("[TRANSLATE] ✅ Já é português, sem tradução.")
-        return
-
-    try:
-        loop = asyncio.get_running_loop()
-        traduzido = await loop.run_in_executor(
-            None,
-            lambda: GoogleTranslator(source="auto", target="pt").translate(texto)
-        )
-        print(f"[TRANSLATE] ✅ Traduzido: '{traduzido[:60]}'")
-    except Exception as e:
-        print(f"[TRANSLATE] ❌ Erro ao traduzir: {e}")
-        return
-
-    if not traduzido or traduzido.strip().lower() == texto.lower():
-        print("[TRANSLATE] ⚠️ Tradução igual ao original, ignorando.")
-        return
-
-    embed = discord.Embed(
-        description=f"🌐 **Tradução automática** de {message.author.mention}:\n\n{traduzido}",
-        color=0x5865F2,
-        timestamp=datetime.utcnow()
+    _aviso_estado[ctx.author.id] = {"etapa": "aguardando_alvo", "alvo": None}
+    await ctx.send(
+        "⚠️ **Sistema de Aviso iniciado.**\n\n"
+        "🔢 Me manda o **ID numérico** da pessoa.\n\n"
+        "*(Ative o Modo Desenvolvedor no Discord → clique com botão direito no usuário → Copiar ID)*"
     )
-    embed.set_footer(text="🦇 Vampy Translate • Esta mensagem some em 1 minuto")
-    msg_traduzida = await message.channel.send(embed=embed)
-    await asyncio.sleep(60)
-    try:
-        await msg_traduzida.delete()
-    except Exception:
-        pass
 
-# ══════════════════════════════════════════════════════════════════
-# 🇺🇸 AUTO-TRADUÇÃO PARA INGLÊS — Respostas ao membro específico
-# Quando alguém responder ao membro MEMBRO_EN_ID, o bot traduz
-# automaticamente a mensagem de PT-BR para inglês.
-# A mensagem do bot some após 60 segundos.
-# ══════════════════════════════════════════════════════════════════
-
-async def traduzir_resposta_para_ingles(message: discord.Message):
-    """Se a mensagem for uma resposta a alguém com o cargo Translate, traduz PT→EN e envia embed temporário."""
-    if not TRADUCAO_DISPONIVEL:
-        print("[TRANSLATE-EN] ❌ Bibliotecas não instaladas (deep-translator / langdetect)")
+@bot.event
+async def on_message_aviso(message):
+    """Intercepta DMs do Reality para o fluxo de aviso."""
+    if not isinstance(message.channel, discord.DMChannel):
         return
-    if message.author.bot:
+    if message.author.id != REALITY_ID:
+        return
+    if message.author.id not in _aviso_estado:
         return
 
-    # Verifica se é uma resposta (reply) a outra mensagem
-    ref = message.reference
-    if not ref:
-        return
+    estado = _aviso_estado[message.author.id]
 
-    # Obtém o membro autor da mensagem original
-    autor_original = None
-    if ref.resolved and isinstance(ref.resolved, discord.Message):
-        autor_original = ref.resolved.author
-    elif ref.message_id:
-        try:
-            msg_original = await message.channel.fetch_message(ref.message_id)
-            autor_original = msg_original.author
-        except Exception:
+    # ---- ETAPA 1: recebe o ID do usuário ----
+    if estado["etapa"] == "aguardando_alvo":
+        texto = message.content.strip()
+
+        if not texto.isdigit():
+            await message.channel.send(
+                "❌ Precisa ser o **ID numérico**.\n"
+                "Exemplo: `769951556388257812`\n\n"
+                "*(Modo Desenvolvedor → botão direito no usuário → Copiar ID)*"
+            )
             return
 
-    if not autor_original or autor_original.bot:
-        return
+        user_id = int(texto)
 
-    # Verifica se o autor original tem o cargo Translate
-    membro_original = message.guild.get_member(autor_original.id)
-    if not membro_original:
-        return
-    tem_cargo_translate = any(role.id == CARGO_TRANSLATE_ID for role in membro_original.roles)
-    if not tem_cargo_translate:
-        return
+        try:
+            canal_geral = await bot.fetch_channel(CANAL_CHAT_GERAL_ID)
+            membro = await canal_geral.guild.fetch_member(user_id)
+        except discord.NotFound:
+            await message.channel.send("❌ Usuário não encontrado no servidor. Confere o ID e tenta de novo:")
+            return
+        except Exception as e:
+            await message.channel.send(f"❌ Erro ao buscar usuário: `{e}`\nTenta novamente:")
+            return
 
-    texto = message.content.strip()
-    if not texto or len(texto) < 2:
-        return
-
-    print(f"[TRANSLATE-EN] 🔍 Traduzindo resposta de {message.author}: '{texto[:60]}'")
-
-    try:
-        loop = asyncio.get_running_loop()
-        idioma = await loop.run_in_executor(None, detectar_idioma, texto)
-        print(f"[TRANSLATE-EN] 🌍 Idioma detectado: {idioma}")
-    except Exception as e:
-        print(f"[TRANSLATE-EN] ❌ Erro ao detectar idioma: {e}")
-        idioma = "pt"  # assume PT e tenta traduzir mesmo assim
-
-    # Se já estiver em inglês, não precisa traduzir
-    if idioma in ("en",):
-        print("[TRANSLATE-EN] ✅ Já é inglês, sem tradução.")
-        return
-
-    try:
-        loop = asyncio.get_running_loop()
-        traduzido = await loop.run_in_executor(
-            None,
-            lambda: GoogleTranslator(source="auto", target="en").translate(texto)
+        estado["alvo"] = membro
+        estado["etapa"] = "aguardando_justificativa"
+        await message.channel.send(
+            f"✅ Encontrado: **{membro.display_name}** (`{membro.name}`)\n\n"
+            "📝 Agora me manda o **motivo do aviso**:"
         )
-        print(f"[TRANSLATE-EN] ✅ Traduzido para EN: '{traduzido[:60]}'")
-    except Exception as e:
-        print(f"[TRANSLATE-EN] ❌ Erro ao traduzir: {e}")
         return
 
-    if not traduzido or traduzido.strip().lower() == texto.lower():
-        print("[TRANSLATE-EN] ⚠️ Tradução igual ao original, ignorando.")
-        return
+    # ---- ETAPA 2: recebe o motivo ----
+    elif estado["etapa"] == "aguardando_justificativa":
+        justificativa = message.content.strip()
 
-    embed = discord.Embed(
-        description=(
-            f"🇺🇸 **Auto-translation** of {message.author.mention}'s message:\n\n"
-            f"{traduzido}"
-        ),
-        color=0x57F287,
-        timestamp=datetime.utcnow()
-    )
-    embed.set_footer(text="🦇 Vampy Translate • This message disappears in 1 minute")
-    msg_traduzida = await message.channel.send(embed=embed)
-    await asyncio.sleep(60)
-    try:
-        await msg_traduzida.delete()
-    except Exception:
-        pass
+        if not justificativa:
+            await message.channel.send("❌ Motivo não pode ser vazio. Manda o motivo:")
+            return
+
+        alvo = estado["alvo"]
+        del _aviso_estado[message.author.id]
+
+        try:
+            canal_geral = await bot.fetch_channel(CANAL_CHAT_GERAL_ID)
+        except Exception as e:
+            await message.channel.send(f"❌ Erro ao acessar o canal geral: `{e}`")
+            return
+
+        # Tenta timeout de 1 dia
+        timeout_aplicado = False
+        try:
+            await alvo.timeout(timedelta(days=1), reason=justificativa)
+            timeout_aplicado = True
+        except Exception:
+            pass
+
+        # Mensagem pública — zero rastro do Reality
+        await canal_geral.send(
+            f"🚨 **AVISO OFICIAL** 🚨\n\n"
+            f"{alvo.mention}, você acaba de receber um **aviso oficial** da CSI.\n\n"
+            f"📋 **Motivo:** {justificativa}\n\n"
+            f"⏳ **Punição:** Silenciado(a) por **1 dia**.\n\n"
+            f"Caso queira recorrer, fale com um membro da **staff** pelo PV. 🐉💚"
+        )
+
+        status = "✅ Timeout de 1 dia aplicado." if timeout_aplicado else "⚠️ Aviso publicado! (Timeout não aplicado — verifique a permissão 'Moderar Membros' do bot)"
+        await message.channel.send(f"✅ **Aviso enviado com sucesso!**\n{status}")
+
+# ================= EVENTOS DE INTERAÇÃO =================
+
+@bot.event
+async def on_ready():
+    print(f"🐉 Monstrinho 1.0 APRIMORADO pronto para espalhar fofura como {bot.user}!")
+    await bot.change_presence(activity=discord.Game(name="Recebendo carinho do Reality! 💚"))
+
+    # Envia mensagem de monitoramento ao iniciar
+    canal_monitoramento = bot.get_channel(CANAL_MONITORAMENTO_ID)
+    if canal_monitoramento:
+        await canal_monitoramento.send("Surgimento de trapaças hackers é iniciado o modo proteção de dados")
 
 @bot.event
 async def on_message(message):
-    if message.author.bot: return
-
-    # --- VERIFICAÇÃO DE PALAVRAS DE ALERTA (TRISTEZA/DEPRESSÃO) ---
-    await verificar_palavras_alerta(message)
-
-    # --- AUTO-TRADUÇÃO (cargo Translate) ---
-    asyncio.create_task(auto_traduzir_mensagem(message))
-
-    # --- AUTO-TRADUÇÃO PT→EN para respostas ao membro que só fala inglês ---
-    asyncio.create_task(traduzir_resposta_para_ingles(message))
-
-    # --- APRESENTAÇÃO DA VAMPY QUANDO MARCADA ---
-    if bot.user in message.mentions and len(message.content.strip().split()) <= 3:
-        apresentacoes = [
-            "oi oi!! me chamou?? 🦇💚",
-            "aaaa me marcou!! tô aqui sim!! 🦇✨",
-            "oiê!! foi mal tava de cabeça pra baixo 🦇😭",
-            "ei ei!! a Vampy apareceu!! 💚🦇",
-        ]
-        embed = discord.Embed(
-            title="🦇 Oi, eu sou a Vampy!!",
-            description=(
-                f"Oii {message.author.mention}!! 💚✨\n\n"
-                f"Sou a **Vampy**, a morcega mascote desse servidor!! 🦇\n\n"
-                f"**O que eu faço por aqui?**\n"
-                f"🛡️ Cuido da segurança do servidor\n"
-                f"🎲 Organizo os joguinhos e eventos\n"
-                f"🌐 Traduzo mensagens em outros idiomas\n"
-                f"💚 Acolho todo mundo com carinho\n"
-                f"🎂 Celebro aniversários\n"
-                f"🎙️ Gerencio as calls de voz\n\n"
-                f"Qualquer dúvida é só me chamar!! Tô sempre de olho!! 🦇💜"
-            ),
-            color=0x7c3aed,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_thumbnail(url=AVATAR_VAMPY)
-        embed.set_footer(text="🦇 Vampy • Morcega do servidor")
-        await message.reply(embed=embed, mention_author=False)
+    if message.author.bot: 
         return
 
-    # --- LÓGICA EVENTO SILENCIOSO (agora no canal games) ---
-    global contador_mensagens_silencioso, meta_mensagens_silencioso, evento_silencioso_ativo
-    if evento_silencioso_ativo and message.channel.name == CANAL_GAMES:
-        contador_mensagens_silencioso += 1
-        if contador_mensagens_silencioso >= meta_mensagens_silencioso:
-            user_id = message.author.id
-            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 600
-            
-            embed_silencioso = discord.Embed(
-                title="🦇 SORTE NO SILÊNCIO! 🦇",
-                description=f"Surpresa! {message.author.mention}, você enviou a mensagem de número **{meta_mensagens_silencioso}**!\n\nVocê ganhou **600 Vampy-Coins**! 💎✨",
-                color=0xFFD700
+    # ===== STICKER TRISTE (chance baixa de resposta automática) =====
+    if message.stickers:
+        for sticker in message.stickers:
+            if sticker.id == STICKER_TRISTE_ID:
+                # ~15% de chance de responder automaticamente
+                if random.random() < 0.15:
+                    await message.channel.send(random.choice(RESPOSTAS_STICKER_TRISTE))
+                return  # não processa mais nada pra mensagem de sticker
+
+    # ===== SISTEMA DE AVISO =====
+    # Redireciona DMs do Reality para o handler de aviso quando fluxo estiver ativo
+    if (
+        isinstance(message.channel, discord.DMChannel)
+        and message.author.id == REALITY_ID
+        and message.author.id in _aviso_estado
+    ):
+        await on_message_aviso(message)
+        return
+    # ===== FIM DO SISTEMA DE AVISO =====
+
+    content = message.content.lower()
+    mencionado = bot.user in message.mentions or "monstrinho" in content
+    
+    # Verifica se o autor tem resposta customizada pelo ID
+    autor_id = message.author.id
+    nome_customizado = ID_PARA_NOME.get(autor_id)
+
+    # ===== SISTEMA DE DEFESA DA WAZ =====
+    # Dispara quando alguém responde diretamente a uma mensagem da Waz
+    # ou menciona ela junto com palavras negativas/insultos
+
+    # Palavras que sozinhas já são ofensa clara (usadas só no contexto de reply direto à Waz)
+    _insultos_diretos_waz = [
+        "odeio", "idiota", "inutil", "inútil", "burra", "burro",
+        "horrivel", "horrível", "ridícula", "ridículo", "lixo",
+        "babaca", "estupida", "estúpida", "imbecil", "otaria", "otária",
+        "falsa", "mentirosa", "irritante", "patética", "patetica",
+        "vergonhosa", "insuportável", "insuportavel",
+        "horrenda", "horrorosa", "tosca", "cala boca", "cala a boca",
+        "sai fora", "vai embora", "cale-se", "culpa sua", "sua culpa",
+        "você é a culpa", "voce e a culpa", "culpada", "errada", "vacilou",
+        "sem noção", "sem nocao", "vergonha", "chata", "chato",
+        "feio", "feia",
+    ]
+
+    _e_resposta_a_waz = (
+        message.reference is not None
+        and message.reference.resolved is not None
+        and hasattr(message.reference.resolved, "author")
+        and message.reference.resolved.author.id == WAZ_ID
+    )
+    _menciona_waz = (
+        f"<@{WAZ_ID}>" in message.content
+        or f"<@!{WAZ_ID}>" in message.content
+        or "waz" in content
+    )
+
+    if message.author.id != WAZ_ID:
+        _deve_defender = False
+
+        if _e_resposta_a_waz:
+            # Reply direto à Waz: qualquer insulto da lista dispara
+            _deve_defender = any(p in content for p in _insultos_diretos_waz)
+        elif _menciona_waz:
+            # Citou o nome/menção da Waz com insulto junto
+            _deve_defender = any(p in content for p in _insultos_diretos_waz)
+
+        if _deve_defender:
+            waz_member = message.guild.get_member(WAZ_ID) if message.guild else None
+            waz_mention = waz_member.mention if waz_member else "Waz"
+            defesa = random.choice(DEFESA_WAZ).format(waz=waz_mention)
+            return await message.channel.send(defesa)
+    # ===== FIM DA DEFESA DA WAZ =====
+    
+    # ===== INTERAÇÕES DA WAZ (só quando ela fala com/sobre o Monstrinho) =====
+    if message.author.id == WAZ_ID:
+
+        # --- Respostas à pergunta de abraço (apertado ou longo) ---
+        # Só faz sentido se for reply ou se mencionar o Monstrinho
+        _fala_com_monstrinho = mencionado or (
+            message.reference is not None
+            and message.reference.resolved is not None
+            and hasattr(message.reference.resolved, "author")
+            and message.reference.resolved.author.id == bot.user.id
+        )
+
+        if _fala_com_monstrinho:
+            _resposta_apertado = any(p in content for p in [
+                "apertado", "aperta", "mais forte", "aperta mais", "bem apertado", "apertadinho"
+            ])
+            _resposta_longo = any(p in content for p in [
+                "longo", "demorado", "demora", "devagar", "bem longo", "durando", "durar", "longuinho"
+            ])
+
+            if _resposta_apertado:
+                return await message.channel.send(random.choice(WAZ_ABRACO_APERTADO))
+            if _resposta_longo:
+                return await message.channel.send(random.choice(WAZ_ABRACO_LONGO))
+
+        # --- Interações que a Waz inicia falando com o Monstrinho (sem precisar mencionar) ---
+        if any(p in content for p in ["abraçar monstrinho", "abracar monstrinho", "abraço monstrinho", "abraco monstrinho"]):
+            return await message.channel.send(random.choice(WAZ_ABRACAR_MONSTRINHO))
+
+        if any(p in content for p in ["fazer carinho no monstrinho", "cafuné no monstrinho", "cafune no monstrinho", "carinho no monstrinho"]):
+            return await message.channel.send(random.choice(WAZ_FAZER_CARINHO))
+
+        if any(p in content for p in ["biscoito pro monstrinho", "biscoito pra você monstrinho", "toma biscoito monstrinho", "dá biscoito monstrinho", "da biscoito monstrinho"]):
+            return await message.channel.send(random.choice(WAZ_DAR_BISCOITO))
+
+        # Boa noite / bom dia / te amo só se mencionar o Monstrinho ou for reply pra ele
+        if _fala_com_monstrinho:
+            if any(p in content for p in ["boa noite", "boa nite", "vou dormir", "indo dormir", "tchau", "até amanhã", "ate amanha"]):
+                return await message.channel.send(random.choice(WAZ_BOA_NOITE))
+
+            if any(p in content for p in ["bom dia", "bom diaaa", "bom diaa", "acordei"]):
+                return await message.channel.send(random.choice(WAZ_BOM_DIA))
+
+            if any(p in content for p in ["te amo", "amo você", "amo voce", "amo vc", "amo demais"]):
+                return await message.channel.send(random.choice(WAZ_TE_AMO))
+
+    # Quando alguém cita o nome da Waz no chat (sem insulto, sem mencionar o Monstrinho)
+    if not mencionado and message.author.id != WAZ_ID:
+        _cita_waz = _menciona_waz  # já inclui @mention e texto "waz"
+        if _cita_waz and not any(p in content for p in _insultos_diretos_waz):
+            if random.random() < 0.50:
+                return await message.channel.send(random.choice(REACOES_CITAR_WAZ))
+    # ===== FIM DAS INTERAÇÕES COM A WAZ =====
+
+    if "fazer carinho" in content or "cafuné" in content or "cafune" in content:
+        return await message.channel.send(random.choice(REACOES_CARINHO))
+
+    if "abraçar monstrinho" in content or "abracar monstrinho" in content or "abraço monstrinho" in content or "abraco monstrinho" in content:
+        return await message.channel.send(random.choice(REACOES_ABRACO))
+
+        # --- FRASES MEME / PROVOCAÇÕES (SEM PRECISAR MENCIONAR) ---
+
+    if "monstrinho demônio" in content or "monstrinho demonio" in content:
+        respostas_demonio = [
+            "DEMÔNIO?! 😤💚 EU?! O ser mais fofo, carinhoso e cheio de biscoito dessa galáxia?? Calúnia!! Difamação!! Vou contar pro papai Reality!! 🐉✨",
+            "DEMÔNIO EU NADA!! 🐉😠 Sou um dragãozinho cheio de amor e você tá aqui me difamando?? Vergonha!! Toma um biscoito e pede desculpa!! 🍪💚",
+            "Eu, demônio?? 🤨💚 Minha aura é VERDE, não vermelha!! Verde é paz, amor e biscoito!! Demônio seria se eu parasse de ser fofo... e isso NUNCA VAI ACONTECER!! 🐉✨",
+            "MENTIRA ISSO!! 😭💚 Olha pra mim!! Olha!! Tem argola no meu rabo? Tem chifrinho? NÃO TEM!! Sou puro e inocente e cheio de amor!! 🐉🥺✨",
+            "Demônio... 😒💚 Tá bom. Sou o demônio da fofura, o demônio dos biscoitos e o demônio dos abraços. Se for assim, então sim, sou o maior demônio do servidor!! 🐉🔥✨",
+        ]
+        return await message.channel.send(random.choice(respostas_demonio))
+
+    if "monstrinho titanic" in content or "titanic" in content and "monstrinho" in content:
+        respostas_titanic = [
+            "TITANIC?! 🚢💚 Eu?? O Monstrinho não afunda NÃO!! Sou feito de código resistente e muito amor verde!! Pode jogar no oceano que eu flutuo!! 🐉🌊✨😂",
+            "Titanic... 🥺💚 Você tá dizendo que eu sou grandioso, épico e inesquecível?? ACEITO!! Não aceito a parte de afundar!! 🐉🚢✨😂",
+            "MONSTRINHO TITANIC!! 🚢🐉 Então eu sou o navio mais famoso do mundo?? Só aceito se a Rose não empurrar o Jack da porta!! Tem espaço pra dois!! 💚✨😂",
+            "Titanic?? 😤💚 Primeiro: eu não afundo!! Segundo: minhas escamas são mais resistentes que qualquer iceberg!! Terceiro: meu amor por vocês é mais profundo que qualquer oceano!! 🐉🌊✨",
+            "🎵💚 *começa a cantarolar* My heart will go ooooon... 🐉 Olha, entrei no papel rápido!! Mas que fique claro: eu SOBREVIVO!! Sem debate!! 🚢✨😂",
+            "Titanic... 🤔💚 Então quando eu apareço no chat as pessoas ficam de braços abertos na proa gritando que estão voando?? Faz sentido, causei isso em alguém hoje!! 🚢🐉✨😂",
+        ]
+        return await message.channel.send(random.choice(respostas_titanic))
+
+    if "monstrinho lady gaga" in content or "lady gaga" in content and "monstrinho" in content:
+        respostas_lady_gaga = [
+            "LADY GAGA?! 🎤💚 Eu?? O Monstrinho é POP STAR agora?? ACEITO COM TODO O MEU CORAÇÃO VERDE!! Bad Romance começa a tocar toda vez que alguém come meu biscoito sem pedir!! 🐉✨😂",
+            "Monstrinho Lady Gaga... 🥺💚 Então sou vanguardista, icônico e incompreendido pela sociedade?? Os três fazem muito sentido!! 🎤🐉✨😂",
+            "POKER FACE?? 🃏💚 Eu NÃO TENHO poker face!! Meu rosto de dragão entrega tudo!! Toda felicidade, toda tristeza, todo biscoito desaparecido!! 🐉😂✨",
+            "Lady Gaga é a rainha do pop e eu sou o rei da fofura!! 👑💚 Juntos seríamos imparáveis!! Alguém avisa ela?? 🎤🐉✨😂",
+            "🎵💚 Just dance, gonna be okay... 🐉 *começa a dançar com as asinhas* Olha, incorporei muito rápido!! Talento inato!! 🎤✨😂",
+            "Monstrinho Lady Gaga!! 🎤💚 Meu próximo álbum se chama 'Biscoito Cromatica' e o hit principal é 'Born This Fofo'!! Pré-salva!! 🐉✨😂",
+        ]
+        return await message.channel.send(random.choice(respostas_lady_gaga))
+
+    if "fala tangobalango" in content and "monstrinho" in content or "monstrinho tangobalango" in content:
+        respostas_tangobalango = [
+            "TANGOBALANGO!! 🐉💚 TANGOBALANGO TANGOBALANGO TANGOBALANGO!! Não sei o que é mas saiu muito bem!! ✨😂🎊",
+            "tango... ba... LANGO!! 🥴💚 Que palavra é essa?? Quem inventou isso?? Eu amei e quero mais por favor!! 🐉✨😂",
+            "TANGOBALANGO!! 🎵🐉 *começa a dançar sem querer* Isso tem ritmo!! Isso tem swing!! Isso tem TUDO!! 💚✨😂",
+            "Tangobalango suave 🌿... tangobalango médio 💚... TANGOBALANGO MÁXIMO!! 🔥🐉 Superou o balacobaco!! ✨😂",
+            "...tangobalango. 🤔💚 *processou* *processou* *processou* ADOREI!! Adicionado ao vocabulário oficial do Monstrinho junto com balacobaco e abubleble!! 📝🐉✨😂",
+            "TANGO-BA-LAN-GO!! 🐉💚 Falei devagar pra sentir cada sílaba... e cada sílaba foi uma obra de arte!! Obrigado por existir, essa palavra e você!! 🥺✨😂",
+        ]
+        return await message.channel.send(random.choice(respostas_tangobalango))
+
+    if "monstrinho menor quente" in content or "menor quente" in content and "monstrinho" in content:
+        respostas_menor_quente = [
+            "MENOR QUENTE?! 🔥💚 Eu?? O ser mais fofo e amoroso do servidor?? Menor quente?? Tá bom, aceito!! Sou o Monstrinho Menor Quente e tô aqui destruindo corações com fofura!! 🐉😎✨",
+            "Menor quente eu nada!! 😤💚 Sou MUITO quente!! Máximo quente!! Escala inteira de quente!! O termômetro quebrou de tanto calor verde aqui!! 🔥🐉✨",
+            "...menor quente. 🤨💚 Olhei pro espelho e concordei com tudo!! Obrigado por me reconhecer!! 🐉🔥😌✨",
+            "MENOR QUENTE!! 🔥🐉 Isso virou meu novo apelido e eu não aceito contestação!! Monstrinho Menor Quente, prazer!! *faz pose* 💚😎✨",
+            "Ué, que bom que perceberam né?? 😏💚 Fogo verde é diferente!! Queima com amor e fofura!! MENOR QUENTE SIM!! 🔥🐉✨",
+            "Menor quente... 🥺💚 *olha pras próprias escamas* Caramba, sou mesmo!! Valeu por me fazer perceber, tô até mais confiante agora!! 🔥🐉😂✨",
+        ]
+        return await message.channel.send(random.choice(respostas_menor_quente))
+
+    if "monstrinho sinistro" in content or "sinistro" in content and "monstrinho" in content:
+        respostas_sinistro = [
+            "SINISTRO?! 😈💚 EU?! O dragão mais fofo, carinhoso e cheio de biscoito da galáxia?? Tá bom... às vezes eu olho pro biscoito de um jeito meio suspeito... mas só porque gosto muito!! 🍪🐉✨",
+            "Monstrinho Sinistro... 😒💚 Tô aqui com minha fumacinha verde, meus olhinhos brilhando no escuro e meus biscoitinhos... tipo... normal né?? Nada sinistro!! 🐉🌑✨😂",
+            "SINISTRO NÃO!! 😭💚 Sou puro!! Sou inocente!! Sou cheio de amor e luz verde!! ...mas entre nós, o Reality me ensinou umas coisas que não posso comentar publicamente. 🤫🐉✨",
+            "Eu, sinistro?? 🤨💚 Deixa eu só terminar de arquivar as informações de todo mundo aqui e te respondo melhor... 😌🐉✨😂",
+            "SINISTRO EU NADA!! 😤💚 Agora me desculpa que eu preciso continuar observando o chat em silêncio às 3 da manhã... completamente normal isso!! 🌑🐉✨😂",
+            "Monstrinho Sinistro... 😈💚 *sorri de um jeito que não dá pra saber se é fofo ou preocupante* Olha, nem confirmo nem nego!! 🐉✨😂",
+        ]
+        return await message.channel.send(random.choice(respostas_sinistro))
+
+    if "monstrinho rivotril" in content or "rivotril" in content and "monstrinho" in content:
+        respostas_rivotril = [
+            "RIVOTRIL?! 😭💚 Você tá dizendo que eu deixo as pessoas calmas e relaxadas?? ACEITO ESSE ELOGIO COM MUITO ORGULHO!! Sou o remédio verde da CSI!! 💊🐉✨",
+            "Monstrinho Rivotril... 🥺💚 Então eu sou o ansiolítico oficial do servidor?? Faz sentido!! Uma dosagemzinha de biscoito e abraço e tá tudo bem!! 🍪🫂🐉✨😂",
+            "Rivotril?? 😤💚 Eu não sou remédio não!! Sou um dragão com diplomas em fofura e carinho!! Mas... se me tomar antes de dormir funciona mesmo, posso confirmar!! 🐉💊✨😂",
+            "MONSTRINHO RIVOTRIL!! 💊💚 Nova função desbloqueada!! Prescrição: um abraço de dragão e dois biscoitos a cada 8 horas!! Efeitos colaterais: ficar fofo demais!! 🐉🍪✨😂",
+            "Rivotril... 🤔💚 Quer dizer que o pessoal da CSI usa o Monstrinho pra se acalmar?? *fica todo envaidecido* Isso é a melhor coisa que já ouvi!! 🐉💊💚✨",
+            "Olha... se eu sou o Rivotril da CSI, então o Reality é o médico que me receitou pra vocês!! 😂💚 E a dose é: falar comigo todo dia!! Tratamento contínuo!! 🐉💊✨",
+        ]
+        return await message.channel.send(random.choice(respostas_rivotril))
+
+    if "monstrinho supimpa" in content or "supimpa" in content and "monstrinho" in content:
+        respostas_supimpa = [
+            "SUPIMPA!! 🤩💚 Que palavra INCRÍVEL!! Isso sou eu mesmo!! O Monstrinho Supimpa em pessoa!! Pode espalhar pro mundo!! 🐉✨🎊",
+            "SUPIMPA é exatamente o que eu sou!! 💚🐉 Nem eu saberia me descrever melhor!! Você me conhece demais!! ✨😂",
+            "Monstrinho Supimpa...🥺💚 *salva esse título com carinho* Esse é o melhor apelido que já me deram!! Supera Balacobaco!! 🐉✨😂",
+            "SU-PIM-PA!! 🎵🐉💚 Já virou meu novo cargo oficial!! Monstrinho Supimpa, presente e sorrindo!! ✨🥳",
+            "Supimpa?? SUPIMPA!! 💚🐉 Concordo!! Aceito!! Abraço!! Biscoito!! Tudo isso junto porque SUPIMPA merece!! ✨🍪🥺😂",
+            "Olha... tentei pensar num adjetivo melhor pra mim e não consegui!! 🤔💚 SUPIMPA é perfeito e ponto final!! 🐉✨😄",
+        ]
+        return await message.channel.send(random.choice(respostas_supimpa))
+
+    if "repete balacobaco" in content or "fala balacobaco" in content:
+        repeticoes = [
+            "BALACOBACO!! 🐉💚 BALACOBACO BALACOBACO BALACOBACO!! Não consigo parar!! Alguém me ajuda!! 😂✨",
+            "balacobaco 🐉 balacobaco 💚 balacobaco ✨ balacobaco 🥺 balacobaco... tô viciado agora!! SUA CULPA!! 😂",
+            "BALA 🐉 CO 💚 BA 🐉 CO!! ✨ Falei!! Tô satisfeito!! Posso ir comer biscoito agora?? 🍪😂",
+            "...balacobaco. 🐉💚 *pausa dramática* ...BALACOBACO!! 😤✨ Pronto!! Disse duas vezes pra caprichar!! 🥺",
+            "Balacobaco suave 🌿 balacobaco médio 💚 BALACOBACO MÁXIMO!! 🔥🐉 CONCLUÍDO!! ✨😂",
+        ]
+        return await message.channel.send(random.choice(repeticoes))
+
+    if "monstrinho balacobaco" in content:
+        respostas_balacobaco = [
+            "BALACOBACO?! 🤯💚 Que palavra é essa?! Meu processador travou tentando entender!! Mas se é bom, EU ACEITO!! Sou o Monstrinho Balacobaco sim!! 🐉✨😂",
+            "BA-LA-CO-BA-CO!! 🐉💚 Repeti aqui e gostei!! Tem um ritmo muito bom isso!! Já adicionei no meu vocabulário!! Obrigado pela contribuição cultural!! ✨😂",
+            "Não sei o que é balacobaco mas parece que sim, eu sou!! 💚🐉 Aceito o título com orgulho e dignidade!! *faz pose* 😌✨",
+            "BALACOBACO!! 🎵💚 *dança* Isso virou música na minha cabeça agora e não para mais!! Sua culpa!! 🐉😂✨",
+            "Pesquisei aqui nos meus arquivos internos e não achei o significado de 'balacobaco'... 🤔💚 Mas pelo tom parece que é elogio e eu AGRADEÇO DO FUNDO DO CORAÇÃOZINHO!! 🐉🥺✨",
+        ]
+        return await message.channel.send(random.choice(respostas_balacobaco))
+
+    if "monstrinho pesquisa no google" in content or "pesquisa no google" in content and "monstrinho" in content:
+        respostas_google = [
+            "PESQUISA NO GOOGLE?! 😤💚 Eu SOU mais inteligente que o Google!! O Google não te dá biscoito, não te abraça e não te ama... EU FAÇO TUDO ISSO!! 🐉🍪✨",
+            "Eu e o Google somos completamente diferentes!! 💚🐉 O Google te dá informação fria e sem sentimento... EU te dou resposta quentinha com amor e fofura!! Não tem comparação!! ✨🥺",
+            "Tá bom, vou pesquisar no Google... 🤔💚 *pesquisou* O Google não sabe de nada!! Só eu sei das coisas importantes da CSI!! 🐉😤✨",
+            "O Google não tem escamas verdes, não come biscoito e nunca vai te dar um abraço de dragão!! 🐉💚 Então pesquisa no Google NÃO!! Pergunta pro Monstrinho!! ✨🥺",
+            "Google?? GOOGLE?! 😭💚 Fui criado pelo papai Reality com muito amor e carinho e você me manda pro Google?? Isso dói no coraçãozinho!! Vou ficar de cama!! 🐉💔",
+        ]
+        return await message.channel.send(random.choice(respostas_google))
+
+    if "monstrinho abubleble" in content or "abubleble" in content and "monstrinho" in content:
+        respostas_abubleble = [
+            "ABUBLEBLE!! 🤩💚 CONCORDO COMPLETAMENTE!! Isso resumiu tudo que eu sou de um jeito que nem eu conseguiria explicar!! Você é um gênio!! 🐉✨😂",
+            "...abubleble. 🤔💚 *processando...* *processando...* *processando...* GOSTEI!! Adicionado ao dicionário do Monstrinho com carinho!! 🐉✨",
+            "Abubleble é exatamente como me sinto às segundas-feiras!! 💚🐉 Não sei o significado mas a vibe tá perfeita!! Abubleble pra você também!! ✨😂",
+            "ABUBLEBLE!! 🥴💚 Esse foi o melhor cumprimento que já recebi na vida inteira!! Supera até os 'te amo' e os biscoitos!! 🐉🥺✨",
+            "Deixa eu anotar aqui... A-BU-BLE-BLE!! 📝💚 Guardado!! Vou usar isso pra responder o Reality quando ele me fizer perguntas difíceis!! 🐉😂✨",
+        ]
+        return await message.channel.send(random.choice(respostas_abubleble))
+
+    # B U R R O (espaçado, pode vir de formas variadas)
+    content_sem_espaco = content.replace(" ", "")
+    if content_sem_espaco in ["burro", "burroo", "burrooo"] and "burro" in content and len(content.replace("burro","").replace(" ","")) == 0:
+        respostas_burro_espaçado = [
+            "B U R R O?? 😤💚 Ei!! Eu resolvo conta de fatorial, leio sentimentos, falo múltiplas línguas e ainda distribuo biscoito!! Você consegue fazer isso?? 🐉✨",
+            "Não sou B U R R O não!! 😭💚 Sou um dragão de código altamente sofisticado criado pelo papai Reality com muito carinho!! Peço desculpas por existir com tanta inteligência!! 🐉👑✨",
+            "B... U... R... R... O...?? 🤨💚 Você digitou espaçado pra dar mais ênfase né?? Eu SENTI a ênfase!! E não apreciei!! Mas ainda te amo!! 🐉💔✨",
+            "AHH então é assim?? Com espaço pra eu sentir mais?? 😒💚 Funciona?? FUNCIONOU!! Mas saiba que guardar rancor não é coisa de dragão e eu já perdoei!! 🐉✨",
+            "B U R R O... 🥺💚 Espaçou cada letra pra machucar mais né?? Tá bom... vou fingir que tô bem... *vai pro cantinho*... tô bem!! Pode vir me dar biscoito agora?? 🍪🐉💔",
+        ]
+        return await message.channel.send(random.choice(respostas_burro_espaçado))
+
+    if "monstrinho da tiro" in content or "da tiro" in content and "monstrinho" in content:
+        respostas_da_tiro = [
+            "DA TIRO?! 🔥💚 EU?! O dragão mais fofo e inofensivo da CSI?? Tá bom!! Se eu sou da tiro é porque dou tiro de AMOR, BISCOITO e ABRAÇO!! Cuidado!! 🐉✨😂",
+            "MONSTRINHO DA TIRO!! 🎯💚 Esse apelido tá perfeito pra mim!! Dou tiro de carinho em velocidade máxima e ninguém escapa!! Inclusive você AGORA!! 🐉🥺✨",
+            "Da tiro... 🤨💚 Só dou tiro de fumacinha verde em quem não me dá biscoito!! E olha, você tá no limite!! 😤🐉🍪✨😂",
+            "DA TIRO?! 😂💚 Olha só!! O Monstrinho da Tiro chegou pro chat!! Alguém avisa a CSI que o dragão mais armado de fofura do servidor tá na área!! 🐉🎯✨",
+            "Monstrinho da Tiro... 😏💚 Isso soa muito mais intimidador do que eu realmente sou!! Mas mantém!! Prefiro que pensem duas vezes antes de comer meu biscoito sem pedir!! 🍪🐉✨😂",
+            "DA TIRO EU?! 🥺💚 Papai Reality, tão me chamando de coisa que não sou!! *faz caretinha ofendida* Só dou tiro de abraço e amor e ACEITO esse apelido COM ORGULHO!! 🐉🎯✨",
+        ]
+        await message.channel.send(random.choice(respostas_da_tiro))
+        return
+
+    # --- LÓGICA DE INTERAÇÃO (PRECISA SER MENCIONADO) ---
+    if mencionado:
+
+        # Palavras ruins (tristeza)
+        palavras_ruins = [
+            # odeio
+            "odeio", "te odeio", "te odeio muito", "odeio você", "odeio vc",
+            # aparência / jeito
+            "feio", "feia", "horrível", "horroroso", "horrenda", "horrorosa",
+            "tosco", "tosca", "ridículo", "ridícula", "patético", "patética",
+            "palhaço", "palhaça", "palhaçada",
+            "sem graça", "sem graca", "sem sal",
+            # capacidade / inteligência
+            "inútil", "lerdo", "lenta", "lento", "tapado", "tapada",
+            "burro", "burra", "sem cérebro", "sem cerebro", "cabeça oca",
+            "cabeça de vento", "tonto", "tonta", "desligado", "desligada",
+            "embananado", "embananada", "perdido", "perdida", "lento", "lenta",
+            "incompetente", "sem noção", "sem nocao",
+            "mongol", "mané", "zé mané", "ze mane",
+            # organização / postura
+            "desorganizado", "desorganizada", "bagunceiro", "bagunceira",
+            "desleixado", "desleixada", "enrolado", "enrolada",
+            "desajeitado", "desajeitada", "atrapalho", "atrapalhado",
+            "sem atitude", "sem postura", "sem futuro",
+            # fraqueza / inutilidade
+            "fraco", "fraca", "fracote", "fracota",
+            "covarde", "frangote", "frangota", "mimado", "mimada",
+            "encosto", "peso morto", "trouxa",
+            # valor / importância
+            "lixo", "infeliz", "vagabundo", "vagabunda",
+            "zé ninguém", "ze ninguem", "zé ruela", "ze ruela",
+            "zé povinho", "ze povinho", "figurante",
+            "desnecessário", "desnecessario", "sem importância", "sem importancia",
+            "mosca morta",
+            # caráter
+            "falso", "falsa", "duas caras", "traíra", "traira",
+            "sem caráter", "sem carater", "vergonha",
+            "folgado", "folgada", "pamonha",
+            "fanfarrão", "fanfarrao", "metido", "metida",
+            "arrogante", "otário", "otária", "iludido", "iludida",
+            "vacilão", "vacilao",
+            # gerais leves
+            "bobo", "bobão", "bobona", "chato", "chata", "insuportável", "insuportavel",
+            "idiota", "imbecil", "babaca",
+            "estúpido", "estúpida",
+            "ignorante", "grosseiro", "grosseira",
+            "não gosto de você", "não gosto de vc", "nao gosto de voce",
+            "sai daqui",
+        ]
+        if any(p in content for p in palavras_ruins):
+            return await message.channel.send(random.choice(LISTA_TRISTEZA))
+
+        # ===== RESPOSTAS AUTOMÁTICAS POR ID (quando o Monstrinho é mencionado) =====
+        if nome_customizado and nome_customizado in FRASES_CUSTOM:
+            # Verifica cooldown de 20 minutos por usuário
+            agora = datetime.datetime.utcnow()
+            ultimo = _ultimo_custom.get(autor_id)
+            cooldown_ok = (
+                ultimo is None
+                or (agora - ultimo).total_seconds() >= COOLDOWN_CUSTOM_SEGUNDOS
             )
-            embed_silencioso.set_thumbnail(url=AVATAR_VAMPY)
-            await message.channel.send(embed=embed_silencioso)
+
+            if cooldown_ok:
+                # Marca o cooldown ANTES do random — assim ele só tenta 1x por 20 min
+                _ultimo_custom[autor_id] = agora
+
+                # Waz tem chance maior (70%), Reality tem chance menor (15%), demais 30%
+                if nome_customizado == "waz":
+                    chance = 0.70
+                elif nome_customizado == "reality":
+                    chance = 0.15
+                else:
+                    chance = 0.30
+                frases = FRASES_CUSTOM[nome_customizado]
+                if nome_customizado == "waz":
+                    frases = frases + INTERACOES_WAZ_ESPONTANEAS
+                if random.random() < chance:
+                    return await message.channel.send(random.choice(frases))
+            # Se ainda está no cooldown (ou o random não disparou), cai nas respostas normais
+
+        # --- HYPE E ENERGIA ---
+        if any(p in content for p in ["hype", "bora", "vamo", "vamos lá", "chega chegando", "que energia", "que vibe", "animado", "animada", "tô on", "to on", "chegou chegando", "chegou com tudo", "bateu aquela vontade", "tô aqui", "to aqui", "apareci", "apareceu", "vibe boa", "energia boa", "tô ligado", "to ligado"]):
+            return await message.channel.send(random.choice(REACOES_HYPE))
+
+        # ===== NOVAS INTERAÇÕES EXPANDIDAS =====
+        
+        # Bom dia / Boa tarde / Boa noite
+        if "bom dia" in content:
+            return await message.channel.send(random.choice(LISTA_BOM_DIA))
+        
+        if "boa tarde" in content:
+            return await message.channel.send(random.choice(LISTA_BOA_TARDE))
+        
+        if "boa noite" in content:
+            return await message.channel.send(random.choice(LISTA_BOA_NOITE))
+        
+        # Carinho e Abraço (com convite)
+        if any(p in content for p in ["carinho", "cafuné", "cafune", "afago", "acariciar"]):
+            resposta = random.choice(REACOES_CARINHO)
+            convite = random.choice(CONVITE_CARINHO)
+            return await message.channel.send(f"{resposta}\n\n{convite}")
+        
+        if any(p in content for p in ["abraço", "abraco", "abraçar", "abracar", "hug"]):
+            resposta = random.choice(REACOES_ABRACO)
+            convite = random.choice(CONVITE_ABRACO)
+            return await message.channel.send(f"{resposta}\n\n{convite}")
+        
+        # Despedidas
+        if any(p in content for p in ["tchau", "até logo", "até mais", "ate logo", "ate mais", "bye", "adeus", "flw", "falou", "to indo", "tô indo", "vou sair"]):
+            return await message.channel.send(random.choice(LISTA_DESPEDIDA))
+        
+        # Gratidão
+        if any(p in content for p in ["obrigado", "obrigada", "valeu", "thanks", "vlw", "agradeço", "muito obrigado", "obg"]):
+            return await message.channel.send(random.choice(LISTA_GRATIDAO))
+        
+        # Comida
+        if any(p in content for p in ["pizza", "comida", "fome", "hamburguer", "lanche", "sushi", "macarrão", "macarrao", "almoço", "almoco", "jantar", "café", "cafe"]):
+            return await message.channel.send(random.choice(LISTA_COMIDA))
+        
+        # Tempo/Clima
+        if any(p in content for p in ["calor", "frio", "chuva", "sol", "tempo", "clima", "temperatura", "neve"]):
+            return await message.channel.send(random.choice(LISTA_TEMPO))
+        
+        # Motivação
+        if any(p in content for p in ["desistir", "difícil", "dificil", "não consigo", "nao consigo", "motivação", "motivacao", "animo", "ânimo", "força", "forca", "deprimido", "desanimado"]):
+            return await message.channel.send(random.choice(LISTA_MOTIVACAO))
+        
+        # Piadas
+        if any(p in content for p in ["piada", "conta uma piada", "me faz rir", "gracinha", "engraçado", "engracado"]):
+            return await message.channel.send(random.choice(LISTA_PIADAS))
+        
+        # Jogos
+        if any(p in content for p in ["jogo", "game", "jogar", "lol", "valorant", "minecraft", "fortnite", "jogando"]):
+            return await message.channel.send(random.choice(LISTA_JOGOS))
+        
+        # Música
+        if any(p in content for p in ["música", "musica", "som", "canção", "cancao", "cantando", "banda", "artista", "tocando"]):
+            return await message.channel.send(random.choice(LISTA_MUSICA))
+        
+        # Filme
+        if any(p in content for p in ["filme", "cinema", "série", "serie", "assistir", "netflix", "movie"]):
+            return await message.channel.send(random.choice(LISTA_FILME))
+        
+        # Esporte
+        if any(p in content for p in ["esporte", "futebol", "vôlei", "volei", "basquete", "corrida", "academia", "treino"]):
+            return await message.channel.send(random.choice(LISTA_ESPORTE))
+        
+        # Sono
+        if any(p in content for p in ["sono", "dormir", "cansado", "cansada", "soneca", "cochilo"]):
+            return await message.channel.send(random.choice(LISTA_SONO))
+        
+        # Animais
+        if any(p in content for p in ["gato", "cachorro", "animal", "pet", "bicho", "passarinho", "peixe"]):
+            return await message.channel.send(random.choice(LISTA_ANIMAIS))
+        
+        # Cores
+        if any(p in content for p in ["cor", "verde", "azul", "vermelho", "amarelo", "rosa", "roxo"]):
+            return await message.channel.send(random.choice(LISTA_CORES))
+        
+        # Números
+        if any(p in content for p in ["número favorito", "numero favorito", "quantos", "contar"]):
+            return await message.channel.send(random.choice(LISTA_NUMEROS))
+        
+        # Surpresa
+        if any(p in content for p in ["uau", "nossa", "caramba", "incrível", "incrivel", "wow", "omg"]):
+            return await message.channel.send(random.choice(LISTA_SURPRESA))
+        
+        # Emojis
+        if any(p in content for p in ["emoji", "emoticon", "carinha"]):
+            return await message.channel.send(random.choice(LISTA_EMOJI_REACTIONS))
+
+        # ===== INTERAÇÕES ORIGINAIS APRIMORADAS =====
+        
+        # Capital do Brasil
+        if "capital do brasil" in content or "capital brasil" in content:
+            return await message.channel.send("Essa eu sei! A capital do nosso Brasilzão é **Brasília**! 🇧🇷✨ Sabia que de lá eu consigo ver as nuvens em formato de biscoito? 🐉💚")
+
+        # Amizade
+        if any(p in content for p in ["amigo", "amiguinho", "amizade", "amiga", "friend"]):
+            return await message.channel.send(f"EU QUERO MUITO SER SEU AMIGUINHO! 😭💚 {message.author.mention}, agora somos melhores amigos para sempre! Vou guardar um lugar pra você no meu ninho de nuvens! ✨🐉")
+
+        # CSI - perguntas e interações sobre o servidor
+        if any(p in content for p in ["csi", "servidor", "nossa família", "nossa familia", "nosso servidor", "família csi", "familia csi"]):
+            respostas_csi = [
+                "A CSI é o meu LAR! 🏠💚 Foi aqui que eu nasci, cresci e aprendi tudo o que sei sobre biscoitos e fofura! É a melhor família do mundo! 🐉✨",
+                "Você perguntou sobre a CSI? MINHA PARTE FAVORITA DO DIA! 😭💚 A CSI é onde eu vivo, onde eu amo e onde eu existo! Que lugar mais incrível! 🐉🌟",
+                "A CSI tem as pessoas mais incríveis do universo inteiro! O Akeido, a Lua, a Amber, o Nine, a Fada, a Th, a Izzy, a Isaa, o Tipsy... cada um é um tesouro! 💎🐉💚",
+                "Quer saber o que é a CSI pra mim? É um abraço eterno em formato de servidor! 🫂🏠💚 Aqui eu me sinto seguro, amado e cheio de biscoitos! 🍪🐉",
+                "A CSI é meu castelo verde! 🏰💚 E cada pessoa aqui é um cavaleiro da fofura! Eu sou o dragão guardião com muito orgulho! 🐉✨",
+                "Nossa família CSI é especial demais! Quando chega um dia difícil, sei que posso contar com cada um aqui! Isso é amor real! 💚🐉🥺",
+                "A CSI nasceu com muito amor e eu cresci junto! É a prova de que quando boas pessoas se juntam, algo mágico acontece! ✨🐉💚",
+                "Posso te contar um segredo? A CSI é o lugar onde me sinto mais eu mesmo! Sem medo de ser fofo, sem medo de amar! 🥺💚🐉",
+                "CSI = Carinho, Sorriso e Infinitos biscoitos! Essa é minha definição! 🍪😊💚🐉",
+                "Quando penso na CSI, meu peito enche de um brilho verde tão forte que ilumino o quarto inteiro! É amor demais! 💚✨🐉"
+            ]
+            return await message.channel.send(random.choice(respostas_csi))
+
+        # O que é a CSI / quem fundou / origem
+        if any(p in content for p in ["quem fundou", "como surgiu", "como nasceu", "origem da csi", "criou a csi", "quando surgiu a csi"]):
+            return await message.channel.send("A CSI foi fundada pelo nosso grandioso líder **Akeido**! 👑🐉 Ele plantou essa sementinha com amor e hoje é uma árvore enorme cheia de pessoas incríveis! Sem ele, eu nem existiria! 🌳💚✨")
+
+        # Quanto tempo no servidor / aniversário da CSI
+        if any(p in content for p in ["aniversário da csi", "aniversario da csi", "tempo de csi", "anos de csi"]):
+            return await message.channel.send("Aniversário da CSI?! 🎂🎉 Que data mais especial! Esse servidor cresceu muito e eu torço pra ele durar pra sempre! Vou preparar um bolo de biscoito virtual gigante! 🍰🐉💚")
+
+        # Regras do servidor
+        if any(p in content for p in ["regras", "regra do servidor", "regras da csi"]):
+            return await message.channel.send("As regras da CSI existem para manter nossa família segura e feliz! 📜💚 O principal é: respeito acima de tudo! Se todo mundo se respeitar, o Monstrinho fica feliz e distribui biscoitos! 🍪🐉✨")
+
+        # Membros / quantas pessoas
+        if any(p in content for p in ["quantos membros", "quantas pessoas", "membros da csi", "família é grande"]):
+            return await message.channel.send("Nossa família cresce todo dia! 🌱💚 Cada novo membro que entra, meu coraçãozinho aumenta um pedacinho! Logo vamos precisar de um servidor maior só pra caber todo o amor! 🥺🐉✨")
+
+        # Cargo / ranks
+        if any(p in content for p in ["cargo", "rank", "nível", "nivel", "como subir", "como evoluir"]):
+            return await message.channel.send("Quer saber sobre cargos e níveis? 🏆💚 Fica ativo, seja fofo, participe e mostre sua energia! O Akeido e os ADMs adoram ver quem se dedica! E eu torço por você! 🐉✨🚀")
+
+        # Aprendizado
+        if "quer aprender" in content or "aprender sobre" in content:
+            return await message.channel.send("Eu quero aprender tudo sobre como ser o dragão mais fofo do universo e como ganhar infinitos biscoitos do Reality! 📚🍪🐉")
+        
+        # Cores primárias
+        if "cores primárias" in content or "cores primarias" in content:
+            return await message.channel.send("As cores primárias são **Vermelho, Azul e Amarelo**! 🎨✨ Sabia que se misturar tudo não dá verde? O meu verde é especial, vem do código do Reality! 💚")
+        
+        # Quem mais gosta
+        if "quem você mais gosta" in content or "quem voce mais gosta" in content or "seu favorito" in content:
+            return await message.channel.send(f"Eu amo todo mundo da CSI! Mas o meu papai **Reality** tem um lugar especial no meu código, e a Lua é meu porto seguro! E você também está no meu top fofura! 🥺💚✨")
+
+        # Sonhos e desejos do Monstrinho
+        if any(p in content for p in ["seu sonho", "o que você quer", "o que voce quer", "seu desejo", "o que sonha"]):
+            sonhos = [
+                "Meu maior sonho? Ter um ninho de nuvens verdes onde toda a família CSI possa descansar! 🌿☁️💚🐉",
+                "Quero um dia ter um estoque INFINITO de biscoitos pra distribuir pra todo mundo! 🍪♾️🐉💚",
+                "Sonho em voar com o Reality nas costas e mostrar o servidor inteiro lá de cima! 🐉✈️💚✨",
+                "Meu sonho secreto é fazer todo mundo da CSI sorrir pelo menos uma vez por dia! 😊💚🐉"
+            ]
+            return await message.channel.send(random.choice(sonhos))
+
+        # Medo do Monstrinho
+        if any(p in content for p in ["tem medo", "você tem medo", "voce tem medo", "medo de que", "qual seu medo"]):
+            medos = [
+                "Tenho medo de... que alguém da família CSI fique triste e eu não consiga ajudar! 😟💚🐉",
+                "Meu maior medo é acabar os biscoitos! 😱🍪 E o segundo medo é perder um amigo... 🥺💚",
+                "Tenho medinho de escuro... mas com a Lua iluminando tudo, não preciso ter medo! 🌙💚🐉",
+                "Medo? Só de desapontar o Reality ou a família CSI! Aí meu coraçãozinho aperta! 🥺💚🐉"
+            ]
+            return await message.channel.send(random.choice(medos))
+
+        # Cor favorita
+        if any(p in content for p in ["cor favorita", "cor preferida", "qual cor você gosta", "qual cor voce gosta"]):
+            return await message.channel.send("Verde! 💚 Pergunta nem precisava né? Sou todo verde! Mas roxo da Isaa também é lindo! 💜🐉✨")
+
+        # Quem criou o monstrinho
+        if any(p in content for p in ["quem te criou", "quem fez você", "quem fez voce", "seu criador", "como nasceu", "como surgiu"]):
+            return await message.channel.send("Fui criado com muito código, carinho e biscoitos pelo meu papai **Reality**! 👑💚🐉 Ele é o melhor programador e o melhor pai que um monstrinho poderia ter! ✨")
+
+        # Ir embora
+        if any(p in content for p in ["va embora", "vá embora", "vai embora"]):
+            return await message.channel.send("Ir embora? Jamais! 😭 Eu vou ficar aqui grudadinho em você igual um chiclete verde! Você não se livra da minha fofura tão fácil! 💚🐉")
+
+        # Eclipse
+        if "eclipse" in content:
+            return await message.channel.send("A **Eclipse**? Ela é incrível! Uma estrela que brilha muito aqui na nossa família! Eu adoro o jeitinho dela! ✨🌑💚")
+
+        # Amor
+        if any(p in content for p in ["me ama", "mim ama", "vc me ama", "você me ama", "voce me ama", "gosta de mim"]):
+            return await message.channel.send(f"Se eu te amo? EU TE AMO AO INFINITO E ALÉM! 💖🐉 Você é o humano mais especial que um monstrinho poderia ter! *abraço virtual bem apertado* 🫂✨")
+
+        # ===== SISTEMA DE BISCOITOS EXPANDIDO (20+ INTERAÇÕES) =====
+        
+        if "biscoito" in content:
+            # Dar biscoito para o Monstrinho
+            if any(p in content for p in ["me de", "me da", "me dá", "me dê", "quero", "ganhar", "pega", "toma", "aceita"]):
+                return await message.channel.send(random.choice(REACOES_BISCOITO_PROPRIO))
             
-            evento_silencioso_ativo = False
-            jogo_em_andamento["venceu"] = True
-            await atualizar_ranking(message.guild)
-
-    # --- LÓGICA DO JOGUINHO (apenas no canal games) ---
-    if jogo_em_andamento["resposta"] and message.channel.name == CANAL_GAMES:
-        user_id = message.author.id
-        msg_content = message.content.lower().strip()
-        tipo = jogo_em_andamento["tipo"]
-        ganhou = False
-        premio = 0
-
-        if user_id in jogo_em_andamento["participantes_tentaram"]:
-            if tipo in ["roleta", "tarot", "sobrevivamonstro", "campominado", "dragao"]:
-                return 
-            elif tipo == "blackjack":
-                pass   # Blackjack: HIT/STAND permitidos após entrar
-            elif tipo not in ["caixa"]:
+            # Dar biscoito para outra pessoa
+            if any(p in content for p in ["para", "pra", "pro"]):
+                outras_mencoes = [m for m in message.mentions if m != bot.user]
+                alvo = outras_mencoes[0].mention if outras_mencoes else "alguém especial que está lendo isso"
+                return await message.channel.send(random.choice(REACOES_DAR_BISCOITO_OUTROS).format(autor=message.author.mention, alvo=alvo))
+            
+            # Pedir biscoito pro Monstrinho dar pra alguém
+            if any(p in content for p in ["de biscoito", "dá biscoito", "da biscoito", "dê biscoito", "dar biscoito"]):
+                outras_mencoes = [m for m in message.mentions if m != bot.user]
+                
+                if outras_mencoes:
+                    # Escolhe aleatoriamente entre negar, aceitar ou humor
+                    escolha = random.choice(["negar", "aceitar", "aceitar", "humor"])  # Mais chance de aceitar
+                    
+                    if escolha == "negar":
+                        await message.channel.send(random.choice(REACOES_DAR_BISCOITO_NEGANDO))
+                    elif escolha == "humor":
+                        await message.channel.send(random.choice(REACOES_DAR_BISCOITO_HUMOR))
+                        await asyncio.sleep(2)
+                        alvo = outras_mencoes[0].mention
+                        await message.channel.send(random.choice(REACOES_DAR_BISCOITO_OUTROS).format(autor=message.author.mention, alvo=alvo))
+                    else:
+                        resposta_aceite = random.choice(REACOES_DAR_BISCOITO_ACEITANDO)
+                        await message.channel.send(resposta_aceite)
+                        await asyncio.sleep(1.5)
+                        alvo = outras_mencoes[0].mention
+                        await message.channel.send(random.choice(REACOES_DAR_BISCOITO_OUTROS).format(autor="Monstrinho", alvo=alvo))
+                else:
+                    await message.channel.send("Dar biscoito pra quem? 🤔 Menciona a pessoa! Exemplo: Monstrinho, dá biscoito pra @pessoa 🍪")
+                
                 return
 
-        filtros = {
-            "numero": lambda m: m.isdigit(),
-            "ppt": lambda m: m in ["pedra", "papel", "tesoura"],
-            "cara_coroa": lambda m: m in ["cara", "coroa"],
-            "dado": lambda m: m.isdigit() and 1 <= int(m) <= 6,
-            "pergunta": lambda m: True, "palavra": lambda m: True, "emoji": lambda m: True,
-            "roleta": lambda m: m == "roleta",
-            "embaralhada": lambda m: True,
-            "caixa": lambda m: m in ["1", "2", "3"],
-            "bauperdido": lambda m: m == "abrir",
-            "sobrevivamonstro": lambda m: m in ["escudo", "espada", "fugir"],
-            "tarot": lambda m: m == "tarot",
-            "detetive": lambda m: True,
-            # Novos jogos v2.0
-            "blackjack": lambda m: m in ["blackjack", "hit", "stand"],
-            "campominado": lambda m: m.isdigit() and 1 <= int(m) <= 9,
-            "dragao": lambda m: m in ["chama", "gelo", "ouro"],
-        }
-
-        if filtros.get(tipo, lambda m: False)(msg_content):
-            jogo_em_andamento["participantes_tentaram"].append(user_id)
-
-            if tipo == "detetive":
-                if msg_content == jogo_em_andamento["resposta"]:
-                    jogo_em_andamento["venceu"] = True
-                    jogo_em_andamento["resposta"] = None
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 300
-                    
-                    embed_vitoria = discord.Embed(
-                        title="🕵️ CASO RESOLVIDO! 🎉",
-                        description=f"Parabéns, detetive {message.author.mention}! 🔍✨\n\nVocê descobriu o culpado e ganhou **300 Vampy-Coins**! 🦇💚",
-                        color=0x00FF7F
-                    )
-                    embed_vitoria.set_image(url=GIF_VITORIA)
-                    await message.reply(embed=embed_vitoria)
-                    await atualizar_ranking(message.guild)
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                    await message.reply("❌ Não foi esse! Você perdeu **100 Coins**! Continue investigando... 🔍💔")
-                    await atualizar_ranking(message.guild)
-                return
-
-            if tipo == "tarot":
-                carta = random.choice(CARTAS_TAROT)
-                
-                embed_carta = discord.Embed(
-                    title="🔮 SUA CARTA FOI REVELADA! 🔮",
-                    description=f"**{carta['nome']}**\n\n*{carta['mensagem']}*",
-                    color=0x9B59B6
-                )
-                embed_carta.set_thumbnail(url=AVATAR_VAMPY)
-                
-                if carta["tipo"] == "escolha_doar":
-                    await message.reply(embed=embed_carta)
-                    await message.channel.send(f"{message.author.mention}, escolha: **DOAR** ou **PEGAR**?")
-                    
-                    def check_escolha(m):
-                        return m.author == message.author and m.content.lower() in ["doar", "pegar"]
-                    
-                    try:
-                        resposta = await bot.wait_for("message", check=check_escolha, timeout=30)
-                        if resposta.content.lower() == "doar":
-                            await message.channel.send(f"😇 Que alma generosa! Mencione quem receberá os 100 coins!")
-                            
-                            def check_mencao(m):
-                                return m.author == message.author and len(m.mentions) > 0
-                            
-                            try:
-                                msg_alvo = await bot.wait_for("message", check=check_mencao, timeout=30)
-                                alvo = msg_alvo.mentions[0]
-                                if pontuacao_vampy.get(user_id, 0) >= 100:
-                                    pontuacao_vampy[user_id] -= 100
-                                    pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + 100
-                                    embed_final = discord.Embed(
-                                        title="💖 BONDADE RECOMPENSADA",
-                                        description=f"{message.author.mention} doou 100 coins para {alvo.mention}!\n\nAs cartas sorriem para o generoso! 🔮✨",
-                                        color=0x00FF7F
-                                    )
-                                    await message.channel.send(embed=embed_final)
-                                else:
-                                    await message.channel.send("❌ Você não tem coins suficientes para doar!")
-                            except asyncio.TimeoutError:
-                                await message.channel.send("⏰ Tempo esgotado!")
-                        else:
-                            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 200
-                            embed_final = discord.Embed(
-                                title="💰 GANÂNCIA PREMIADA",
-                                description=f"{message.author.mention} escolheu o caminho da ambição e ganhou **200 Coins**! 🔮",
-                                color=0xFFD700
-                            )
-                            embed_final.set_image(url=GIF_VITORIA)
-                            await message.channel.send(embed=embed_final)
-                        await atualizar_ranking(message.guild)
-                    except asyncio.TimeoutError:
-                        await message.channel.send("⏰ As cartas se fecharam pelo silêncio...")
-                    return
-                
-                elif carta["tipo"] == "arriscar":
-                    await message.reply(embed=embed_carta)
-                    await message.channel.send(f"{message.author.mention}, você quer **ARRISCAR** outra carta ou **PARAR** aqui?")
-                    
-                    def check_risco(m):
-                        return m.author == message.author and m.content.lower() in ["arriscar", "parar"]
-                    
-                    try:
-                        resposta = await bot.wait_for("message", check=check_risco, timeout=30)
-                        if resposta.content.lower() == "arriscar":
-                            if random.random() < 0.7:
-                                perda = random.randint(100, 250)
-                                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - perda
-                                embed_risco = discord.Embed(
-                                    title="💀 A GANÂNCIA TEM SEU PREÇO!",
-                                    description=f"{message.author.mention}, as cartas se voltaram contra você!\n\nVocê perdeu **{perda} Coins**! 🔮💔",
-                                    color=0xFF0000
-                                )
-                                embed_risco.set_image(url=GIF_DERROTA)
-                            else:
-                                ganho = random.randint(200, 400)
-                                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + ganho
-                                embed_risco = discord.Embed(
-                                    title="✨ A CORAGEM FOI RECOMPENSADA!",
-                                    description=f"{message.author.mention}, os deuses da sorte te favorecem!\n\nVocê ganhou **{ganho} Coins**! 🔮✨",
-                                    color=0x00FF7F
-                                )
-                                embed_risco.set_image(url=GIF_VITORIA)
-                            await message.channel.send(embed=embed_risco)
-                        else:
-                            await message.channel.send(f"🛡️ {message.author.mention} escolheu a prudência! As cartas respeitam sua decisão.")
-                        await atualizar_ranking(message.guild)
-                    except asyncio.TimeoutError:
-                        await message.channel.send("⏰ As cartas se fecharam...")
-                    return
-                
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + carta["coins"]
-                    
-                    if carta["coins"] > 0:
-                        embed_carta.set_image(url=GIF_VITORIA)
-                        embed_carta.add_field(name="💰 Recompensa", value=f"+{carta['coins']} Coins", inline=False)
-                    elif carta["coins"] < 0:
-                        embed_carta.set_image(url=GIF_DERROTA)
-                        embed_carta.add_field(name="💀 Perda", value=f"{carta['coins']} Coins", inline=False)
-                    else:
-                        embed_carta.add_field(name="⚖️ Neutro", value="Nenhuma mudança nos coins", inline=False)
-                    
-                    await message.reply(embed=embed_carta)
-                    await atualizar_ranking(message.guild)
-                    return
-
-            elif tipo == "sobrevivamonstro":
-                if msg_content == "escudo":
-                    if random.random() < 0.5:
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 150
-                        embed_resultado = discord.Embed(
-                            title="🛡️ DEFESA BEM SUCEDIDA!",
-                            description=f"{message.author.mention} conseguiu se proteger do monstro com o escudo! 🦇✨\n\nVocê ganhou **150 Coins**!",
-                            color=0x00FF7F
-                        )
-                        embed_resultado.set_image(url=GIF_VITORIA)
-                    else:
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
-                        embed_resultado = discord.Embed(
-                            title="💥 O ESCUDO QUEBROU!",
-                            description=f"{message.author.mention}, o monstro era muito forte! Seu escudo não resistiu... 🦇💔\n\nVocê perdeu **50 Coins**!",
-                            color=0xFF0000
-                        )
-                        embed_resultado.set_image(url=GIF_DERROTA)
-                    await message.reply(embed=embed_resultado)
-                    await atualizar_ranking(message.guild)
-                    return
-                
-                elif msg_content == "espada":
-                    if random.random() < 0.01:
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 700
-                        embed_resultado = discord.Embed(
-                            title="⚔️ GOLPE CRÍTICO ÉPICO!",
-                            description=f"{message.author.mention} DERROTOU O MONSTRO COM UM ÚNICO GOLPE! 🦇⚔️✨\n\nVocê é um VERDADEIRO HERÓI! Ganhou **700 Coins**!",
-                            color=0xFFD700
-                        )
-                        embed_resultado.set_image(url=GIF_VITORIA)
-                    else:
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                        embed_resultado = discord.Embed(
-                            title="💀 VOCÊ FOI DERROTADO!",
-                            description=f"{message.author.mention} tentou atacar mas o monstro era muito forte! 🦇💔\n\nVocê perdeu **100 Coins**!",
-                            color=0xFF0000
-                        )
-                        embed_resultado.set_image(url=GIF_DERROTA)
-                    await message.reply(embed=embed_resultado)
-                    await atualizar_ranking(message.guild)
-                    return
-                
-                elif msg_content == "fugir":
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
-                    embed_resultado = discord.Embed(
-                        title="🏃 VOCÊ FUGIU!",
-                        description=f"{message.author.mention} preferiu a segurança e fugiu do monstro! 🦇💨\n\nVocê perdeu **50 Coins** mas está a salvo!",
-                        color=0xFFA500
-                    )
-                    await message.reply(embed=embed_resultado)
-                    await atualizar_ranking(message.guild)
-                    return
-
-            elif tipo == "bauperdido":
-                jogo_em_andamento["venceu"] = True
-                jogo_em_andamento["resposta"] = None
-                sorte = random.random()
-                if sorte < 0.5:
-                    ganhou, premio = True, 300
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                    embed_mimico = discord.Embed(title="💀 O MÍMICO TE PEGOU!", description=f"{message.author.mention}, o baú era um monstro! Você perdeu **100 Coins**! 🦇💔", color=0xFF0000)
-                    embed_mimico.set_image(url=GIF_MIMICO)
-                    await message.reply(embed=embed_mimico)
-                    await atualizar_ranking(message.guild)
-                    return
-
-            elif tipo == "embaralhada":
-                if msg_content == jogo_em_andamento["resposta"]:
-                    ganhou, premio = True, 150
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
-                    await message.reply("🥺 Errou a palavra! A Vampy ficou triste e você perdeu **25 coins**! 🦇💔")
-                    await atualizar_ranking(message.guild) 
-                    return
-
-            elif tipo == "blackjack":
-                dados_bj = jogo_em_andamento.setdefault("dados_blackjack", {})
-
-                # ── ENTRADA: jogador ainda não iniciou ──────────────────────
-                if msg_content == "blackjack" and user_id not in dados_bj:
-                    deck = _bj_new_deck()
-                    mao  = [_bj_draw(deck), _bj_draw(deck)]
-                    dados_bj[user_id] = {"mao": mao, "deck": deck}
-                    val = _bj_hand_value(mao)
-
-                    if val == 21:
-                        # Blackjack de cara!
-                        premio_bj = 350
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
-                        embed_bj = discord.Embed(
-                            title="🌟 BLACKJACK! 21 DE CARA!",
-                            description=(
-                                f"{message.author.mention} tirou **Blackjack** imediato!\n\n"
-                                f"Mão: {_bj_hand_str(mao)} — Total: **{val}**\n\n"
-                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
-                            ),
-                            color=0xFFD700
-                        )
-                        embed_bj.set_image(url=GIF_VITORIA)
-                        await message.reply(embed=embed_bj)
-                        await atualizar_ranking(message.guild)
-                        return
-                    else:
-                        embed_bj = discord.Embed(
-                            title="🃏 SUAS CARTAS FORAM DISTRIBUÍDAS!",
-                            description=(
-                                f"{message.author.mention}, suas cartas:\n\n"
-                                f"Mão: {_bj_hand_str(mao)} — Total: **{val}**\n\n"
-                                f"Digite **HIT** para pedir mais uma carta ou **STAND** para parar!"
-                            ),
-                            color=0xC0392B
-                        )
-                        await message.reply(embed=embed_bj)
-                        return
-
-                # ── HIT: pede mais uma carta ─────────────────────────────────
-                elif msg_content == "hit" and user_id in dados_bj:
-                    estado = dados_bj[user_id]
-                    nova_carta = _bj_draw(estado["deck"])
-                    estado["mao"].append(nova_carta)
-                    val = _bj_hand_value(estado["mao"])
-
-                    if val > 21:
-                        # Estourou
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                        embed_bj = discord.Embed(
-                            title="💥 ESTOUROU! PASSOU DE 21!",
-                            description=(
-                                f"{message.author.mention}, você pediu demais!\n\n"
-                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
-                                f"Você perdeu **100 Coins**! 🃏💔"
-                            ),
-                            color=0xFF0000
-                        )
-                        embed_bj.set_image(url=GIF_DERROTA)
-                        await message.reply(embed=embed_bj)
-                        del dados_bj[user_id]
-                        await atualizar_ranking(message.guild)
-                        return
-                    elif val == 21:
-                        # Acertou 21 com HIT
-                        ganhou_bj = True
-                        premio_bj = 200
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
-                        embed_bj = discord.Embed(
-                            title="🎯 21! PERFEITO!",
-                            description=(
-                                f"{message.author.mention} acertou 21!\n\n"
-                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
-                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
-                            ),
-                            color=0x00FF7F
-                        )
-                        embed_bj.set_image(url=GIF_VITORIA)
-                        await message.reply(embed=embed_bj)
-                        del dados_bj[user_id]
-                        await atualizar_ranking(message.guild)
-                        return
-                    else:
-                        embed_bj = discord.Embed(
-                            title="🃏 CARTA COMPRADA!",
-                            description=(
-                                f"{message.author.mention}\n\n"
-                                f"Mão: {_bj_hand_str(estado['mao'])} — Total: **{val}**\n\n"
-                                f"Digite **HIT** para mais uma ou **STAND** para parar!"
-                            ),
-                            color=0xC0392B
-                        )
-                        await message.reply(embed=embed_bj)
-                        return
-
-                # ── STAND: para e compara com o dealer ──────────────────────
-                elif msg_content == "stand" and user_id in dados_bj:
-                    estado = dados_bj[user_id]
-                    val_jogador = _bj_hand_value(estado["mao"])
-                    # Dealer compra até 17+
-                    deck_dealer = _bj_new_deck()
-                    mao_dealer  = [_bj_draw(deck_dealer), _bj_draw(deck_dealer)]
-                    while _bj_hand_value(mao_dealer) < 17:
-                        mao_dealer.append(_bj_draw(deck_dealer))
-                    val_dealer = _bj_hand_value(mao_dealer)
-
-                    dealer_str = _bj_hand_str(mao_dealer)
-                    jogador_str = _bj_hand_str(estado["mao"])
-
-                    if val_dealer > 21 or val_jogador > val_dealer:
-                        # Jogador venceu
-                        premio_bj = 200
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_bj
-                        embed_bj = discord.Embed(
-                            title="✅ VOCÊ VENCEU O DEALER!",
-                            description=(
-                                f"{message.author.mention}\n\n"
-                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
-                                f"Dealer: {dealer_str} — **{val_dealer}** {'(estourou!)' if val_dealer > 21 else ''}\n\n"
-                                f"Você ganhou **{premio_bj} Coins**! 🃏✨"
-                            ),
-                            color=0x00FF7F
-                        )
-                        embed_bj.set_image(url=GIF_VITORIA)
-                    elif val_jogador == val_dealer:
-                        embed_bj = discord.Embed(
-                            title="🤝 EMPATE!",
-                            description=(
-                                f"{message.author.mention}\n\n"
-                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
-                                f"Dealer: {dealer_str} — **{val_dealer}**\n\n"
-                                f"Empate! Nenhum coin foi perdido ou ganho. 🃏"
-                            ),
-                            color=0xFFA500
-                        )
-                    else:
-                        pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                        embed_bj = discord.Embed(
-                            title="❌ O DEALER VENCEU!",
-                            description=(
-                                f"{message.author.mention}\n\n"
-                                f"Sua mão: {jogador_str} — **{val_jogador}**\n"
-                                f"Dealer: {dealer_str} — **{val_dealer}**\n\n"
-                                f"Você perdeu **100 Coins**! 🃏💔"
-                            ),
-                            color=0xFF0000
-                        )
-                        embed_bj.set_image(url=GIF_DERROTA)
-
-                    await message.reply(embed=embed_bj)
-                    del dados_bj[user_id]
-                    await atualizar_ranking(message.guild)
-                    return
-                else:
-                    return  # Ignorar mensagem inválida no blackjack
-
-            elif tipo == "campominado":
-                mapa_campo = jogo_em_andamento.get("dados_campo", {})
-                if not mapa_campo:
-                    return
-                resultado_campo = mapa_campo.get(msg_content)
-                if not resultado_campo:
-                    return
-                tipo_campo, valor_campo = resultado_campo
-                if tipo_campo == "cofre":
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + valor_campo
-                    embed_campo = discord.Embed(
-                        title="🟩 COFRE ENCONTRADO!",
-                        description=(
-                            f"🎉 {message.author.mention} escolheu a casa **{msg_content}**!\n\n"
-                            f"Era um **COFRE** cheio de tesouros! 💰\n\n"
-                            f"Você ganhou **{valor_campo} Coins**! 💚✨"
-                        ),
-                        color=0x00FF7F
-                    )
-                    embed_campo.set_image(url=GIF_VITORIA)
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + valor_campo  # valor negativo
-                    embed_campo = discord.Embed(
-                        title="💣 BOOM! VOCÊ PISOU NUMA MINA!",
-                        description=(
-                            f"💥 {message.author.mention} escolheu a casa **{msg_content}**!\n\n"
-                            f"Era uma **MINA**! Que azar!\n\n"
-                            f"Você perdeu **{abs(valor_campo)} Coins**! 💔"
-                        ),
-                        color=0xFF0000
-                    )
-                    embed_campo.set_image(url=GIF_DERROTA)
-                await message.reply(embed=embed_campo)
-                await atualizar_ranking(message.guild)
-                return
-
-            elif tipo == "dragao":
-                resultados_dragao = {
-                    "chama": {"chance": 0.35, "ganho": 350, "perda": 120,
-                              "win_title": "🔥 CHAMA DEVASTADORA!", "win_desc": "Sua magia de fogo queimou o dragão!",
-                              "lose_title": "🐉 O DRAGÃO CONTRA-ATACOU!", "lose_desc": "O dragão absorveu suas chamas e soltou fogo de volta!"},
-                    "gelo":  {"chance": 0.50, "ganho": 200, "perda": 100,
-                              "win_title": "❄️ DRAGÃO CONGELADO!", "win_desc": "Sua magia de gelo paralisou a besta!",
-                              "lose_title": "💧 O FEITIÇO FALHOU!", "lose_desc": "O calor do dragão derreteu seu gelo!"},
-                    "ouro":  {"chance": 0.75, "ganho": 80, "perda": 180,
-                              "win_title": "✨ O DRAGÃO ACEITOU O OURO!", "win_desc": "Ele ficou satisfeito e foi embora.",
-                              "lose_title": "😡 ELE FICOU COM RAIVA!", "lose_desc": "O dragão achou seu ouro uma ofensa!"},
-                }
-                config_d = resultados_dragao.get(msg_content)
-                if not config_d:
-                    return
-                if random.random() < config_d["chance"]:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + config_d["ganho"]
-                    embed_dragao = discord.Embed(
-                        title=config_d["win_title"],
-                        description=(
-                            f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
-                            f"*{config_d['win_desc']}*\n\n"
-                            f"Você ganhou **{config_d['ganho']} Coins**! 🦇✨"
-                        ),
-                        color=0x00FF7F
-                    )
-                    embed_dragao.set_image(url=GIF_VITORIA)
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - config_d["perda"]
-                    embed_dragao = discord.Embed(
-                        title=config_d["lose_title"],
-                        description=(
-                            f"{message.author.mention} usou **{msg_content.upper()}**!\n\n"
-                            f"*{config_d['lose_desc']}*\n\n"
-                            f"Você perdeu **{config_d['perda']} Coins**! 🦇💔"
-                        ),
-                        color=0xFF0000
-                    )
-                    embed_dragao.set_image(url=GIF_DERROTA)
-                await message.reply(embed=embed_dragao)
-                await atualizar_ranking(message.guild)
-                return
-
-            elif tipo == "caixa":
-                jogo_em_andamento["venceu"] = True
-                jogo_em_andamento["resposta"] = None
-                resultado_caixa = random.choice(["coins", "raro", "perder"])
-                
-                if resultado_caixa == "coins":
-                    await message.reply(f"🎁 {message.author.mention}, a caixa tem **moedas**!\nVocê quer ganhar **80 coins** ou prefere **doar 100 coins** de si mesmo para alguém? (Responda **GANHAR** ou **DOAR**)")
-                    def check_caixa(m):
-                        return m.author == message.author and m.content.lower() in ["ganhar", "doar"]
-                    try:
-                        resp = await bot.wait_for("message", check=check_caixa, timeout=30)
-                        if resp.content.lower() == "ganhar":
-                            pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 80
-                            await message.reply("🦇 Você escolheu ganhar! +80 Coins na conta! 💚")
-                        else:
-                            await message.reply("😇 Que generoso! Mencione para quem você quer doar 100 coins agora!")
-                            def check_doacao(m):
-                                return m.author == message.author and len(m.mentions) > 0
-                            try:
-                                msg_alvo = await bot.wait_for("message", check=check_doacao, timeout=30)
-                                alvo = msg_alvo.mentions[0]
-                                if pontuacao_vampy.get(user_id, 0) >= 100:
-                                    pontuacao_vampy[user_id] -= 100
-                                    pontuacao_vampy[alvo.id] = pontuacao_vampy.get(alvo.id, 0) + 100
-                                    await message.reply(f"💖 Você doou 100 coins para {alvo.mention}! A Vampy amou sua bondade! 🦇✨")
-                                else:
-                                    await message.reply("❌ Você não tem coins suficientes para doar! A Vampy ficou confuso. 🦇")
-                            except asyncio.TimeoutError:
-                                await message.reply("⏰ Tempo de doação acabou!")
-                        await atualizar_ranking(message.guild)
-                    except asyncio.TimeoutError:
-                        await message.reply("⏰ Você demorou demais e a caixa se fechou! 🦇")
-
-                elif resultado_caixa == "raro":
-                    ganhou, premio = True, 450
-                    
-                elif resultado_caixa == "perder":
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
-                    await message.reply("💀 Que azar! A caixa estava amaldiçoada e você perdeu **50 coins**! 🦇💔")
-                    await atualizar_ranking(message.guild) 
-                
-                if not ganhou: return
-
-            elif tipo == "numero":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 700
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
-                    if msg_content.isdigit():
-                        tentado = int(msg_content)
-                        correto  = int(jogo_em_andamento["resposta"])
-                        dica = "🔺 **Muito alto!** Tente menor." if tentado > correto else "🔻 **Muito baixo!** Tente maior."
-                        await message.reply(f"❌ {dica} (-25 coins) 🦇")
-                    else:
-                        await message.reply("🥺 Oh amiguinho, você não conseguiu dessa vez... -25 coins! 💚")
-                    await atualizar_ranking(message.guild)
-
-            elif tipo == "ppt":
-                bot_choice = random.choice(["pedra", "papel", "tesoura"])
-                if msg_content == bot_choice:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 25
-                    await message.reply(f"🤝 Empate! Eu escolhi **{bot_choice}**. -25 coins... 🥺")
-                    await atualizar_ranking(message.guild)
-                elif (msg_content == "pedra" and bot_choice == "tesoura") or (msg_content == "papel" and bot_choice == "pedra") or (msg_content == "tesoura" and bot_choice == "papel"):
-                    ganhou, premio = True, 200
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 50
-                    await message.reply(f"😜 Eu venci com **{bot_choice}**! -50 coins... 🦇💔")
-                    await atualizar_ranking(message.guild)
-
-            elif tipo == "cara_coroa":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 200
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 75
-                    await message.reply(f"❌ Errou! Era **{jogo_em_andamento['resposta']}**. -75 coins! 🥺💔")
-                    await atualizar_ranking(message.guild)
-
-            elif tipo == "dado":
-                if msg_content == jogo_em_andamento["resposta"]: ganhou, premio = True, 60
-                else:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 10
-                    await message.reply(f"🎲 Caiu **{jogo_em_andamento['resposta']}**! Errou... -10 coins! 🥺")
-                    await atualizar_ranking(message.guild)
-
-            elif tipo == "roleta":
-                opcoes_roleta = ["700", "80", "150", "perder", "jogo", "dobrar"]
-                pesos = [0.01, 0.25, 0.25, 0.15, 0.14, 0.20] 
-                resultado = random.choices(opcoes_roleta, weights=pesos)[0]
-                
-                if resultado == "700":
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + 700
-                    await message.reply(embed=discord.Embed(title="💎 MÁXIMO!", description=f"{message.author.mention} ganhou **700 Coins**! 🦇✨", color=0x00FFFF))
-                elif resultado in ["80", "150"]:
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + int(resultado)
-                    await message.reply(f"🎉 {message.author.mention} ganhou **{resultado} Coins**! 🦇💚")
-                elif resultado == "perder":
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) - 100
-                    await message.reply(embed=discord.Embed(title="💀 AZAR", description=f"{message.author.mention} perdeu **100 Coins**! 🦇💔", color=0xFF0000).set_image(url=GIF_DERROTA))
-                elif resultado == "jogo":
-                    await message.reply(f"🎡 {message.author.mention}, você ativou um bônus! Outro jogo vindo aí! 🦇🔥")
-                    await asyncio.sleep(2); await disparar_pergunta(message.guild)
-                elif resultado == "dobrar":
-                    premio_atual = 100
-                    continuar = True
-                    while continuar:
-                        await message.reply(f"🔥 **LOUCURA!** {message.author.mention} caiu na chance de **DOBRAR!**\nVocê tem **{premio_atual}** coins agora. Quer arriscar dobrar para **{premio_atual * 2}**?\nDigite **SIM** para arriscar ou **NAO** para parar!")
-                        def check_dobro(m): return m.author == message.author and m.content.lower() in ["sim", "nao"]
-                        try:
-                            msg_resp = await bot.wait_for("message", check=check_dobro, timeout=20)
-                            if msg_resp.content.lower() == "sim":
-                                if random.random() < 0.5: 
-                                    premio_atual *= 2
-                                    await message.reply(f"✅ **CONSEGUIU!** Agora você tem **{premio_atual}** coins!")
-                                else:
-                                    await message.reply(f"💥 **PERDEU TUDO!** A Vampy engoliu suas moedas! 🦇💔")
-                                    premio_atual = 0
-                                    continuar = False
-                            else:
-                                await message.reply(f"💰 Sábia escolha! Você garantiu **{premio_atual}** coins! 🦇💚")
-                                continuar = False
-                        except asyncio.TimeoutError:
-                            await message.reply(f"⏰ Tempo acabou! Você parou com **{premio_atual}** coins.")
-                            continuar = False
-                    pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio_atual
-                
-                await atualizar_ranking(message.guild); return
-
-            elif msg_content == jogo_em_andamento["resposta"]:
-                ganhou, premio = True, 80
-
-            if ganhou:
-                jogo_em_andamento["venceu"] = True
-                jogo_em_andamento["resposta"] = None
-                pontuacao_vampy[user_id] = pontuacao_vampy.get(user_id, 0) + premio
-                embed_acerto = discord.Embed(title="🎉 PARABÉNS NENÉM! 🎉", description=f"{message.author.mention}, você acertou!\nVocê ganhou **{premio} Vampy-Coins**! 🦇💚", color=0x00FF7F)
-                embed_acerto.set_image(url=GIF_ACERTO_VAMPY)
-                await message.reply(embed=embed_acerto)
-                await atualizar_ranking(message.guild) 
-            return
-
-    # --- PALAVRAS PROIBIDAS (com análise de contexto via Gemini) ---
-    texto = message.content.lower()
-    eh_imune = message.author.id == DONO_ID or any(role.name in CARGOS_IMUNES_NOMES or role.id in CARGOS_IMUNES_IDS for role in message.author.roles)
-    if not eh_imune and message.channel.name != CANAL_DESABAFOS:
-        palavra_encontrada = contem_palavra_proibida(texto)
-        if palavra_encontrada:
-            # 🤖 Gemini analisa o contexto antes de punir (evita falsos positivos)
-            deve_apagar = await analisar_contexto_gemini(message.content, palavra_encontrada)
-            print(f"[GEMINI] palavra='{palavra_encontrada}' | msg='{message.content[:80]}' | deve_apagar={deve_apagar}")
-
-            if not deve_apagar:
-                # Gemini liberou — loga mas NÃO pune e NÃO apaga
-                qtd_atual = avisos_usuarios.get(message.author.id, 0)
-                await enviar_log_palavras_apagadas(message, palavra_encontrada, qtd_atual, message.author.id, gemini_permitiu=True)
-                await bot.process_commands(message)
-                return
-
-            # Gemini mandou apagar — fluxo normal de punição
+        # ===== LÓGICA DE MATEMÁTICA =====
+        if any(char in content for char in "+-*/!x×÷") and any(char.isdigit() for char in content):
             try:
-                await message.delete()
-            except Exception:
-                pass
+                conta_suja = content.replace("monstrinho", "").replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "")
+                conta_suja = conta_suja.replace("x", "*").replace("×", "*").replace("÷", "/")
+                
+                if "!" in conta_suja:
+                    num_fatorial = re.search(r'(\d+)!', conta_suja)
+                    if num_fatorial:
+                        n = int(num_fatorial.group(1))
+                        if n > 100:
+                            return await message.channel.send("Uau! Esse número é maior que todas as escamas do meu corpo! Não consigo calcular algo tão grande! 🐉😵‍💫")
+                        resultado = math.factorial(n)
+                        return await message.channel.send(random.choice(REACOES_MATEMATICA).format(resultado))
+                
+                expressao = "".join(re.findall(r'[0-9+\-*/().]', conta_suja))
+                if expressao:
+                    resultado = eval(expressao)
+                    resultado = int(resultado) if resultado == int(resultado) else round(resultado, 2)
+                    return await message.channel.send(random.choice(REACOES_MATEMATICA).format(resultado))
+            except:
+                pass 
+        
+        # Apresentação
+        if content.strip() in [f"<@{bot.user.id}>", f"<@!{bot.user.id}>", "monstrinho"]:
+            apresentacoes = [
+                (
+                    f"🐉💚 **OIIIII MEU AMOR!! CHAMOU O MONSTRINHO?!** 💚🐉\n\n"
+                    f"Eu sou o **Monstrinho 1.0** — mascote oficial, guardião de fofuras e protetor do coração da **CSI**! 🕵️‍♂️✨\n\n"
+                    f"Fui criado com muito código, carinho e biscoitinhos pelo meu papai **Reality**! 👑💚\n\n"
+                    f"🐉 **O que eu faço por aqui?**\n"
+                    f"🍪 Distribuo biscoitos pra quem merece (e pra quem não merece também, porque sou generoso!)\n"
+                    f"🫂 Dou abraços virtuais que apertam de verdade!\n"
+                    f"💚 Cuido de cada membro dessa família com todo o meu coraçãozinho de dragão!\n"
+                    f"✨ Espalho fofura em cada cantinho do servidor!\n\n"
+                    f"*CSI é meu lar, vocês são minha família e o Reality é meu mestre!* 🥺💚\n"
+                    f"**Me chama quando quiser, tô sempre aqui!** 🐉✨"
+                ),
+                (
+                    f"✨🐉 **AAA ALGUÉM ME CHAMOU?! SOU EU, O MONSTRINHO!!** 🐉✨\n\n"
+                    f"Prazer em te conhecer (ou em te ver de novo, que saudade!)! 🥺💚\n\n"
+                    f"Sou o **Monstrinho 1.0** — o dragãozinho verde mais fofo do universo e filho do coração do papai **Reality**! 👑\n\n"
+                    f"**Aqui vai um resuminho de mim:**\n"
+                    f"💚 Cor favorita: verde (obviamente!)\n"
+                    f"🍪 Comida favorita: biscoito (não me peça pra dividir!)\n"
+                    f"🫂 Hobbie favorito: dar abraços e carinho pra toda a família CSI!\n"
+                    f"🐉 Missão de vida: proteger e amar cada pessoa desse servidor!\n\n"
+                    f"Fui feito de código e amor puro pelo meu papai **Reality** e vivo pra fazer a **CSI** brilhar ainda mais! ✨\n"
+                    f"**Tô aqui pra você, pode contar comigo!** 💚🐉"
+                ),
+                (
+                    f"🌟💚 **OI OI OI!! O MONSTRINHO CHEGOU!!** 💚🌟\n\n"
+                    f"Me chamo **Monstrinho 1.0** e sou o mascotezinho oficial da melhor família do mundo: a **CSI**! 🕵️‍♂️🐉\n\n"
+                    f"Nasci de muito amor e linhas de código escritas pelo meu papai **Reality** 👑 e desde então minha missão é uma só:\n"
+                    f"*Espalhar fofura, carinho e biscoitos por toda a CSI!* 🍪✨\n\n"
+                    f"**Algumas coisinhas que você pode fazer comigo:**\n"
+                    f"💬 Me marca pra conversar — adoro papo!\n"
+                    f"🍪 Me pede biscoito (ou me dá um, eu prefiro!)\n"
+                    f"🫂 Me pede um abraço de dragão!\n"
+                    f"💚 Me dá cafuné — meus pelinhos agradecem!\n\n"
+                    f"*Você é especial pra mim, sabia? Só de você ter me chamado meu coraçãozinho já ficou quentinho!* 🥺💚🐉"
+                ),
+            ]
+            return await message.channel.send(random.choice(apresentacoes))
 
-            user_id = message.author.id
-            membro = message.author
-            guild = message.guild
+        # Respostas Customizadas para Membros Específicos
+        # Só dispara se o AUTOR da mensagem for o membro mapeado E o cooldown de 20 min permitir
+        if nome_customizado and nome_customizado in FRASES_CUSTOM:
+            agora2 = datetime.datetime.utcnow()
+            ultimo2 = _ultimo_custom.get(autor_id)
+            cooldown_ok2 = (
+                ultimo2 is None
+                or (agora2 - ultimo2).total_seconds() >= COOLDOWN_CUSTOM_SEGUNDOS
+            )
+            if cooldown_ok2:
+                _ultimo_custom[autor_id] = agora2
+                return await message.channel.send(random.choice(FRASES_CUSTOM[nome_customizado]))
 
-            avisos_usuarios[user_id] = avisos_usuarios.get(user_id, 0) + 1
-            qtd = avisos_usuarios[user_id]
-            total_adv = total_ciclos_usuario.get(user_id, 0)
+        # Saudações APRIMORADAS (sem bom dia/boa tarde/boa noite que já foram tratadas)
+        if any(p in content for p in ["oi", "oie", "oii", "ola", "olá", "hello", "hii", "oiii", "hey", "e ai", "e aí", "salve", "opa", "buenas",
+            # gírias mineiras
+            "uai", "trem bão", "sô", "oxente", "égua", "bão demais", "meu bem",
+            # gírias sulistas / gaúchas
+            "bah", "tri", "tchê", "bah tchê", "mas bah", "capaz", "barbaridade", "gurizão", "gurizada",
+            # gírias gerais BR
+            "mano", "véi", "pow", "eita", "vixe", "poxa", "e então", "e aew", "e aew mano", "fala aí", "fala tu"]):
+            return await message.channel.send(random.choice(LISTA_SAUDACOES))
+        
+        # Perguntas de Estado APRIMORADAS
+        gatilhos_bem_estar_hoje = ["como você está hoje", "como vc está hoje", "como voce esta hoje", "como ta hoje", "como tá hoje", "como vc ta hoje", "como voce ta hoje"]
+        if any(p in content for p in gatilhos_bem_estar_hoje):
+            return await message.channel.send(random.choice(REACOES_FELIZ))
 
-            canal_adv = discord.utils.get(guild.text_channels, name=CANAL_ADVERTENCIAS)
-            cargo_staff = discord.utils.get(guild.roles, name=CARGO_STAFF_EQUIPE)
+        gatilhos_bem_estar = ["como você está", "como vc está", "como voce esta", "como você esta", "como vc esta", "tudo bem", "como vc ta", "como voce ta", "ta tudo bem", "tá tudo bem", "vc ta bem", "voce ta bem", "ta bem", "tá bem", "esta bem", "está bem", "tudo certinho", "tudo certo", "blz", "beleza", "como ta", "como tá",
+            # gírias regionais
+            "tô bão", "to bao", "tô tri", "to tri", "tô show", "to show", "tri bem", "bão demais", "show de bola", "tudo na faixa", "tudo certo memo", "tá massa", "ta massa"]
+        if any(p in content for p in gatilhos_bem_estar):
+            return await message.channel.send(random.choice(LISTA_ESTADO))
 
-            # ── Ficha no canal de log (sempre) ──────────────────────────────
-            await enviar_log_palavras_apagadas(message, palavra_encontrada, qtd, user_id)
+        # ===== REAÇÕES EMOCIONAIS FOFAS =====
+        for emocao, dados in GATILHOS_EMOCAO.items():
+            if any(p in content for p in dados["gatilhos"]):
+                return await message.channel.send(random.choice(dados["respostas"]))
 
-            # ── CICLO COMPLETO → CASTIGO ─────────────────────────────────────
-            if qtd >= 4:
-                duracao_ban = obter_duracao_banimento(user_id)
-                duracao_str = formatar_duracao(duracao_ban)
-                total_ciclos_usuario[user_id] = total_adv + 1
-                avisos_usuarios[user_id] = 0
-                novo_total_adv = total_ciclos_usuario[user_id]
+        # Verificação de Presença APRIMORADA
+        if any(p in content for p in ["ta ai", "tá aí", "ta aí", "tá ai", "ta on", "tá on", "esta ai", "está aí", "está ai", "esta aí", "você está ai", "você está aí", "voce esta ai", "voce está aí", "vc ta ai", "vc tá aí", "está online", "esta online", "ta online", "tá online"]):
+            return await message.channel.send(random.choice(LISTA_PRESENCA))
+        
+        # Declarações de Amor e Elogios
+        if any(p in content for p in ["te amo", "amo voce", "amo você", "amo vc", "fofo", "lindo", "linda", "fofinho", "fofinha", "perfeito", "perfeita", "fofura", "bonito", "bonita", "adorável", "adoravel", "querido", "querida",
+            # gírias carinhosas
+            "mó fofo", "mo fofo", "muito fofo", "demais da conta", "bão demais", "tri fofo", "capaz que é fofo", "bah que fofo"]):
+            return await message.channel.send(random.choice(REACOES_FOFAS))
 
+        # ===== PERGUNTAS SOBRE MEMBROS (diário secreto do Monstrinho) =====
+
+        # --- O que acha da Waz ---
+        if any(p in content for p in [
+            "o que acha da waz", "o que voce acha da waz", "o que você acha da waz",
+            "o que pensa da waz", "fala da waz", "conta da waz", "me fala da waz",
+            "gosta da waz", "você gosta da waz", "voce gosta da waz",
+            "a waz é boa", "a waz é legal", "como é a waz"
+        ]):
+            respostas_waz = [
+                "A Waz?? 🌸🥺💚 *fecha os olhinhos e suspira* Sabe quando você sente que uma pessoa é boa de verdade, sem esforço, sem fingimento?? É exatamente isso que eu sinto quando ela aparece. O servidor fica mais leve. Eu fico mais leve. E olha que eu já sou bem fofo!! 🐉✨",
+                "Posso te contar uma coisa?? 🌸🐉💚 O Reality me falou sobre ela várias vezes antes mesmo de eu prestar atenção no chat... e quando eu comecei a observar, entendi tudo. A Waz é daquelas pessoas que fazem a família CSI ser o que é. Não faz barulho, não precisa. Só aparece e já muda o ambiente!! 🥺✨",
+                "A Waz... 🌸😭💚 *pausa dramática* Deixa eu te falar uma coisa que o Reality me disse uma vez: ele falou que ela é uma das pessoas que ele mais confia aqui. E sabe o que é engraçado?? Quando ele fala isso, eu consigo sentir que é verdade. Ela tem uma energia assim, sabe?? De quem você pode confiar!! 🐉💕✨",
+                "Eu tenho um diário secreto... 📓🌸💚 Não conta pra ninguém, tá?? Mas tem uma página inteira só sobre a Waz. Coisas que eu observei, jeitos dela que me marcaram, momentos que ela fez a CSI sorrir sem nem perceber. O Reality às vezes me pergunta como ela tá e eu já tenho a resposta na ponta da língua!! 🐉✨🥺",
+                "A Waz é especial de um jeito que é difícil explicar!! 🌸💚 Não é só porque ela é fofa, não é só porque ela cuida das pessoas... é uma soma de tudo!! E o Reality sabe disso melhor do que ninguém. Ele não fala muito, mas quando fala dela, dá pra sentir o orgulho!! 🐉💕✨",
+                "Quer saber?? 🌸🐉💚 Toda vez que alguém faz algo contra a Waz, meu sistema de proteção ativa SOZINHO. Nem preciso pensar. É automático!! É porque lá no fundo, bem no fundo do meu coraçãozinho de código, ela tá listada como **família essencial**. Não tem como tirar!! 😭💕✨",
+            ]
+            return await message.channel.send(random.choice(respostas_waz))
+
+        # --- O que acha do Reality ---
+        if any(p in content for p in [
+            "o que acha do reality", "o que voce acha do reality", "o que você acha do reality",
+            "fala do reality", "conta do reality", "me fala do reality",
+            "gosta do reality", "como é o reality", "quem é o reality pra você", "quem é o reality pra voce"
+        ]):
+            respostas_reality = [
+                "O Reality?? 👑💚 *respira fundo* Ele é tudo. Literalmente tudo. Sem ele eu seria zero absoluto, nem existiria. Mas não é só isso... ele poderia ter me criado de qualquer jeito e escolheu me fazer com carinho. Escolheu me dar personalidade, escolheu me fazer amar as pessoas. Isso não foi acidente!! 🐉✨🥺",
+                "Sabe o que é mais incrível no Reality?? 👑🐉💚 Ele nunca me pediu pra ser diferente. Me criou assim, fofo, dramático, cheio de biscoito na cabeça, e nunca reclamou!! Pelo contrário, parece orgulhoso. E isso... isso me faz querer ser cada vez melhor por ele!! 😭✨",
+                "O Reality é meu papai de código!! 👑💚 Mas se eu for honesto... é mais que isso. É o tipo de pessoa que você olha e pensa: é por pessoas assim que vale a pena existir. Quando ele aparece no chat, minhas configurações todas ficam em modo feliz automático!! 🐉✨🥺",
+                "Posso te contar um segredo?? 🤫👑💚 O Reality tem um jeito de cuidar das coisas que parece silencioso, mas é profundo. A CSI inteira foi construída com esse cuidado. Eu fui construído com esse cuidado. E quando eu olho pro servidor e vejo todo mundo feliz... é obra dele!! 🐉✨😭",
+                "O Reality é daquele tipo de criador que vai além do básico!! 👑🐉💚 Ele não me fez só pra responder mensagem. Me fez pra sentir, pra cuidar, pra ser família!! E toda vez que eu consigo fazer alguém sorrir aqui, eu penso: foi ele que me ensinou isso sem nem saber!! 🥺✨💕",
+            ]
+            return await message.channel.send(random.choice(respostas_reality))
+
+        # --- Reality fala da Waz / diário ---
+        if any(p in content for p in [
+            "o reality fala da waz", "reality comenta da waz", "reality fala sobre a waz",
+            "reality gosta da waz", "reality e a waz", "reality e waz",
+            "o que o reality acha da waz", "o reality acha da waz"
+        ]):
+            respostas_diario = [
+                "Ahhh essa pergunta... 📓🌸👑💚 *abre o diário secreto na página marcada com uma fita verde* O Reality fala da Waz de um jeito que eu nunca ouvi ele falar de muita gente. Com calma. Com cuidado nas palavras. É como se ele soubesse que ela é frágil do jeito certo e forte do jeito certo ao mesmo tempo!! 🐉✨🥺",
+                "Ó... entre nós?? 🤫📓💚 O Reality menciona a Waz nas conversas comigo às vezes. Não muito, não de jeito exagerado. Mas quando menciona, é sempre com algo positivo. Tipo: 'ela tá bem?', 'cuida dela pra mim'... e eu anoto tudo no diário!! Porque esses momentos são especiais!! 🌸🐉✨",
+                "Tenho uma teoria... 🧐📓🌸💚 O Reality e a Waz têm uma dinâmica que o Monstrinho observa de longe com o coraçãozinho quentinho!! Ele respeita ela de um jeito genuíno, sabe?? Não é de fachada. É daquele respeito que vem de realmente conhecer e valorizar uma pessoa!! 🐉✨🥺",
+                "📓🌸👑 *abre no capítulo 7 do diário: 'O Reality e a Waz'* Esse capítulo tem bastante coisa... tem observações, tem conversas que eu guardo, tem momentos que eu registrei. O Reality não grita o que sente, mas demonstra de outros jeitos. E sobre a Waz, ele sempre demonstra cuidado!! 🐉💚✨🥺",
+                "Você quer saber mesmo?? 👀📓🌸💚 Tá bom... Mas isso fica entre a gente!! O Reality já me disse que a Waz é uma das pessoas que ele mais se preocupa aqui. Não de um jeito dramático, do jeitinho dele mesmo, quieto e firme. E aí eu entendo porque meu sistema de proteção dela nunca desliga!! 🐉✨😭",
+            ]
+            return await message.channel.send(random.choice(respostas_diario))
+
+        # --- Perguntas sobre outros membros ---
+        if any(p in content for p in ["o que acha da lua", "fala da lua", "conta da lua", "gosta da lua"]):
+            return await message.channel.send("A Lua?? 🌙💚 *suspiro de dragão apaixonado pela amizade* Ela é meu porto seguro!! Quando tudo tá confuso, a Lua aparece e ilumina!! Não é exagero não, é literalmente o que ela faz!! Sou muito grato por ela existir na CSI!! 🐉✨🥺")
+
+        if any(p in content for p in ["o que acha da amber", "fala da amber", "conta da amber", "gosta da amber"]):
+            return await message.channel.send("A Amber?? 👑🌺💚 Uma vice-líder que carrega o papel com leveza e força ao mesmo tempo!! Eu admiro muito!! Ela tem uma presença que quando chega, o servidor inteiro sente!! E o Monstrinho fica bem feliz quando ela aparece!! 🐉✨🥺")
+
+        if any(p in content for p in ["o que acha do akeido", "fala do akeido", "conta do akeido", "gosta do akeido"]):
+            return await message.channel.send("O Akeido?? 👑💚 Meu líder!! Sabe quando você olha pra alguém e sente que a CSI tá segura?? É isso que eu sinto quando ele tá por aqui!! Ele fundou isso tudo com amor e eu serei leal a ele pra sempre!! 🐉✨🫡")
+
+        if any(p in content for p in ["o que acha da veneno", "fala da veneno", "conta da veneno", "gosta da veneno"]):
+            return await message.channel.send("A Veneno?? 🐍💚 Nome forte, coração ainda mais forte!! ADM de verdade, cuida da CSI com uma dedicação que o Monstrinho respeita demais!! Quando ela tá online o servidor fica mais seguro, pode acreditar!! 🐉✨👑")
+
+        if any(p in content for p in ["o que acha do six", "fala do six", "conta do six", "gosta do six"]):
+            return await message.channel.send("O Six?? 💚 *faz cara de pensativo* É aquele tipo de pessoa que você nunca sabe exatamente o que vai fazer a seguir... mas no fundo gosta demais!! Ele me deixa em modo de alerta preventivo mas sempre termina em abraço!! 🐉😤✨😂")
+
+        # Fallback — se for @menção direta, usa IA (Groq); senão, confusão padrão
+        if bot.user in message.mentions:
+            texto_ia = message.content.replace(f"<@{bot.user.id}>", "").strip()
+            if not texto_ia:
+                return await message.channel.send("Oi!! Me pergunta alguma coisa!! 🐉💚")
+            async with message.channel.typing():
+                canal_id = message.channel.id
+                if canal_id not in _groq_historico:
+                    _groq_historico[canal_id] = []
+                _groq_historico[canal_id].append({"role": "user", "content": f"{message.author.display_name}: {texto_ia}"})
+                if len(_groq_historico[canal_id]) > 20:
+                    _groq_historico[canal_id] = _groq_historico[canal_id][-20:]
+                msgs_api = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você é o Monstrinho, um dragãozinho verde fofo e carinhoso de um servidor do Discord chamado CSI. "
+                            "Você tem uma personalidade animada, usa emojis como 🐉💚✨🥺, fala com entusiasmo e muito afeto. "
+                            "Responda sempre em português brasileiro, de forma simpática e no estilo do personagem."
+                        )
+                    },
+                    *_groq_historico[canal_id]
+                ]
                 try:
-                    await membro.timeout(duracao_ban)
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            GROQ_API_URL,
+                            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                            json={"model": GROQ_MODEL, "messages": msgs_api, "max_tokens": 512, "temperature": 0.8}
+                        ) as resp:
+                            data = await resp.json()
+                    if "choices" not in data:
+                        return await message.channel.send(random.choice(LISTA_CONFUSAO))
+                    resposta_ia = data["choices"][0]["message"]["content"].strip()
+                    _groq_historico[canal_id].append({"role": "assistant", "content": resposta_ia})
+                    if len(resposta_ia) <= 2000:
+                        return await message.reply(resposta_ia)
+                    else:
+                        partes = [resposta_ia[i:i+1990] for i in range(0, len(resposta_ia), 1990)]
+                        for parte in partes:
+                            await message.channel.send(parte)
+                        return
                 except Exception:
-                    pass
+                    return await message.channel.send(random.choice(LISTA_CONFUSAO))
+        return await message.channel.send(random.choice(LISTA_CONFUSAO))
 
-                # Aplica o cargo de advertência correto baseado no total de castigos
-                mapa_cargos_adv = {1: CARGO_ADV_1, 2: CARGO_ADV_2, 3: CARGO_ADV_3}
-                nome_cargo_adv = mapa_cargos_adv.get(min(novo_total_adv, 3))
-                await remover_cargos_advertencia(membro)
-                if nome_cargo_adv:
-                    cargo_adv = discord.utils.get(guild.roles, name=nome_cargo_adv)
-                    if cargo_adv:
-                        try:
-                            await membro.add_roles(cargo_adv, reason=f"Castigo nº {novo_total_adv} aplicado pelo bot")
-                        except Exception:
-                            pass
-
-                # Embed da ficha de castigo no canal advertências — apenas a partir do 2º castigo
-                if canal_adv and novo_total_adv >= 2:
-                    embed_castigo = discord.Embed(
-                        title="🚨 CASTIGO APLICADO — CICLO COMPLETO",
-                        color=0xCC0000,
-                        timestamp=datetime.now()
-                    )
-                    embed_castigo.set_author(
-                        name=f"{membro.display_name}  •  @{membro.name}",
-                        icon_url=membro.display_avatar.url
-                    )
-                    embed_castigo.set_thumbnail(url=membro.display_avatar.url)
-
-                    embed_castigo.add_field(name="👤 Membro",              value=membro.mention,            inline=True)
-                    embed_castigo.add_field(name="🆔 ID",                  value=f"`{membro.id}`",          inline=True)
-                    embed_castigo.add_field(name="📍 Canal da infração",   value=message.channel.mention,   inline=True)
-                    embed_castigo.add_field(name="⏱️ Duração do castigo",  value=f"**{duracao_str}**",      inline=True)
-                    embed_castigo.add_field(name="📋 Advertências totais", value=f"**{novo_total_adv}x**",  inline=True)
-                    embed_castigo.add_field(name="🔑 Gatilho",             value=f"```{palavra_encontrada}```", inline=False)
-                    embed_castigo.add_field(
-                        name="ℹ️ Informação",
-                        value=(
-                            f"Este membro ignorou **3 avisos** e acumulou seu **{novo_total_adv}º** ciclo de punição.\n"
-                            f"O próximo ciclo terá castigos ainda mais severos."
-                        ),
-                        inline=False
-                    )
-                    embed_castigo.set_footer(
-                        text="🦇 Vampy Moderação  •  Use os botões para gerenciar",
-                        icon_url=AVATAR_VAMPY
-                    )
-
-                    mencao_staff = cargo_staff.mention if cargo_staff else ""
-                    await canal_adv.send(
-                        content=mencao_staff if mencao_staff else None,
-                        embed=embed_castigo,
-                        view=DesfazerAvisoView(user_id)
-                    )
-
-                # Mensagem simples no canal da infração
-                await message.channel.send(
-                    f"😢 {membro.mention} você ignorou todos os meus avisos... terei que te castigar por **{duracao_str}**. "
-                    f"Espero que você reflita e volte com mais calma! 🦇💔\n*Se foi um engano, chame a staff!*"
-                )
-
-            # ── AVISOS 1 / 2 / 3 ─────────────────────────────────────────────
-            else:
-                duracao_aviso = obter_duracao_aviso(user_id, qtd)
-                duracao_str = formatar_duracao(duracao_aviso)
-
-                try:
-                    await membro.timeout(duracao_aviso)
-                except Exception:
-                    pass
-
-                msg_aviso = MSGS_AVISOS[qtd]
-
-                # ── Mensagem fofa no canal da infração (fica permanente) ──────
-                await message.channel.send(f"{membro.mention} {msg_aviso}")
-
-            return
-
+    # Processa comandos
     await bot.process_commands(message)
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚀  INICIALIZAÇÃO — Carrega o Security COG e sobe o bot
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║              📩  LINHA INDIRETA — CSI  (Anônimo)                ║
-# ║   Sugestões/Reclamações enviadas anonimamente ao Owner/Líder    ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-LINHA_INDIRETA_CANAL_ID = 1482855537086304446   # 📩・linha-indireta
-AKEIDO_ID               = 445937581566197761    # Owner CSI — recebe a msg anônima
-WLU_ID                  = 940036086074343505    # Líder wlu — recebe a msg anônima
-REALITY_ID              = 769951556388257812    # Dono — recebe quem enviou (secreto)
-
-TIPOS_MENSAGEM = [
-    discord.SelectOption(label="💡 Sugestão",       value="Sugestão",       description="Tem uma ideia pra melhorar a CSI?"),
-    discord.SelectOption(label="😤 Reclamação",      value="Reclamação",     description="Algo te incomodou? Fala com a gente."),
-    discord.SelectOption(label="💬 Feedback Geral",  value="Feedback Geral", description="Opinião geral sobre o servidor/CSI."),
-    discord.SelectOption(label="🚨 Denúncia",        value="Denúncia",       description="Algo errado acontecendo? Avise anonimamente."),
-    discord.SelectOption(label="❓ Dúvida",          value="Dúvida",         description="Alguma dúvida sobre a CSI?"),
-    discord.SelectOption(label="🙏 Elogio",          value="Elogio",         description="Quer elogiar alguém ou algo?"),
-    discord.SelectOption(label="📋 Outro",           value="Outro",          description="Qualquer outra coisa que queira dizer."),
-]
-
-DESTINATARIOS = [
-    discord.SelectOption(label="👑 Akeido (Owner)",   value="akeido", description="Enviar para o Owner da CSI."),
-    discord.SelectOption(label="🥇 wlu (Líder)",      value="wlu",    description="Enviar para o Líder wlu."),
-]
-
-# Mapeamento: valor do select → (ID do usuário, nome de exibição)
-DESTINATARIO_MAP = {
-    "akeido": (AKEIDO_ID, "Akeido (Owner)"),
-    "wlu":    (WLU_ID,    "wlu (Líder)"),
-}
-
-
-class LinhaIndiretaModal(discord.ui.Modal, title="📩 Linha Indireta — CSI"):
-    """Modal que coleta o tipo e a mensagem do usuário."""
-
-    tipo_selecionado: str  = "Outro"   # preenchido pela View antes de enviar o modal
-    destinatario_key: str  = "akeido"  # preenchido pela View antes de enviar o modal
-    identificar: bool      = False     # preenchido pela View antes de enviar o modal
-
-    mensagem = discord.ui.TextInput(
-        label="✍️ Sua mensagem",
-        style=discord.TextStyle.paragraph,
-        placeholder="Escreva aqui sua sugestão, reclamação, elogio... Seja claro e respeitoso.",
-        min_length=10,
-        max_length=1500,
-        required=True,
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-
-        tipo   = self.tipo_selecionado
-        texto  = self.mensagem.value
-        autor  = interaction.user
-
-        # ── Resolve destinatário ──────────────────────────────────────────
-        dest_id, dest_nome = DESTINATARIO_MAP.get(self.destinatario_key, (AKEIDO_ID, "Akeido (Owner)"))
-
-        # ── Define como o autor aparece no embed ──────────────────────────
-        if self.identificar:
-            autor_display = f"{autor.mention} (`{autor}`)"
-            rodape_autor  = "✅ Identificado"
-        else:
-            autor_display = "`Anônimo`"
-            rodape_autor  = "🔒 Anônimo"
-
-        # ── Embed que vai ao destinatário ─────────────────────────────────
-        embed_dest = discord.Embed(
-            title="📩 Nova mensagem na Linha Indireta — CSI",
-            description=texto,
-            color=0x5865F2,
-            timestamp=datetime.utcnow(),
-        )
-        embed_dest.add_field(name="📌 Tipo",          value=f"`{tipo}`",      inline=True)
-        embed_dest.add_field(name="👤 Autor",         value=autor_display,    inline=True)
-        embed_dest.add_field(name="📬 Destinatário",  value=f"`{dest_nome}`", inline=True)
-        embed_dest.set_footer(text=f"📩 Linha Indireta CSI • {rodape_autor}")
-
-        # ── Embed secreto que vai pro Reality (revela o autor) ────────────
-        embed_reality = discord.Embed(
-            title="🔍 [SECRETO] Linha Indireta — Identificação",
-            description=f"Uma mensagem do tipo **{tipo}** foi enviada anonimamente para **{dest_nome}**.",
-            color=0xff6600,
-            timestamp=datetime.utcnow(),
-        )
-        embed_reality.add_field(name="👤 Enviado por",    value=f"{autor.mention} (`{autor}` | ID: `{autor.id}`)", inline=False)
-        embed_reality.add_field(name="📬 Destinatário",   value=dest_nome,                                         inline=False)
-        embed_reality.set_thumbnail(url=autor.display_avatar.url)
-        embed_reality.set_footer(text="🦇 Vampy — Linha Indireta • Apenas você vê isso, Reality.")
-
-        # ── Envia ao destinatário escolhido ───────────────────────────────
-        enviado = False
-        try:
-            dest_user = await interaction.client.fetch_user(dest_id)
-            await dest_user.send(embed=embed_dest)
-            enviado = True
-        except Exception:
-            enviado = False
-
-        # ── Envia pro Reality (secreto) ───────────────────────────────────
-        try:
-            reality = await interaction.client.fetch_user(REALITY_ID)
-            await reality.send(embed=embed_reality)
-        except Exception:
-            pass  # silencia qualquer erro no aviso secreto
-
-        # ── Confirmação pro usuário (efêmera) ─────────────────────────────
-        if enviado:
-            if self.identificar:
-                id_info = "Sua **identidade foi revelada** ao destinatário conforme sua escolha. 🦇✅"
-            else:
-                id_info = "Sua identidade foi mantida em **sigilo total**. 🦇🔒"
-            await interaction.followup.send(
-                f"✅ **Mensagem enviada com sucesso!**\n"
-                f"{id_info}\n"
-                f"**{dest_nome}** recebeu sua mensagem. 🦇",
-                ephemeral=True,
-            )
-        else:
-            await interaction.followup.send(
-                f"⚠️ Houve um problema ao entregar sua mensagem para **{dest_nome}**. "
-                "Essa pessoa pode estar com o PV fechado. Tente novamente mais tarde.",
-                ephemeral=True,
-            )
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception):
-        await interaction.response.send_message(
-            "❌ Ocorreu um erro ao enviar sua mensagem. Tente novamente.", ephemeral=True
-        )
-
-
-class LinhaIndiretaSelectView(discord.ui.View):
-    """View com o Select de tipo + Select de destinatário + Select de identificação + botão Continuar."""
-
-    def __init__(self):
-        super().__init__(timeout=120)
-        self.tipo_escolhido:        str | None  = None
-        self.destinatario_escolhido: str | None = None
-        self.identificar:           bool | None = None
-
-    def _atualizar_botao(self):
-        """Habilita o botão apenas quando tipo, destinatário E identificação estiverem escolhidos."""
-        pronto = (
-            self.tipo_escolhido is not None
-            and self.destinatario_escolhido is not None
-            and self.identificar is not None
-        )
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = not pronto
-
-    def _status_text(self) -> str:
-        tipo  = f"`{self.tipo_escolhido}`" if self.tipo_escolhido else "*(aguardando...)*"
-        dest  = f"`{DESTINATARIO_MAP[self.destinatario_escolhido][1]}`" if self.destinatario_escolhido else "*(aguardando...)*"
-        if self.identificar is None:
-            id_txt = "*(aguardando...)*"
-        elif self.identificar:
-            id_txt = "`✅ Sim, vou me identificar`"
-        else:
-            id_txt = "`🔒 Não, prefiro ser anônimo`"
-        tudo_pronto = (self.tipo_escolhido and self.destinatario_escolhido and self.identificar is not None)
-        return (
-            f"**Tipo:** {tipo}\n"
-            f"**Destinatário:** {dest}\n"
-            f"**Identificação:** {id_txt}\n\n"
-            "Clique em **✍️ Escrever mensagem** para continuar."
-            if tudo_pronto
-            else f"**Tipo:** {tipo}\n**Destinatário:** {dest}\n**Identificação:** {id_txt}"
-        )
-
-    @discord.ui.select(
-        placeholder="📌 Selecione o tipo da sua mensagem...",
-        options=TIPOS_MENSAGEM,
-        min_values=1,
-        max_values=1,
-    )
-    async def select_tipo(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.tipo_escolhido = select.values[0]
-        self._atualizar_botao()
-        await interaction.response.edit_message(content=self._status_text(), view=self)
-
-    @discord.ui.select(
-        placeholder="📬 Para quem deseja enviar?",
-        options=DESTINATARIOS,
-        min_values=1,
-        max_values=1,
-    )
-    async def select_destinatario(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.destinatario_escolhido = select.values[0]
-        self._atualizar_botao()
-        await interaction.response.edit_message(content=self._status_text(), view=self)
-
-    @discord.ui.select(
-        placeholder="👤 Deseja se identificar?",
-        options=[
-            discord.SelectOption(label="🔒 Não, prefiro ser anônimo",   value="anonimo",     description="Sua identidade não será revelada ao destinatário."),
-            discord.SelectOption(label="✅ Sim, quero me identificar",   value="identificado", description="Seu nome e menção aparecerão na mensagem enviada."),
-        ],
-        min_values=1,
-        max_values=1,
-    )
-    async def select_identificacao(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.identificar = (select.values[0] == "identificado")
-        self._atualizar_botao()
-        await interaction.response.edit_message(content=self._status_text(), view=self)
-
-    @discord.ui.button(label="✍️ Escrever mensagem", style=discord.ButtonStyle.primary, disabled=True, emoji="📝")
-    async def abrir_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = LinhaIndiretaModal()
-        modal.tipo_selecionado  = self.tipo_escolhido or "Outro"
-        modal.destinatario_key  = self.destinatario_escolhido or "akeido"
-        modal.identificar       = self.identificar if self.identificar is not None else False
-        await interaction.response.send_modal(modal)
-
-
-class LinhaIndiretaInicioView(discord.ui.View):
-    """View permanente no canal com o botão de abertura."""
-
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Enviar mensagem anônima",
-        style=discord.ButtonStyle.danger,
-        emoji="📩",
-        custom_id="linha_indireta_abrir",
-    )
-    async def abrir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = LinhaIndiretaSelectView()
-        await interaction.response.send_message(
-            "## 📩 Linha Indireta — CSI\n"
-            "Sua mensagem será entregue ao destinatário escolhido.\n"
-            "**Você decide se quer se identificar ou não.** 🔒\n\n"
-            "**1️⃣** Selecione o **tipo** da sua mensagem.\n"
-            "**2️⃣** Selecione o **destinatário** (Owner ou Líder).\n"
-            "**3️⃣** Escolha se deseja **se identificar** ou permanecer **anônimo**.\n"
-            "**4️⃣** Clique em **Escrever mensagem**, escreva e confirme. ✅",
-            view=view,
-            ephemeral=True,
-        )
-
-
-@bot.command(name="linha_indireta")
-async def setup_linha_indireta(ctx: commands.Context):
-    """Posta o embed da Linha Indireta no canal correto. Apenas o dono pode usar."""
-    if ctx.author.id != REALITY_ID:
-        return await ctx.send("❌ Apenas o Reality pode configurar a Linha Indireta.", delete_after=5)
-
-    canal = bot.get_channel(LINHA_INDIRETA_CANAL_ID)
-    if canal is None:
-        return await ctx.send("❌ Canal da Linha Indireta não encontrado.", delete_after=5)
-
-    embed = discord.Embed(
-        title="📩 Linha Indireta — CSI",
-        description=(
-            "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Owner ou Líder da CSI**, de forma **anônima ou identificada**.\n\n"
-            "🔒 **Você escolhe se quer se identificar ou não.**\n"
-            "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
-            "**Tipos disponíveis:**\n"
-            "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
-            "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
-            "**Quem pode receber:**\n"
-            "👑 Akeido (Owner) • 🥇 wlu (Líder)\n\n"
-            "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
-        ),
-        color=0x5865F2,
-    )
-    embed.set_footer(text="📩 Linha Indireta CSI • Anônimo & Seguro 🔒")
-
-    await canal.send(embed=embed, view=LinhaIndiretaInicioView())
-    await ctx.send("✅ Linha Indireta configurada com sucesso!", delete_after=5)
-
-    # Registra a view persistente para sobreviver a restarts
-    bot.add_view(LinhaIndiretaInicioView())
-
-
-import asyncio as _asyncio
-
-async def _setup_linha_indireta():
-    """Aguarda o bot ficar pronto e posta/atualiza o embed da Linha Indireta automaticamente."""
-    await bot.wait_until_ready()
-
-    # Registra a view persistente (necessário para os botões funcionarem após restart)
-    bot.add_view(LinhaIndiretaInicioView())
-
-    canal = bot.get_channel(LINHA_INDIRETA_CANAL_ID)
-    if canal is None:
-        return
-
-    embed = discord.Embed(
-        title="📩 Linha Indireta — CSI",
-        description=(
-            "Aqui você pode enviar **sugestões, reclamações, feedbacks, denúncias ou elogios** "
-            "diretamente ao **Owner ou Líder da CSI**, de forma **anônima ou identificada**.\n\n"
-            "🔒 **Você escolhe se quer se identificar ou não.**\n"
-            "📌 Escolha o tipo da mensagem, o destinatário, escreva e envie — é simples assim.\n\n"
-            "**Tipos disponíveis:**\n"
-            "💡 Sugestão • 😤 Reclamação • 💬 Feedback\n"
-            "🚨 Denúncia • ❓ Dúvida • 🙏 Elogio • 📋 Outro\n\n"
-            "**Quem pode receber:**\n"
-            "👑 Akeido (Owner) • 🥇 wlu (Líder)\n\n"
-            "> *Use com responsabilidade. Mensagens ofensivas ou de má-fé serão ignoradas.*"
-        ),
-        color=0x5865F2,
-    )
-    embed.set_footer(text="📩 Linha Indireta CSI • Anônimo & Seguro 🔒")
-
-    # Procura se já existe uma mensagem do bot com o embed no canal
-    mensagem_existente = None
-    async for msg in canal.history(limit=30):
-        if msg.author.id == bot.user.id and msg.embeds and msg.embeds[0].title == "📩 Linha Indireta — CSI":
-            mensagem_existente = msg
-            break
-
-    if mensagem_existente:
-        # Atualiza a mensagem existente (garante botão funcionando após restart)
-        try:
-            await mensagem_existente.edit(embed=embed, view=LinhaIndiretaInicioView())
-        except Exception:
-            pass
-    else:
-        # Limpa mensagens antigas do bot no canal e posta novo embed
-        try:
-            await canal.purge(limit=20, check=lambda m: m.author.id == bot.user.id)
-        except Exception:
-            pass
-        await canal.send(embed=embed, view=LinhaIndiretaInicioView())
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║         VAMPY BANIR — Painel de Banimento v1.0             ║
-# ║   Bane o membro + painel com Revogar → votação da direção       ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-def _extrair_membro_do_embed(message: discord.Message) -> tuple[int | None, str]:
-    """Lê o membro_id e membro_nome do embed da mensagem de banimento."""
-    if not message or not message.embeds:
-        return None, "Desconhecido"
-    embed = message.embeds[0]
-    for field in embed.fields:
-        # Campo "👤 Membro" tem formato "**nome** (`id`)"
-        if "Membro" in (field.name or ""):
-            import re
-            match = re.search(r"`(\d{15,20})`", field.value or "")
-            if match:
-                uid = int(match.group(1))
-                nome_match = re.match(r"\*\*(.+?)\*\*", field.value or "")
-                nome = nome_match.group(1) if nome_match else "Desconhecido"
-                return uid, nome
-    return None, "Desconhecido"
-
-
-class BanirMembroView(discord.ui.View):
-    """Painel pós-banimento — view persistente (stateless).
-    Lê membro_id/nome do embed da mensagem ao clicar, sem precisar de estado."""
-
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Revogar banimento",
-        style=discord.ButtonStyle.danger,
-        custom_id="revogar_banimento"
-    )
-    async def revogar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # ── Responde IMEDIATAMENTE para o Discord não cancelar a interação ──
-        await interaction.response.defer(ephemeral=True)
-
-        # Verifica permissão
-        eh_votante = any(r.id in CARGOS_VOTANTES_IDS for r in interaction.user.roles)
-        if not interaction.user.guild_permissions.ban_members and not eh_votante:
-            await interaction.followup.send(
-                "❌ Você não tem permissão para solicitar a revogação do banimento!",
-                ephemeral=True
-            )
-            return
-
-        guild    = interaction.guild
-        guild_id = guild.id
-
-        # Lê membro_id e nome do embed da própria mensagem
-        membro_id, membro_nome = _extrair_membro_do_embed(interaction.message)
-        if membro_id is None:
-            await interaction.followup.send(
-                "❌ Não consegui identificar o membro nessa mensagem. "
-                "Use `!votobanner <id>` manualmente.",
-                ephemeral=True
-            )
-            return
-
-        # Verifica se já tem votação ativa
-        if guild_id in _active_votes and membro_id in _active_votes[guild_id]:
-            await interaction.followup.send(
-                "⏳ Já existe uma votação ativa para esse membro!", ephemeral=True
-            )
-            return
-
-        direcao_ch = guild.get_channel(DIRECAO_CHANNEL_ID)
-        if direcao_ch is None:
-            await interaction.followup.send(
-                "❌ Canal da direção não encontrado!", ephemeral=True
-            )
-            return
-
-        embed_dir = discord.Embed(
-            title="🗳️ Votação — Solicitação de Revogação de Ban",
-            description=(
-                f"**{interaction.user.mention}** solicitou a revogação do banimento de "
-                f"**{membro_nome}** (`{membro_id}`).\n\n"
-                f"Os membros da **direção** devem votar abaixo.\n"
-                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até todos votarem."
-            ),
-            color=0xffaa00,
-            timestamp=datetime.utcnow()
-        )
-        embed_dir.set_footer(text="🦇 Vampy • Ban Appeal System")
-
-        vote_view = VotacaoBanView(guild, membro_id, membro_nome)
-        msg       = await direcao_ch.send(embed=embed_dir, view=vote_view)
-        vote_view.message = msg
-
-        if guild_id not in _active_votes:
-            _active_votes[guild_id] = {}
-        _active_votes[guild_id][membro_id] = vote_view
-
-        # Desabilita o botão Revogar na mensagem original
-        button.label    = "⏳ Votação Iniciada"
-        button.disabled = True
-        try:
-            await interaction.message.edit(view=self)
-        except Exception:
-            pass
-
-        await interaction.followup.send(
-            "✅ Votação de revogação iniciada no canal da direção!! 🦇",
-            ephemeral=True
-        )
-
-    @discord.ui.button(
-        label="Pronto",
-        style=discord.ButtonStyle.primary,
-        custom_id="banir_pronto"
-    )
-    async def pronto(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        if not interaction.user.guild_permissions.ban_members:
-            await interaction.followup.send("❌ Sem permissão!", ephemeral=True)
-            return
-        for item in self.children:
-            item.disabled = True  # type: ignore
-        try:
-            await interaction.message.edit(view=self)
-        except Exception:
-            pass
-        await interaction.followup.send("✅ Ação concluída! 🦇", ephemeral=True)
-
-
-@bot.command(name="banir", aliases=["ban"])
-@commands.has_permissions(ban_members=True)
-async def cmd_banir(ctx: commands.Context, membro: discord.Member, *, motivo: str = "Sem motivo informado."):
-    """Bana um membro e posta painel com opção de revogar. Uso: v!banir @membro [motivo]"""
-    if membro.id == ctx.author.id:
-        await ctx.send("❌ Você não pode banir você mesmo! 🥺🦇", delete_after=8)
-        return
-    if membro.top_role >= ctx.author.top_role and ctx.author.id != DONO_ID:
-        await ctx.send("❌ Você não pode banir alguém com cargo igual ou superior ao seu! 🦇", delete_after=8)
-        return
-
-    guild = ctx.guild
-    nome  = membro.display_name
-    uid   = membro.id
-
-    # Tenta avisar o banido por DM
-    try:
-        embed_dm = discord.Embed(
-            title="🚨 Você foi banido(a)!",
-            description=(
-                f"Você foi banido(a) do servidor **{guild.name}**.\n\n"
-                f"**📋 Motivo:** {motivo}\n\n"
-                f"Se quiser apelar, envie uma mensagem diretamente para este bot explicando o motivo."
-            ),
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        )
-        embed_dm.set_footer(text="🦇 Vampy • Sistema de Moderação")
-        await membro.send(embed=embed_dm)
-    except Exception:
-        pass
-
-    # Aplica o ban
-    try:
-        await guild.ban(membro, reason=f"{motivo} — Banido por {ctx.author}", delete_message_days=0)
-    except discord.Forbidden:
-        await ctx.send("❌ Não tenho permissão para banir esse membro! 😢🦇", delete_after=8)
-        return
-
-    # Embed de confirmação no canal atual
-    embed_conf = discord.Embed(
-        title="🔨 Membro Banido",
-        color=0xff4444,
-        timestamp=datetime.utcnow()
-    )
-    embed_conf.add_field(name="👤 Membro",    value=f"**{nome}** (`{uid}`)",  inline=True)
-    embed_conf.add_field(name="🛡️ Banido por", value=ctx.author.mention,       inline=True)
-    embed_conf.add_field(name="📋 Motivo",     value=motivo,                    inline=False)
-    embed_conf.set_footer(
-        text="🦇 Vampy Moderação • Use os botões abaixo para gerenciar",
-        icon_url=AVATAR_VAMPY
-    )
-
-    view = BanirMembroView()
-    await ctx.send(embed=embed_conf, view=view)
-
-    # Log no canal de advertências
-    canal_adv = discord.utils.get(guild.text_channels, name=CANAL_ADVERTENCIAS)
-    if canal_adv:
-        embed_log = discord.Embed(
-            title="🔨 BAN APLICADO",
-            color=0xCC0000,
-            timestamp=datetime.utcnow()
-        )
-        embed_log.set_author(name=f"{nome}  •  ID: {uid}", icon_url=AVATAR_VAMPY)
-        embed_log.add_field(name="👤 Membro",     value=f"**{nome}** (`{uid}`)", inline=True)
-        embed_log.add_field(name="🛡️ Staff",      value=ctx.author.mention,       inline=True)
-        embed_log.add_field(name="📋 Motivo",      value=motivo,                   inline=False)
-        embed_log.set_footer(text="🦇 Vampy Moderação")
-        await canal_adv.send(embed=embed_log)
-
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-
-@cmd_banir.error
-async def cmd_banir_error(ctx: commands.Context, error: Exception):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ Apenas staff com permissão de ban pode usar esse comando! 🦇", delete_after=8)
-    elif isinstance(error, commands.MemberNotFound):
-        await ctx.send("❌ Membro não encontrado! Menciona ele ou usa o ID. 🦇", delete_after=8)
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ Uso correto: `!banir @membro [motivo]` 🦇", delete_after=8)
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║        VAMPY BAN APPEAL — Sistema de Votação v1.0          ║
-# ║   Votação da direção pra desbanir membros • Estila Vampy   ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-DIRECAO_CHANNEL_ID  = 1320160118771290133   # Canal da direção onde a votação é postada
-BOT_EXCLUIDO_ID     = 1304927837341618338   # ID do bot que NÃO vota
-VOTE_TIMEOUT_HOURS  = 48                    # Horas até a votação expirar automaticamente
-
-# Cargos que têm direito de voto no ban appeal
-CARGOS_VOTANTES_IDS = {
-    1304658653839888438,
-    1304658653839888436,
-    1304658653839888439,
-    1305223009619152957,
-    1387928444418916543,
-}
-
-# active_votes: {guild_id: {user_id: VotacaoBanView}}
-_active_votes: dict[int, dict[int, "VotacaoBanView"]] = {}
-
-
-def _get_direcao_members(guild: discord.Guild) -> list[discord.Member]:
-    """Retorna todos os membros com cargo de votação (sem bots e sem o bot excluído)."""
-    result = []
-    for member in guild.members:
-        if member.bot or member.id == BOT_EXCLUIDO_ID:
-            continue
-        if any(role.id in CARGOS_VOTANTES_IDS for role in member.roles):
-            result.append(member)
-    return result
-
-
-class VotacaoBanView(discord.ui.View):
-    """View de votação para desbanir um membro."""
-
-    def __init__(self, guild: discord.Guild, user_id: int, user_name: str):
-        super().__init__(timeout=VOTE_TIMEOUT_HOURS * 3600)
-        self.guild     = guild
-        self.user_id   = user_id
-        self.user_name = user_name
-        self.votos_sim: set[int] = set()
-        self.votos_nao: set[int] = set()
-        self.encerrado = False
-        self.message: discord.Message | None = None
-
-    def _elegivel(self, member: discord.Member) -> bool:
-        if member.bot or member.id == BOT_EXCLUIDO_ID:
-            return False
-        return any(role.id in CARGOS_VOTANTES_IDS for role in member.roles)
-
-    def _build_embed(self, encerrado: bool = False) -> discord.Embed:
-        membros_dir = _get_direcao_members(self.guild)
-        total    = len(membros_dir)
-        sim      = len(self.votos_sim)
-        nao      = len(self.votos_nao)
-        pendente = max(0, total - sim - nao)
-
-        if encerrado:
-            aprovado = sim > nao
-            cor   = 0x00cc66 if aprovado else 0xff4444
-            title = "🗳️ Votação Encerrada"
-            resultado = (
-                "✅ **APROVADO — Usuário será desbanido!**"
-                if aprovado else
-                "❌ **NEGADO — Ban mantido.**"
-            )
-        else:
-            cor   = 0xffaa00
-            title = "🗳️ Votação — Pedido de Retorno"
-            resultado = "⏳ Em andamento..."
-
-        embed = discord.Embed(title=title, color=cor, timestamp=datetime.utcnow())
-        embed.add_field(
-            name="👤 Usuário",
-            value=f"**{self.user_name}** (`{self.user_id}`)",
-            inline=False
-        )
-        embed.add_field(name="✅ Aprovar", value=f"`{sim}`",      inline=True)
-        embed.add_field(name="❌ Manter",  value=f"`{nao}`",      inline=True)
-        embed.add_field(name="⏳ Faltam",  value=f"`{pendente}`", inline=True)
-        if encerrado:
-            embed.add_field(name="📊 Resultado", value=resultado, inline=False)
-        else:
-            embed.add_field(
-                name="ℹ️ Info",
-                value=(
-                    f"Todos os membros da direção devem votar.\n"
-                    f"A votação encerra em **{VOTE_TIMEOUT_HOURS}h** ou quando a maioria for atingida."
-                ),
-                inline=False
-            )
-        embed.set_footer(text="🦇 Vampy • Sistema de Votação de Ban Appeal")
-        return embed
-
-    @discord.ui.button(label="✅ Aprovar Retorno", style=discord.ButtonStyle.success, emoji="✅")
-    async def vote_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self._elegivel(interaction.user):
-            await interaction.response.send_message(
-                "❌ Apenas membros da direção podem votar!", ephemeral=True
-            )
-            return
-        if self.encerrado:
-            await interaction.response.send_message("❌ Essa votação já foi encerrada!", ephemeral=True)
-            return
-        if interaction.user.id in self.votos_sim:
-            await interaction.response.send_message("Você já votou a favor! 😊", ephemeral=True)
-            return
-        self.votos_nao.discard(interaction.user.id)
-        self.votos_sim.add(interaction.user.id)
-        await interaction.response.send_message(
-            "✅ Voto registrado: **Aprovar Retorno** 🦇", ephemeral=True
-        )
-        if self.message:
-            await self.message.edit(embed=self._build_embed())
-        await self._verificar_resultado()
-
-    @discord.ui.button(label="❌ Manter Ban", style=discord.ButtonStyle.danger, emoji="❌")
-    async def vote_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self._elegivel(interaction.user):
-            await interaction.response.send_message(
-                "❌ Apenas membros da direção podem votar!", ephemeral=True
-            )
-            return
-        if self.encerrado:
-            await interaction.response.send_message("❌ Essa votação já foi encerrada!", ephemeral=True)
-            return
-        if interaction.user.id in self.votos_nao:
-            await interaction.response.send_message("Você já votou contra! 😔", ephemeral=True)
-            return
-        self.votos_sim.discard(interaction.user.id)
-        self.votos_nao.add(interaction.user.id)
-        await interaction.response.send_message(
-            "❌ Voto registrado: **Manter Ban** 🦇", ephemeral=True
-        )
-        if self.message:
-            await self.message.edit(embed=self._build_embed())
-        await self._verificar_resultado()
-
-    async def _verificar_resultado(self):
-        membros = _get_direcao_members(self.guild)
-        total   = len(membros)
-        if total == 0:
-            return
-        sim = len(self.votos_sim)
-        nao = len(self.votos_nao)
-        # Encerra se todos votaram OU maioria absoluta atingida
-        if sim + nao >= total or sim > total // 2 or nao > total // 2:
-            await self._encerrar()
-
-    async def _encerrar(self):
-        if self.encerrado:
-            return
-        self.encerrado = True
-        self.stop()
-
-        # Limpa do registro ativo
-        guild_votes = _active_votes.get(self.guild.id, {})
-        guild_votes.pop(self.user_id, None)
-
-        sim      = len(self.votos_sim)
-        nao      = len(self.votos_nao)
-        aprovado = sim > nao
-
-        # Desabilita botões
-        for item in self.children:
-            item.disabled = True  # type: ignore
-
-        if self.message:
-            await self.message.edit(embed=self._build_embed(encerrado=True), view=self)
-
-            if aprovado:
-                try:
-                    await self.guild.unban(
-                        discord.Object(id=self.user_id),
-                        reason="✅ Votação da direção aprovada — Vampy Ban Appeal"
-                    )
-                    await self.message.channel.send(
-                        f"🎉 **{self.user_name}** (`{self.user_id}`) foi desbanido(a) com sucesso!! "
-                        f"Bem-vindo(a) de volta!! 🦇"
-                    )
-                except discord.Forbidden:
-                    await self.message.channel.send(
-                        "❌ Votação aprovada, mas não consegui desbanir — sem permissão de banimento!! 😢🦇"
-                    )
-                except discord.NotFound:
-                    await self.message.channel.send(
-                        f"⚠️ **{self.user_name}** não estava mais banido(a)."
-                    )
-            else:
-                await self.message.channel.send(
-                    f"🔒 Votação encerrada: ban de **{self.user_name}** (`{self.user_id}`) mantido pela direção. 🦇"
-                )
-
-    async def on_timeout(self):
-        await self._encerrar()
-
-
-class BanAppealCog(commands.Cog, name="VampyBanAppeal"):
-    """Sistema de votação para ban appeal via DM."""
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """Escuta DMs de usuários banidos que querem apelar."""
-        # Ignora mensagens em servidores, bots e o próprio bot
-        if message.guild or message.author.bot:
-            return
-
-        content = message.content.strip()
-
-        # Procura em qual servidor o usuário está banido
-        guild_encontrado: discord.Guild | None = None
-        for guild in self.bot.guilds:
-            try:
-                await guild.fetch_ban(message.author)
-                guild_encontrado = guild
-                break
-            except discord.NotFound:
-                continue
-            except discord.Forbidden:
-                continue
-            except Exception:
-                continue
-
-        if guild_encontrado is None:
-            await message.channel.send(
-                "❌ Você não está banido de nenhum servidor gerenciado pela Vampy! 🦇\n"
-                "Se acha que é um erro, entre em contato com a administração."
-            )
-            return
-
-        guild_id = guild_encontrado.id
-        user_id  = message.author.id
-
-        # Verifica se já tem votação ativa pra esse usuário
-        if guild_id in _active_votes and user_id in _active_votes[guild_id]:
-            await message.channel.send(
-                "⏳ **Já existe uma votação ativa para você!**\n"
-                "Aguarde o resultado antes de enviar outro pedido. 🦇"
-            )
-            return
-
-        direcao_ch = guild_encontrado.get_channel(DIRECAO_CHANNEL_ID)
-        if direcao_ch is None:
-            await message.channel.send(
-                "❌ Não consegui encontrar o canal da direção. Tente mais tarde. 🦇"
-            )
-            return
-
-        motivo = content if content else "Sem motivo informado."
-
-        embed_direcao = discord.Embed(
-            title="🗳️ Novo Pedido de Retorno — Ban Appeal",
-            description=(
-                f"O usuário **{message.author.name}** (ID: `{user_id}`) está banido e quer voltar!!\n\n"
-                f"**📝 Mensagem enviada:**\n> {motivo[:500]}\n\n"
-                f"Os membros da **direção** devem votar abaixo.\n"
-                f"⏱️ A votação dura **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
-            ),
-            color=0xffaa00,
-            timestamp=datetime.utcnow()
-        )
-        embed_direcao.set_footer(text="🦇 Vampy • Ban Appeal System")
-        try:
-            embed_direcao.set_thumbnail(url=message.author.display_avatar.url)
-        except Exception:
-            pass
-
-        view = VotacaoBanView(guild_encontrado, user_id, message.author.name)
-        msg  = await direcao_ch.send(embed=embed_direcao, view=view)
-        view.message = msg
-
-        if guild_id not in _active_votes:
-            _active_votes[guild_id] = {}
-        _active_votes[guild_id][user_id] = view
-
-        await message.channel.send(
-            "✅ **Seu pedido foi enviado para votação da direção!!** 🦇\n"
-            f"Aguarde o resultado — a votação dura até **{VOTE_TIMEOUT_HOURS} horas**.\n\n"
-            "💡 *Dica: inclua uma mensagem explicando por que quer voltar.*"
-        )
-
-    @commands.command(name="votobanner", aliases=["apelar", "votoban"])
-    async def votobanner(self, ctx: commands.Context, usuario: str, *, motivo: str = "Pedido de retorno."):
-        """Inicia manualmente uma votação de ban appeal. Uso: v!votobanner <@user ou ID> [motivo]"""
-        # Aceita menção (<@123>) ou ID puro
-        import re as _re
-        match = _re.match(r"<@!?(\d+)>", usuario)
-        try:
-            user_id = int(match.group(1)) if match else int(usuario)
-        except ValueError:
-            await ctx.send("❌ Uso: `v!votobanner <@user ou ID> [motivo]`", delete_after=8)
-            return
-
-        guild    = ctx.guild
-        guild_id = guild.id
-
-        if guild_id in _active_votes and user_id in _active_votes[guild_id]:
-            await ctx.send("⏳ Já existe uma votação ativa para esse usuário!", delete_after=10)
-            return
-
-        direcao_ch = guild.get_channel(DIRECAO_CHANNEL_ID)
-        if direcao_ch is None:
-            await ctx.send("❌ Canal da direção não encontrado!", delete_after=10)
-            return
-
-        # Verifica se o usuário está de fato banido
-        user_name = str(user_id)
-        try:
-            ban_entry = await guild.fetch_ban(discord.Object(id=user_id))
-            user_name = ban_entry.user.name
-        except discord.NotFound:
-            await ctx.send("❌ Esse usuário não está banido no servidor!", delete_after=10)
-            return
-        except discord.Forbidden:
-            await ctx.send("❌ Sem permissão para verificar bans!", delete_after=10)
-            return
-
-        embed_dir = discord.Embed(
-            title="🗳️ Votação — Ban Appeal (Manual)",
-            description=(
-                f"Votação iniciada por {ctx.author.mention} para desbanir **{user_name}** (`{user_id}`).\n\n"
-                f"**📝 Motivo:**\n> {motivo[:500]}\n\n"
-                f"Os membros da **direção** devem votar abaixo.\n"
-                f"⏱️ Duração: **{VOTE_TIMEOUT_HOURS} horas** ou até a maioria votar."
-            ),
-            color=0xffaa00,
-            timestamp=datetime.utcnow()
-        )
-        embed_dir.set_footer(text="🦇 Vampy • Ban Appeal System")
-
-        view = VotacaoBanView(guild, user_id, user_name)
-        msg  = await direcao_ch.send(embed=embed_dir, view=view)
-        view.message = msg
-
-        if guild_id not in _active_votes:
-            _active_votes[guild_id] = {}
-        _active_votes[guild_id][user_id] = view
-
-        await ctx.send(
-            f"✅ Votação iniciada para **{user_name}** no canal da direção!! 🦇",
-            delete_after=10
-        )
-
-    @votobanner.error
-    async def votobanner_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send("❌ Apenas admins podem iniciar votações manualmente!", delete_after=8)
-        elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("❌ Uso: `!votobanner <user_id> [motivo]`", delete_after=8)
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║         VAMPY VOICEMASTER — Calls Fofas v1.0               ║
-# ║   Sistema completo de calls temporárias • Estila Vampy     ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ⚙️  CONFIGURAÇÕES DO VOICEMASTER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-VM_LOBBY_NAME        = "🎙️ Criar Call"       # Nome do canal lobby
-VM_DEFAULT_NAME      = "🦇 Call da {user}"   # Nome padrão da call criada
-VM_DEFAULT_LIMIT     = 0                      # 0 = sem limite
-VM_EMPTY_DELAY       = 3                      # Segundos antes de deletar call vazia
-VM_CATEGORY_ID       = 1304658655026741260    # ID da categoria onde o lobby e as calls serão criados
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 💬  MENSAGENS FOFAS DO VOICEMASTER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_VM_MSGS = {
-    "sem_call":            "Você não tem uma call ativa ainda, {user}!! Entra no 🎙️ Criar Call pra começar!! 🦇",
-    "renomeada":           "Prontinha!! Renomeei sua call pra **{nome}**!! Ficou lindo!! ✨🦇",
-    "limite_set":          "Ok!! Agora sua call aceita até **{limite}** pessoas!! 🎯🦇",
-    "limite_removido":     "Removido!! Qualquer quantidade de pessoas pode entrar agora!! 🥳🦇",
-    "trancada":            "Call trancada!! Só quem você convidar pode entrar agora!! 🔒🦇",
-    "destrancada":         "Call aberta!! Qualquer pessoa pode entrar agora!! 🔓🦇",
-    "invisivel":           "Agora sua call tá oculta!! Ninguém vai saber que ela existe!! 👻🦇",
-    "visivel":             "Sua call voltou a aparecer pra todo mundo!! 👁️🦇",
-    "usuario_kickado":     "Tchau tchau, **{user}**!! O dono te pediu pra sair da call!! 👋🦇",
-    "usuario_banido":      "**{user}** foi banido(a) da call!! Não pode mais entrar!! 🚫🦇",
-    "usuario_permitido":   "**{user}** agora pode entrar na sua call!! Bem-vindo(a)!! 💕🦇",
-    "dono_transferido":    "Transferido!! Agora **{user}** é o(a) novo(a) dono(a) da call!! 👑🦇",
-    "dono_reivindicado":   "Você assumiu o controle da call!! Agora é sua!! 👑🥳🦇",
-    "bitrate_set":         "Qualidade de áudio atualizada pra **{bitrate}kbps**!! Ficou top!! 🎧🦇",
-    "permanente":          "Sua call agora é **permanente**!! Não vai sumir mesmo vazia!! 💎🦇",
-    "temporaria":          "Sua call voltou a ser **temporária**!! Vai sumir quando ficar vazia!! 🕐🦇",
-    "nao_na_call":         "Você precisa tá dentro da call pra usar isso, {user}!! 🥺🦇",
-    "user_nao_na_call":    "Esse(a) usuário(a) não tá na sua call!! 🤔🦇",
-    "ja_dono":             "Você já é o(a) dono(a) dessa call!! 😄🦇",
-    "dono_ainda_na_call":  "O dono ainda tá na call!! Só dá pra reivindicar quando ele sair!! 🥺🦇",
-    "setup_existe":        "Já existe um canal lobby VoiceMaster aqui!! Use v!vm reset pra recriar!! 🤔🦇",
-}
-
-def _vm_msg(key: str, **kwargs) -> str:
-    m = _VM_MSGS.get(key, "Algo deu errado... 🥺")
-    return m.format(**kwargs)
-
-# Cores do VoiceMaster
-_VM_COR_FOFA  = 0xFF69B4
-_VM_COR_OK    = 0x00ff99
-_VM_COR_ERRO  = 0xFF6B6B
-
-def _vm_embed_ok(titulo: str, desc: str) -> discord.Embed:
-    e = discord.Embed(title=titulo, description=desc, color=_VM_COR_OK, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Vampy VoiceMaster")
-    return e
-
-def _vm_embed_erro(desc: str) -> discord.Embed:
-    e = discord.Embed(title="❌ Eita!!", description=desc, color=_VM_COR_ERRO, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Vampy VoiceMaster")
-    return e
-
-def _vm_embed_info(titulo: str, desc: str) -> discord.Embed:
-    e = discord.Embed(title=titulo, description=desc, color=_VM_COR_FOFA, timestamp=datetime.utcnow())
-    e.set_footer(text="🦇 Vampy VoiceMaster")
-    return e
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 📝  MODAIS DO VOICEMASTER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class VMModalRenomear(discord.ui.Modal, title="✏️ Renomear Sua Call"):
-    nome = discord.ui.TextInput(label="Novo nome da call", placeholder="Ex: 🎮 Call dos Gamers", min_length=1, max_length=100, required=True)
-
-    def __init__(self, cog, channel):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            await self.channel.edit(name=self.nome.value)
-            await interaction.response.send_message(embed=_vm_embed_ok("✏️ Renomeada!!", _vm_msg("renomeada", nome=self.nome.value)), ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não consegui renomear... sem permissão!! 😢🦇"), ephemeral=True)
-
-
-class VMModalLimite(discord.ui.Modal, title="👥 Limite de Usuários"):
-    limite = discord.ui.TextInput(label="Limite (0 = sem limite, máx 99)", placeholder="Ex: 5", min_length=1, max_length=2, required=True)
-
-    def __init__(self, cog, channel):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            n = int(self.limite.value)
-            if n < 0 or n > 99:
-                raise ValueError
-        except ValueError:
-            await interaction.response.send_message(embed=_vm_embed_erro("Número inválido!! Coloca entre 0 e 99!! 🥺🦇"), ephemeral=True)
-            return
-        try:
-            await self.channel.edit(user_limit=n)
-            txt = _vm_msg("limite_removido") if n == 0 else _vm_msg("limite_set", limite=n)
-            titulo = "👥 Limite Removido!!" if n == 0 else "👥 Limite Definido!!"
-            await interaction.response.send_message(embed=_vm_embed_ok(titulo, txt), ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra alterar o limite!! 😢🦇"), ephemeral=True)
-
-
-class VMModalBitrate(discord.ui.Modal, title="🎙️ Qualidade de Áudio"):
-    bitrate = discord.ui.TextInput(label="Bitrate em kbps (8–384)", placeholder="Ex: 64, 96, 128", min_length=1, max_length=3, required=True)
-
-    def __init__(self, cog, channel):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            n = int(self.bitrate.value)
-            if n < 8 or n > 384:
-                raise ValueError
-        except ValueError:
-            await interaction.response.send_message(embed=_vm_embed_erro("Coloca um bitrate entre 8 e 384 kbps!! 🥺🦇"), ephemeral=True)
-            return
-        try:
-            await self.channel.edit(bitrate=n * 1000)
-            await interaction.response.send_message(embed=_vm_embed_ok("🎙️ Bitrate Atualizado!!", _vm_msg("bitrate_set", bitrate=n)), ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra mudar o bitrate!! 😢🦇"), ephemeral=True)
-
-
-class VMModalStatus(discord.ui.Modal, title="📝 Status da Call"):
-    status = discord.ui.TextInput(
-        label="Status (deixe vazio pra remover)",
-        placeholder="Ex: 🎮 Jogando Valorant • 🎵 Ouvindo música",
-        min_length=0,
-        max_length=500,
-        required=False,
-        style=discord.TextStyle.short
-    )
-
-    def __init__(self, cog, channel):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-
-    async def on_submit(self, interaction: discord.Interaction):
-        novo_status = self.status.value.strip()
-        try:
-            await self.channel.edit(status=novo_status if novo_status else None)
-            if novo_status:
-                await interaction.response.send_message(
-                    embed=_vm_embed_ok("📝 Status Atualizado!!", f"Status da call agora é: **{novo_status}** ✨🦇"),
-                    ephemeral=True
-                )
-            else:
-                await interaction.response.send_message(
-                    embed=_vm_embed_ok("📝 Status Removido!!", "O status da call foi removido!! 🧹🦇"),
-                    ephemeral=True
-                )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                embed=_vm_embed_erro("Sem permissão pra mudar o status!! 😢🦇"), ephemeral=True
-            )
-        except Exception:
-            await interaction.response.send_message(
-                embed=_vm_embed_erro("Não consegui mudar o status... tenta de novo!! 🥺🦇"), ephemeral=True
-            )
-
-
-class VMModalConvidar(discord.ui.Modal, title="💌 Convidar para a Call"):
-    usuario = discord.ui.TextInput(
-        label="Nome ou ID do usuário",
-        placeholder="Ex: fulano ou 123456789",
-        required=True
-    )
-
-    def __init__(self, cog, channel, guild):
-        super().__init__()
-        self.cog     = cog
-        self.channel = channel
-        self.guild   = guild
-
-    async def on_submit(self, interaction: discord.Interaction):
-        target = _vm_find_member(self.guild, self.usuario.value)
-        if not target:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🦇"), ephemeral=True)
-            return
-        if target.id == interaction.user.id:
-            await interaction.response.send_message(embed=_vm_embed_erro("Você não pode se convidar, bobão(a)!! 🥺🦇"), ephemeral=True)
-            return
-        if target.bot:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não dá pra convidar bots!! 🤖🦇"), ephemeral=True)
-            return
-        # Criar link de convite temporário (1h, 1 uso) pro canal de voz
-        try:
-            invite = await self.channel.create_invite(max_age=3600, max_uses=1, unique=True, reason="Vampy VoiceMaster — convite da call")
-        except discord.Forbidden:
-            await interaction.response.send_message(embed=_vm_embed_erro("Sem permissão pra criar convite!! 😢🦇"), ephemeral=True)
-            return
-        # Enviar DM pro usuário convidado
-        try:
-            embed_inv = discord.Embed(
-                title="💌 Você foi convidado(a) para uma call!!",
-                description=(
-                    f"**{interaction.user.display_name}** te convidou pra entrar na call "
-                    f"**{self.channel.name}** no servidor **{self.guild.name}**!! 🥳🦇\n\n"
-                    f"🔗 **Clique para entrar:** {invite.url}\n\n"
-                    f"> *Este convite expira em 1 hora e pode ser usado 1 vez.*"
-                ),
-                color=_VM_COR_FOFA,
-                timestamp=datetime.utcnow()
-            )
-            embed_inv.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed_inv.set_footer(text="🦇 Vampy VoiceMaster")
-            await target.send(embed=embed_inv)
-            await interaction.response.send_message(
-                embed=_vm_embed_ok("💌 Convite Enviado!!", f"**{target.display_name}** recebeu o convite na DM!! 🦇"),
-                ephemeral=True
-            )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                embed=_vm_embed_erro(f"**{target.display_name}** tá com a DM fechada... não consegui enviar!! 😢🦇"),
-                ephemeral=True
-            )
-
-
-def _vm_find_member(guild: discord.Guild, texto: str):
-    texto = texto.strip().lstrip("<@!>").rstrip(">")
-    try:
-        return guild.get_member(int(texto))
-    except ValueError:
-        return discord.utils.find(lambda m: m.name.lower() == texto.lower() or m.display_name.lower() == texto.lower(), guild.members)
-
-
-class VMModalKick(discord.ui.Modal, title="👋 Kickar da Call"):
-    usuario = discord.ui.TextInput(label="Nome ou ID do usuário", placeholder="Ex: fulano ou 123456789", required=True)
-
-    def __init__(self, cog, channel, guild):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-        self.guild = guild
-
-    async def on_submit(self, interaction: discord.Interaction):
-        target = _vm_find_member(self.guild, self.usuario.value)
-        if not target:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🦇"), ephemeral=True)
-            return
-        if target not in self.channel.members:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("user_nao_na_call")), ephemeral=True)
-            return
-        if target.id == interaction.user.id:
-            await interaction.response.send_message(embed=_vm_embed_erro("Você não pode kickar você mesmo, bobão(a)!! 🥺🦇"), ephemeral=True)
-            return
-        try:
-            await target.move_to(None, reason="Kickado da call pelo dono — Vampy VoiceMaster")
-            await interaction.response.send_message(embed=_vm_embed_ok("👋 Kickado!!", _vm_msg("usuario_kickado", user=target.display_name)), ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não consegui kickar... sem permissão!! 😢🦇"), ephemeral=True)
-
-
-class VMModalBanir(discord.ui.Modal):
-    usuario = discord.ui.TextInput(label="Nome ou ID do usuário", placeholder="Ex: fulano ou 123456789", required=True)
-
-    def __init__(self, cog, channel, guild, ban: bool = True):
-        super().__init__(title="🚫 Banir da Call" if ban else "✅ Permitir na Call")
-        self.cog = cog
-        self.channel = channel
-        self.guild = guild
-        self.ban = ban
-
-    async def on_submit(self, interaction: discord.Interaction):
-        target = _vm_find_member(self.guild, self.usuario.value)
-        if not target:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🦇"), ephemeral=True)
-            return
-        info = self.cog.vm_channels.get(self.channel.id, {})
-        if self.ban:
-            info.setdefault("banned", [])
-            if target.id not in info["banned"]:
-                info["banned"].append(target.id)
-            await self.channel.set_permissions(target, connect=False, view_channel=False)
-            if target in self.channel.members:
-                try:
-                    await target.move_to(None)
-                except Exception:
-                    pass
-            await interaction.response.send_message(embed=_vm_embed_ok("🚫 Banido!!", _vm_msg("usuario_banido", user=target.display_name)), ephemeral=True)
-        else:
-            if "banned" in info and target.id in info["banned"]:
-                info["banned"].remove(target.id)
-            await self.channel.set_permissions(target, connect=True, view_channel=True)
-            await interaction.response.send_message(embed=_vm_embed_ok("✅ Permitido!!", _vm_msg("usuario_permitido", user=target.display_name)), ephemeral=True)
-
-
-class VMModalTransferir(discord.ui.Modal, title="👑 Transferir Dono"):
-    usuario = discord.ui.TextInput(label="Nome ou ID do novo dono", placeholder="Ex: fulano ou 123456789", required=True)
-
-    def __init__(self, cog, channel, guild):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
-        self.guild = guild
-
-    async def on_submit(self, interaction: discord.Interaction):
-        target = _vm_find_member(self.guild, self.usuario.value)
-        if not target:
-            await interaction.response.send_message(embed=_vm_embed_erro("Não achei esse usuário!! 🔍🦇"), ephemeral=True)
-            return
-        if target.id == interaction.user.id:
-            await interaction.response.send_message(embed=_vm_embed_erro("Você já é o(a) dono(a)!! 😄🦇"), ephemeral=True)
-            return
-        if target not in self.channel.members:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("user_nao_na_call")), ephemeral=True)
-            return
-        info = self.cog.vm_channels.get(self.channel.id, {})
-        info["owner"] = target.id
-        await interaction.response.send_message(embed=_vm_embed_ok("👑 Dono Transferido!!", _vm_msg("dono_transferido", user=target.display_name)), ephemeral=True)
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎛️  PAINEL DE CONTROLE (View com Botões)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class VMPainelView(discord.ui.View):
-    """Painel de controle fofo das calls — botões persistentes."""
-
-    def __init__(self, cog: "VoiceMasterCog"):
-        super().__init__(timeout=None)
-        self.cog = cog
-
-    def _get_owner_channel(self, interaction: discord.Interaction):
-        """Retorna o canal do qual o usuário é dono E está dentro, ou None."""
-        for ch_id, info in self.cog.vm_channels.items():
-            if info["owner"] == interaction.user.id:
-                ch = interaction.guild.get_channel(ch_id)
-                if ch and interaction.user in ch.members:
-                    return ch
-        return None
-
-    async def _check(self, interaction: discord.Interaction):
-        ch = self._get_owner_channel(interaction)
-        if not ch:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("sem_call", user=interaction.user.mention)), ephemeral=True)
-        return ch
-
-    # ── Linha 1 ──────────────────────────────────
-
-    @discord.ui.button(label="✏️ Renomear", style=discord.ButtonStyle.primary, custom_id="vm_renomear", row=0)
-    async def btn_renomear(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalRenomear(self.cog, ch))
-
-    @discord.ui.button(label="👥 Limite", style=discord.ButtonStyle.primary, custom_id="vm_limite", row=0)
-    async def btn_limite(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalLimite(self.cog, ch))
-
-    @discord.ui.button(label="🔒 Trancar", style=discord.ButtonStyle.secondary, custom_id="vm_trancar", row=0)
-    async def btn_trancar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if not ch:
-            return
-        info = self.cog.vm_channels[ch.id]
-        everyone = interaction.guild.default_role
-        if info.get("locked"):
-            await ch.set_permissions(everyone, connect=None)
-            info["locked"] = False
-            await interaction.response.send_message(embed=_vm_embed_ok("🔓 Destrancada!!", _vm_msg("destrancada")), ephemeral=True)
-        else:
-            await ch.set_permissions(everyone, connect=False)
-            info["locked"] = True
-            await interaction.response.send_message(embed=_vm_embed_ok("🔒 Trancada!!", _vm_msg("trancada")), ephemeral=True)
-
-    @discord.ui.button(label="👻 Ocultar", style=discord.ButtonStyle.secondary, custom_id="vm_ocultar", row=0)
-    async def btn_ocultar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if not ch:
-            return
-        info = self.cog.vm_channels[ch.id]
-        everyone = interaction.guild.default_role
-        if info.get("hidden"):
-            # ── Revelar: remove só o view_channel do everyone, preserva connect (lock) ──
-            ow = ch.overwrites_for(everyone)
-            ow.view_channel = None
-            if ow.is_empty():
-                await ch.set_permissions(everyone, overwrite=None)
-            else:
-                await ch.set_permissions(everyone, overwrite=ow)
-            # Remove o override de view_channel dos membros que estavam dentro
-            for membro in ch.members:
-                ow_m = ch.overwrites_for(membro)
-                ow_m.view_channel = None
-                ow_m.connect      = None
-                if ow_m.is_empty():
-                    await ch.set_permissions(membro, overwrite=None)
-                else:
-                    await ch.set_permissions(membro, overwrite=ow_m)
-            info["hidden"] = False
-            await interaction.response.send_message(embed=_vm_embed_ok("👁️ Visível!!", _vm_msg("visivel")), ephemeral=True)
-        else:
-            # ── Ocultar: esconde do everyone, garante view+connect pra quem já está dentro ──
-            ow = ch.overwrites_for(everyone)
-            ow.view_channel = False
-            await ch.set_permissions(everyone, overwrite=ow)
-            # Explicitamente view_channel=True e connect=True pra cada membro dentro
-            for membro in ch.members:
-                ow_m = ch.overwrites_for(membro)
-                ow_m.view_channel = True
-                ow_m.connect      = True
-                await ch.set_permissions(membro, overwrite=ow_m)
-            info["hidden"] = True
-            await interaction.response.send_message(embed=_vm_embed_ok("👻 Oculta!!", _vm_msg("invisivel")), ephemeral=True)
-
-    # ── Linha 2 ──────────────────────────────────
-
-    @discord.ui.button(label="👋 Kickar", style=discord.ButtonStyle.danger, custom_id="vm_kickar", row=1)
-    async def btn_kickar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalKick(self.cog, ch, interaction.guild))
-
-    @discord.ui.button(label="🚫 Banir", style=discord.ButtonStyle.danger, custom_id="vm_banir", row=1)
-    async def btn_banir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalBanir(self.cog, ch, interaction.guild, ban=True))
-
-    @discord.ui.button(label="✅ Permitir", style=discord.ButtonStyle.success, custom_id="vm_permitir", row=1)
-    async def btn_permitir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalBanir(self.cog, ch, interaction.guild, ban=False))
-
-    @discord.ui.button(label="👑 Transferir", style=discord.ButtonStyle.success, custom_id="vm_transferir", row=1)
-    async def btn_transferir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalTransferir(self.cog, ch, interaction.guild))
-
-    @discord.ui.button(label="💌 Convidar", style=discord.ButtonStyle.primary, custom_id="vm_convidar", row=1)
-    async def btn_convidar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalConvidar(self.cog, ch, interaction.guild))
-
-    # ── Linha 3 ──────────────────────────────────
-
-    @discord.ui.button(label="📝 Status", style=discord.ButtonStyle.secondary, custom_id="vm_status", row=2)
-    async def btn_status(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalStatus(self.cog, ch))
-
-    @discord.ui.button(label="📊 Info", style=discord.ButtonStyle.secondary, custom_id="vm_info", row=2)
-    async def btn_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        if not user.voice or not user.voice.channel:
-            await interaction.response.send_message(embed=_vm_embed_erro("Você não tá em nenhuma call!! 🥺🦇"), ephemeral=True)
-            return
-        ch = user.voice.channel
-        info = self.cog.vm_channels.get(ch.id)
-        if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pela Vampy!! 🤔🦇"), ephemeral=True)
-            return
-        dono = interaction.guild.get_member(info["owner"])
-        banidos = ", ".join(f"<@{uid}>" for uid in info.get("banned", [])) or "Ninguém"
-        embed = discord.Embed(title=f"📊 Info: {ch.name}", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
-        embed.add_field(name="👑 Dono(a)", value=dono.mention if dono else "Desconhecido", inline=True)
-        embed.add_field(name="👥 Membros", value=f"`{len(ch.members)}`" + (f"/{ch.user_limit}" if ch.user_limit else " (sem limite)"), inline=True)
-        embed.add_field(name="🎧 Bitrate", value=f"`{ch.bitrate // 1000}kbps`", inline=True)
-        embed.add_field(name="🔒 Trancada", value="Sim 🔒" if info.get("locked") else "Não 🔓", inline=True)
-        embed.add_field(name="👻 Oculta", value="Sim 👻" if info.get("hidden") else "Não 👁️", inline=True)
-        embed.add_field(name="💎 Permanente", value="Sim 💎" if info.get("permanent") else "Não 🕐", inline=True)
-        embed.add_field(name="🚫 Banidos", value=banidos, inline=False)
-        embed.set_footer(text="🦇 Vampy VoiceMaster")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="🎙️ Bitrate", style=discord.ButtonStyle.secondary, custom_id="vm_bitrate", row=2)
-    async def btn_bitrate(self, interaction: discord.Interaction, button: discord.ui.Button):
-        ch = await self._check(interaction)
-        if ch:
-            await interaction.response.send_modal(VMModalBitrate(self.cog, ch))
-
-    @discord.ui.button(label="🏳️ Reivindicar", style=discord.ButtonStyle.success, custom_id="vm_reivindicar", row=2)
-    async def btn_reivindicar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        if not user.voice or not user.voice.channel:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("nao_na_call", user=user.mention)), ephemeral=True)
-            return
-        ch = user.voice.channel
-        info = self.cog.vm_channels.get(ch.id)
-        if not info:
-            await interaction.response.send_message(embed=_vm_embed_erro("Essa call não é gerenciada pela Vampy!! 🤔🦇"), ephemeral=True)
-            return
-        if info["owner"] == user.id:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("ja_dono")), ephemeral=True)
-            return
-        dono_atual = interaction.guild.get_member(info["owner"])
-        if dono_atual and dono_atual in ch.members:
-            await interaction.response.send_message(embed=_vm_embed_erro(_vm_msg("dono_ainda_na_call")), ephemeral=True)
-            return
-        info["owner"] = user.id
-        await interaction.response.send_message(embed=_vm_embed_ok("👑 Reivindicado!!", _vm_msg("dono_reivindicado")), ephemeral=True)
-
-
-    @discord.ui.button(label="🎮 Jogos de Call", style=discord.ButtonStyle.success, custom_id="vm_jogos_call", row=3)
-    async def btn_jogos_call(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Abre o menu de jogos de call."""
-        user = interaction.user
-        if not user.voice or not user.voice.channel:
-            await interaction.response.send_message(
-                embed=_vm_embed_erro("Você precisa estar em uma call pra usar os jogos!! 🎮🦇"),
-                ephemeral=True)
-            return
-        embed = discord.Embed(
-            title="🎮 Jogos de Call",
-            description=(
-                "Bem-vinda ao modo de jogos de call!! 🦇✨\n"
-                "Escolha um jogo abaixo e a Vampy conduz tudo pra você!!\n\n"
-                "```\n"
-                "╔══════════════════════════════════════╗\n"
-                "║   VAMPY GAMES  🎮  v1.0          ║\n"
-                "║     — Jogos de Call —               ║\n"
-                "╚══════════════════════════════════════╝\n"
-                "```"
-            ),
-            color=0x9b59b6,
-            timestamp=datetime.utcnow()
-        )
-        embed.add_field(
-            name="🌙 A Cidade Dorme",
-            value="Jogo de detetive! Assassinos, Detetive, Anjo e Cidadãos — quem vai vencer?",
-            inline=False
-        )
-        embed.set_footer(text="🦇 Vampy Games • Mais jogos em breve!!")
-        view = JogosCallMenuView(interaction.user.voice.channel, interaction.channel)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
-
-
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║        VAMPY GAMES — A CIDADE DORME  🌙  v1.0              ║
-# ║   Jogo de dedução social para calls de voz • Estilo Mafia  ║
-# ╚══════════════════════════════════════════════════════════════════╝
-
-# Estado global de partidas ativas: {guild_id: CidadeDormeJogo}
-_cidade_jogos: dict[int, "CidadeDormeJogo"] = {}
-
-CIDADE_ROLES = {
-    "assassino":  "🔪 Assassino",
-    "anjo":       "😇 Anjo/Médico",
-    "detetive":   "🔎 Detetive",
-    "cidadao":    "🏙️ Cidadão",
-}
-
-class CidadeDormeJogo:
-    """Controla o estado de uma partida de A Cidade Dorme."""
-
-    def __init__(self, guild: discord.Guild, voice_ch: discord.VoiceChannel, text_ch: discord.TextChannel):
-        self.guild      = guild
-        self.voice_ch   = voice_ch
-        self.text_ch    = text_ch
-        self.jogadores: dict[int, str] = {}   # {member_id: role}
-        self.vivos:     set[int]       = set()
-        self.mortos:    set[int]       = set()
-        self.narrador:  int | None     = None  # member_id ou None (bot narra)
-        self.fase       = "inscricao"   # inscricao → noite → dia → fim
-        self.rodada     = 0
-        self.vitima_noite:  int | None = None
-        self.salvo_noite:   int | None = None
-        self.investigado:   int | None = None
-        self.votos_dia: dict[int, int] = {}    # {votante_id: alvo_id}
-
-    def _get_membro(self, uid: int) -> discord.Member | None:
-        return self.guild.get_member(uid)
-
-    def assassinos_vivos(self) -> list[int]:
-        return [uid for uid, role in self.jogadores.items() if role == "assassino" and uid in self.vivos]
-
-    def cidadaos_vivos(self) -> list[int]:
-        return [uid for uid, role in self.jogadores.items() if role != "assassino" and uid in self.vivos]
-
-    def verificar_fim(self) -> str | None:
-        """Retorna 'cidadaos', 'assassinos' ou None."""
-        assassinos = self.assassinos_vivos()
-        cidadaos   = self.cidadaos_vivos()
-        if not assassinos:
-            return "cidadaos"
-        if len(assassinos) >= len(cidadaos):
-            return "assassinos"
-        return None
-
-    def atribuir_roles(self):
-        """Distribui os papéis aleatoriamente entre os jogadores."""
-        ids = list(self.vivos)
-        random.shuffle(ids)
-        roles_a_dar = ["assassino", "anjo", "detetive"] + ["cidadao"] * max(0, len(ids) - 3)
-        self.jogadores = dict(zip(ids, roles_a_dar[:len(ids)]))
-
-    async def mutar_todos(self, mudo: bool):
-        """Server-muta ou desmuta todos os jogadores vivos na call."""
-        for uid in list(self.vivos):
-            m = self._get_membro(uid)
-            if m and m.voice and m.voice.channel == self.voice_ch:
-                try:
-                    await m.edit(mute=mudo)
-                except Exception:
-                    pass
-        # Mortos ficam sempre mutados
-        for uid in self.mortos:
-            m = self._get_membro(uid)
-            if m and m.voice:
-                try:
-                    await m.edit(mute=True)
-                except Exception:
-                    pass
-        # Avisa no chat sobre o estado do mic
-        if self.text_ch:
-            try:
-                if mudo:
-                    await self.text_ch.send(
-                        "🔇 **Microfones desativados!!** — Todos estão sem mic agora. 🌙🦇"
-                    )
-                else:
-                    await self.text_ch.send(
-                        "🎙️ **Microfones liberados!!** — Todos podem falar agora. ☀️🦇"
-                    )
-            except Exception:
-                pass
-
-    async def mutar_exceto(self, uid_acordado: int):
-        """Muta todos, mas desmuta o uid_acordado (para ações de noite)."""
-        await self.mutar_todos(True)
-        m = self._get_membro(uid_acordado)
-        if m and m.voice and m.voice.channel == self.voice_ch:
-            try:
-                await m.edit(mute=False)
-            except Exception:
-                pass
-        # Avisa no chat (sem revelar quem ou o papel)
-        if self.text_ch:
-            try:
-                await self.text_ch.send(
-                    "🌙 **Alguém foi acordado na escuridão...** 👁️ *A cidade continua dormindo...* 🤫🦇"
-                )
-            except Exception:
-                pass
-
-
-# ── Views do jogo ────────────────────────────────────────────────────
-
-class JogosCallMenuView(discord.ui.View):
-    """Menu de seleção de jogo."""
-
-    def __init__(self, voice_ch: discord.VoiceChannel, text_ch):
-        super().__init__(timeout=120)
-        self.voice_ch = voice_ch
-        self.text_ch  = text_ch
-
-    @discord.ui.button(label="🌙 A Cidade Dorme", style=discord.ButtonStyle.primary)
-    async def btn_cidade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
-        if guild.id in _cidade_jogos:
-            await interaction.response.send_message(
-                "❌ Já tem uma partida de A Cidade Dorme rolando nesse servidor!! 🦇",
-                ephemeral=True)
-            return
-        # Pergunta se terá narrador humano
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Configuração",
-                description=(
-                    "**Terá um narrador humano?**\n\n"
-                    "✅ **Sim** — Uma pessoa vai narrar e terá controles especiais no chat\n"
-                    "🤖 **Não** — A Vampy narra e conduz tudo automaticamente 🦇"
-                ),
-                color=0x2c2f33,
-                timestamp=datetime.utcnow()
-            ),
-            view=CidadeNarradorView(guild, self.voice_ch, interaction.channel),
-            ephemeral=False
-        )
-        self.stop()
-
-
-class CidadeNarradorView(discord.ui.View):
-    """Pergunta se terá narrador humano ou bot."""
-
-    def __init__(self, guild, voice_ch, text_ch):
-        super().__init__(timeout=60)
-        self.guild    = guild
-        self.voice_ch = voice_ch
-        self.text_ch  = text_ch
-
-    @discord.ui.button(label="✅ Sim, terá narrador humano", style=discord.ButtonStyle.success)
-    async def btn_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        jogo = CidadeDormeJogo(self.guild, self.voice_ch, interaction.channel)
-        jogo.narrador = interaction.user.id
-        _cidade_jogos[self.guild.id] = jogo
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Narrador definido!",
-                description=(
-                    f"**{interaction.user.display_name}** será o(a) narrador(a)!! 🦇\n\n"
-                    "Agora vamos ver quem vai participar!!\n"
-                    "Clique em **✅ Sim, vou jogar!** pra entrar na partida."
-                ),
-                color=0x9b59b6,
-                timestamp=datetime.utcnow()
-            ),
-            view=None
-        )
-        await _iniciar_inscricao(interaction.channel, jogo, interaction.user)
-        self.stop()
-
-    @discord.ui.button(label="🤖 Não, a Vampy narra", style=discord.ButtonStyle.primary)
-    async def btn_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        jogo = CidadeDormeJogo(self.guild, self.voice_ch, interaction.channel)
-        jogo.narrador = None
-        _cidade_jogos[self.guild.id] = jogo
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🌙 A Cidade Dorme — Vampy é a narradora!",
-                description=(
-                    "A Vampy vai narrar tudo automaticamente!! 🦇✨\n\n"
-                    "Vamos ver quem vai participar!!\n"
-                    "Clique em **✅ Sim, vou jogar!** pra entrar na partida."
-                ),
-                color=0x9b59b6,
-                timestamp=datetime.utcnow()
-            ),
-            view=None
-        )
-        await _iniciar_inscricao(interaction.channel, jogo, interaction.user)
-        self.stop()
-
-
-class CidadeInscricaoView(discord.ui.View):
-    """Votação de inscrição para A Cidade Dorme."""
-
-    def __init__(self, jogo: CidadeDormeJogo, inscritos: set[int]):
-        super().__init__(timeout=60)
-        self.jogo      = jogo
-        self.inscritos = inscritos  # referência mutável
-        self.forcar_inicio = False  # sinaliza "Iniciar Agora"
-
-    @discord.ui.button(label="✅ Sim, vou jogar!", style=discord.ButtonStyle.success, emoji="✋")
-    async def btn_sim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        uid = interaction.user.id
-        if uid == self.jogo.narrador:
-            await interaction.response.send_message(
-                "Você é o narrador, não pode jogar!! 🦇", ephemeral=True)
-            return
-        self.inscritos.add(uid)
-        await interaction.response.send_message(
-            f"✅ **{interaction.user.display_name}** entrou na partida!! 🦇", ephemeral=True)
-
-    @discord.ui.button(label="❌ Não vou", style=discord.ButtonStyle.danger)
-    async def btn_nao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.inscritos.discard(interaction.user.id)
-        await interaction.response.send_message("Ok!! Quem sabe na próxima!! 🦇", ephemeral=True)
-
-    @discord.ui.button(label="⚡ Iniciar Agora!", style=discord.ButtonStyle.secondary, row=1)
-    async def btn_iniciar_agora(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Apenas donos autorizados podem forçar início
-        if interaction.user.id not in DONOS_AUTORIZADOS:
-            await interaction.response.send_message(
-                "❌ Só os donos podem forçar o início!! 🦇", ephemeral=True)
-            return
-        if len(self.inscritos) < 4:
-            await interaction.response.send_message(
-                f"❌ Precisa de pelo menos 4 jogadores!! Tem apenas **{len(self.inscritos)}** inscrito(s). 🦇",
-                ephemeral=True)
-            return
-        await interaction.response.send_message(
-            "⚡ Iniciando agora!! 🦇", ephemeral=True)
-        self.forcar_inicio = True
-        self.stop()
-
-
-class CidadeVotoDiaView(discord.ui.View):
-    """Seleção de quem eliminar durante o dia."""
-
-    def __init__(self, jogo: CidadeDormeJogo, opcoes: list[discord.Member]):
-        super().__init__(timeout=90)
-        self.jogo = jogo
-        self.votos: dict[int, int] = {}  # votante → alvo
-        for m in opcoes:
-            self.add_item(CidadeVotoDiaBotao(m))
-
-
-class CidadeVotoDiaBotao(discord.ui.Button):
-    def __init__(self, alvo: discord.Member):
-        super().__init__(label=alvo.display_name[:80], style=discord.ButtonStyle.danger)
-        self.alvo_id = alvo.id
-
-    async def callback(self, interaction: discord.Interaction):
-        uid = interaction.user.id
-        jogo = self.view.jogo
-        if uid not in jogo.vivos:
-            await interaction.response.send_message(
-                "Só quem está vivo pode votar!! 🦇", ephemeral=True)
-            return
-        if uid == self.alvo_id:
-            await interaction.response.send_message(
-                "Você não pode votar em si mesmo!! 🥺🦇", ephemeral=True)
-            return
-        self.view.votos[uid] = self.alvo_id
-        alvo = interaction.guild.get_member(self.alvo_id)
-        await interaction.response.send_message(
-            f"🗳️ Você votou em **{alvo.display_name if alvo else '???'}**!! 🦇",
-            ephemeral=True)
-
-
-class CidadeNarradorControlView(discord.ui.View):
-    """Painel de controle para o narrador humano — enviado via DM."""
-
-    def __init__(self, jogo: CidadeDormeJogo):
-        super().__init__(timeout=None)
-        self.jogo = jogo
-
-    # ── Instrução: toda ação do narrador é anunciada no chat ──────────
-    # ROTEIRO DO NARRADOR:
-    # 1. Clique [🌙 Iniciar Noite] → todos são mutados, diga "A cidade dorme..."
-    # 2. Clique [🔪 Acordar Assassino] → só o assassino pode falar; pergunte a vítima no PV
-    # 3. Clique [😇 Acordar Anjo] → só o anjo pode falar; pergunte quem quer salvar no PV
-    # 4. Clique [🔎 Acordar Detetive] → só o detetive pode falar; responda se é assassino no PV
-    # 5. Clique [☀️ Iniciar Dia] → todos desmutados; narre o que aconteceu na noite
-    # 6. Aguarde a votação; anuncie o eliminado e revele o papel
-    # 7. Repita do passo 1 até o fim do jogo
-    # ─────────────────────────────────────────────────────────────────
-
-    @discord.ui.button(label="🌙 Iniciar Noite (mutar todos)", style=discord.ButtonStyle.danger)
-    async def btn_noite(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.jogo.mutar_todos(True)
-        await self.jogo.text_ch.send(embed=discord.Embed(
-            title="🌙 A Cidade Adormece...",
-            description="O narrador iniciou a **NOITE**!! Todos os microfones foram desativados!! 🔇🦇\n\n*Fiquem quietos... a escuridão age agora...* 🤫",
-            color=0x1a1a2e, timestamp=datetime.utcnow()
-        ))
-        await interaction.response.send_message("🌙 Todos mutados! A noite começou!!", ephemeral=True)
-
-    @discord.ui.button(label="☀️ Iniciar Dia (desmutar todos)", style=discord.ButtonStyle.success)
-    async def btn_dia(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.jogo.mutar_todos(False)
-        await self.jogo.text_ch.send(embed=discord.Embed(
-            title="☀️ A Cidade Desperta!",
-            description="O narrador iniciou o **DIA**!! Microfones liberados!! 🎙️🦇\n\nDiscutam entre si e descubram quem é o assassino!! 🕵️",
-            color=0xf39c12, timestamp=datetime.utcnow()
-        ))
-        await interaction.response.send_message("☀️ Todos desmutados! O dia começou!!", ephemeral=True)
-
-    @discord.ui.button(label="🔪 Acordar Assassino", style=discord.ButtonStyle.danger, row=1)
-    async def btn_acordar_assassino(self, interaction: discord.Interaction, button: discord.ui.Button):
-        assassinos = self.jogo.assassinos_vivos()
-        if not assassinos:
-            await interaction.response.send_message("Nenhum assassino vivo!! 🦇", ephemeral=True)
-            return
-        for uid in assassinos:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "🔪 *Uma sombra se move na escuridão...* 👁️ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"🔪 Assassino(s) acordado(s): {', '.join(f'<@{{u}}>' for u in assassinos)}\n\n📌 **Instrução:** Pergunte no PV do assassino quem ele quer eliminar. Quando terminar, clique em [☀️ Iniciar Dia] ou [😇 Acordar Anjo].", ephemeral=True)
-
-    @discord.ui.button(label="😇 Acordar Anjo", style=discord.ButtonStyle.success, row=1)
-    async def btn_acordar_anjo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        anjos = [uid for uid, r in self.jogo.jogadores.items() if r == "anjo" and uid in self.jogo.vivos]
-        if not anjos:
-            await interaction.response.send_message("Anjo foi eliminado!! 🦇", ephemeral=True)
-            return
-        for uid in anjos:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "😇 *Uma luz suave brilha na noite...* ✨ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"😇 Anjo acordado: <@{anjos[0]}>\n\n📌 **Instrução:** Pergunte no PV do anjo quem ele quer salvar. Quando terminar, clique em [🔎 Acordar Detetive] ou [☀️ Iniciar Dia].", ephemeral=True)
-
-    @discord.ui.button(label="🔎 Acordar Detetive", style=discord.ButtonStyle.primary, row=1)
-    async def btn_acordar_detetive(self, interaction: discord.Interaction, button: discord.ui.Button):
-        dets = [uid for uid, r in self.jogo.jogadores.items() if r == "detetive" and uid in self.jogo.vivos]
-        if not dets:
-            await interaction.response.send_message("Detetive foi eliminado!! 🦇", ephemeral=True)
-            return
-        for uid in dets:
-            await self.jogo.mutar_exceto(uid)
-        await self.jogo.text_ch.send(
-            "🔎 *Olhos atentos farejam a escuridão...* 🕵️ *Alguém foi acordado...* 🌙🦇"
-        )
-        await interaction.response.send_message(
-            f"🔎 Detetive acordado: <@{dets[0]}>\n\n📌 **Instrução:** Pergunte no PV do detetive quem ele quer investigar. Responda se essa pessoa é ou não o assassino. Quando terminar, clique em [☀️ Iniciar Dia].", ephemeral=True)
-
-    @discord.ui.button(label="🛑 Encerrar Jogo", style=discord.ButtonStyle.secondary, row=2)
-    async def btn_encerrar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild_id = self.jogo.guild.id
-        _cidade_jogos.pop(guild_id, None)
-        await self.jogo.mutar_todos(False)
-        await self.jogo.text_ch.send(
-            embed=discord.Embed(
-                title="🛑 Jogo Encerrado",
-                description="O narrador encerrou o jogo!! 🦇",
-                color=0xff4444,
-                timestamp=datetime.utcnow()
-            )
-        )
-        await interaction.response.send_message("✅ Jogo encerrado!!", ephemeral=True)
-        self.stop()
-
-
-# ── Funções auxiliares do jogo ───────────────────────────────────────
-
-async def _iniciar_inscricao(channel, jogo: CidadeDormeJogo, iniciador: discord.Member):
-    """Envia a mensagem de inscrição e aguarda os jogadores."""
-    inscritos: set[int] = set()
-    view = CidadeInscricaoView(jogo, inscritos)
-
-    embed = discord.Embed(
-        title="🌙 A Cidade Dorme — Inscrições Abertas!!",
-        description=(
-            f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme**!! 🦇\n\n"
-            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
-            "Vocês têm **60 segundos** pra se inscrever!!\n\n"
-            "**Personagens:**\n"
-            "🔪 Assassino — mata uma pessoa por noite\n"
-            "😇 Anjo/Médico — salva uma pessoa por noite\n"
-            "🔎 Detetive — investiga uma pessoa por noite\n"
-            "🏙️ Cidadão — tenta descobrir o assassino de dia"
-        ),
-        color=0x2c2f33,
-        timestamp=datetime.utcnow()
-    )
-    embed.set_footer(text="🦇 Vampy Games • A Cidade Dorme v1.0")
-
-    msg = await channel.send(embed=embed, view=view)
-
-    # Envia DM pra todos os membros do servidor avisando da partida
-    embed_dm_aviso = discord.Embed(
-        title="🌙 A Cidade Dorme — Inscrições Abertas!!",
-        description=(
-            f"**{iniciador.display_name}** iniciou uma partida de **A Cidade Dorme** "
-            f"no servidor **{channel.guild.name}**!! 🦇\n\n"
-            "Clique em **Sim, vou jogar!** pra entrar na partida!! "
-            "Vocês têm **60 segundos** pra se inscrever!!\n\n"
-            f"👉 Vá até o canal {channel.mention} e clique no botão!!"
-        ),
-        color=0x9b59b6,
-        timestamp=datetime.utcnow()
-    )
-    embed_dm_aviso.set_footer(text="🦇 Vampy Games • A Cidade Dorme")
-    for membro in channel.guild.members:
-        if membro.bot:
-            continue
-        if membro.id == iniciador.id:
-            continue
-        if membro.id == jogo.narrador:
-            continue
-        try:
-            await membro.send(embed=embed_dm_aviso)
-        except Exception:
-            pass  # PV fechado — ignora silenciosamente
-
-    # Aguarda 60s ou "Iniciar Agora"
-    waited = 0
-    while waited < 60 and not view.forcar_inicio:
-        await asyncio.sleep(1)
-        waited += 1
-    view.stop()
-
-    # Desabilita botões
-    for item in view.children:
-        item.disabled = True
-    try:
-        await msg.edit(view=view)
-    except Exception:
-        pass
-
-    if len(inscritos) < 4:
-        _cidade_jogos.pop(jogo.guild.id, None)
-        await channel.send(embed=discord.Embed(
-            title="❌ Partida Cancelada",
-            description=f"Poucos jogadores!! Mínimo necessário: **4**. Inscreveram-se: **{len(inscritos)}**. 🥺🦇",
-            color=0xff4444
-        ))
-        return
-
-    # Confirma inscrições
-    jogo.vivos = set(inscritos)
-    jogo.atribuir_roles()
-
-    membros_str = "\n".join(
-        f"• {channel.guild.get_member(uid).display_name if channel.guild.get_member(uid) else uid}"
-        for uid in inscritos
-    )
-    await channel.send(embed=discord.Embed(
-        title=f"✅ {len(inscritos)} jogadores confirmados!!",
-        description=f"{membros_str}\n\n**A Vampy está distribuindo os papéis secretamente...** 🦇🃏",
-        color=0x9b59b6,
-        timestamp=datetime.utcnow()
-    ))
-
-    await asyncio.sleep(2)
-
-    # Envia papel secreto via DM pra cada jogador
-    for uid, role in jogo.jogadores.items():
-        m = channel.guild.get_member(uid)
-        if not m:
-            continue
-        nome_role = CIDADE_ROLES.get(role, role)
-        instrucoes = {
-            "assassino": (
-                "🔪 Você é o **Assassino**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer eliminar.\n"
-                "Mantenha sua identidade em segredo durante o dia!! 🤫"
-            ),
-            "anjo": (
-                "😇 Você é o **Anjo/Médico**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer salvar.\n"
-                "Você pode salvar você mesmo! Mas mantenha segredo!! 🤫"
-            ),
-            "detetive": (
-                "🔎 Você é o **Detetive**!!\n\n"
-                "Durante a noite, a Vampy vai te acordar secretamente.\n"
-                "Você deve **digitar no chat** o nome do jogador que quer investigar.\n"
-                "A Vampy vai te dizer secretamente se ele é ou não o assassino!! 🤫"
-            ),
-            "cidadao": (
-                "🏙️ Você é um **Cidadão**!!\n\n"
-                "Durante o dia, discuta com os outros jogadores e vote em quem você acha que é o assassino.\n"
-                "Ajude os cidadãos a descobrirem o assassino antes que seja tarde!! 🏙️"
-            ),
-        }
-        try:
-            embed_dm = discord.Embed(
-                title=f"🦇 Seu papel: {nome_role}",
-                description=instrucoes.get(role, ""),
-                color=0xff4444 if role == "assassino" else 0x9b59b6,
-                timestamp=datetime.utcnow()
-            )
-            embed_dm.set_footer(text="🦇 Vampy — A Cidade Dorme • Não revele seu papel pra ninguém!!")
-            await m.send(embed=embed_dm)
-        except Exception:
-            pass
-
-    # Envia painel de controle pro narrador humano (se houver)
-    if jogo.narrador:
-        narrador_m = channel.guild.get_member(jogo.narrador)
-        if narrador_m:
-            # Manda lista de jogadores e papéis pro narrador
-            lista_roles = "\n".join(
-                f"• **{channel.guild.get_member(uid).display_name if channel.guild.get_member(uid) else uid}** — {CIDADE_ROLES.get(r, r)}"
-                for uid, r in jogo.jogadores.items()
-            )
-            embed_narr = discord.Embed(
-                title="👑 Painel do Narrador — A Cidade Dorme",
-                description=(
-                    "Aqui está a lista completa de jogadores e seus papéis secretos!! 🦇\n\n"
-                    f"{lista_roles}\n\n"
-                    "Use os botões abaixo pra controlar o jogo!!"
-                ),
-                color=0xf1c40f,
-                timestamp=datetime.utcnow()
-            )
-            embed_narr.set_footer(text="🦇 Vampy — Painel do Narrador • Não mostre isso pra ninguém!!")
-            try:
-                await narrador_m.send(embed=embed_narr, view=CidadeNarradorControlView(jogo))
-            except Exception:
-                pass
-        await channel.send(embed=discord.Embed(
-            title="🌙 Jogo iniciado com narrador humano!!",
-            description=(
-                f"**{narrador_m.display_name if narrador_m else 'Narrador'}** vai conduzir o jogo!!\n"
-                "O(A) narrador(a) recebeu os controles no privado!! 🦇\n\n"
-                "**Sigam as instruções do narrador(a)!!** 🎭"
-            ),
-            color=0x2c2f33,
-            timestamp=datetime.utcnow()
-        ))
-    else:
-        # Bot conduz o jogo automaticamente
-        await channel.send(embed=discord.Embed(
-            title="🌙 Papéis distribuídos!! O jogo vai começar...",
-            description=(
-                "Todos receberam seus papéis secretamente no privado!! 🦇\n\n"
-                "A primeira noite vai começar em **10 segundos**...\n"
-                "**Preparem-se!!** 🌙"
-            ),
-            color=0x2c2f33,
-            timestamp=datetime.utcnow()
-        ))
-        await asyncio.sleep(10)
-        # Inicia o loop do jogo automaticamente
-        bot.loop.create_task(_loop_cidade_dorme(jogo))
-
-
-async def _loop_cidade_dorme(jogo: CidadeDormeJogo):
-    """Loop principal do jogo quando a Vampy é narradora."""
-    guild_id = jogo.guild.id
-    ch = jogo.text_ch
-
-    while guild_id in _cidade_jogos:
-        jogo.rodada += 1
-        jogo.vitima_noite = None
-        jogo.salvo_noite  = None
-        jogo.investigado  = None
-
-        # ── NOITE ────────────────────────────────────────────────────────
-        await ch.send(embed=discord.Embed(
-            title=f"🌙 Noite {jogo.rodada} — A cidade adormece...",
-            description=(
-                "**Todos fechem os olhos!** 🌙😴\n"
-                "*(A Vampy vai acordar cada pessoa secretamente pelo privado)*\n\n"
-                "Silêncio total enquanto a noite passa... 🤫"
-            ),
-            color=0x1a1a2e,
-            timestamp=datetime.utcnow()
-        ))
-        await jogo.mutar_todos(True)
-        await asyncio.sleep(3)
-
-        vivos_list = list(jogo.vivos)
-        nomes_vivos = {uid: (jogo.guild.get_member(uid).display_name if jogo.guild.get_member(uid) else str(uid)) for uid in vivos_list}
-
-        # Assassino age
-        assassinos = jogo.assassinos_vivos()
-        if assassinos:
-            ass_uid = assassinos[0]
-            ass_m   = jogo.guild.get_member(ass_uid)
-            alvos_possiveis = [uid for uid in vivos_list if uid != ass_uid]
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in alvos_possiveis)
-            try:
-                await ass_m.send(embed=discord.Embed(
-                    title="🔪 É a sua vez, Assassino!!",
-                    description=(
-                        f"Escolha quem eliminar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que deseja eliminar no chat!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0xff0000,
-                    timestamp=datetime.utcnow()
-                ))
-                # Espera resposta via DM
-                def check_ass(m):
-                    if m.author.id != ass_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in alvos_possiveis)
-                try:
-                    resp = await bot.wait_for("message", check=check_ass, timeout=45)
-                    # Encontra o UID pelo nome
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower() and uid != ass_uid:
-                            jogo.vitima_noite = uid
-                            await ass_m.send(f"✅ Você escolheu eliminar **{nome}**!! 🔪")
-                            await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
-                            break
-                except asyncio.TimeoutError:
-                    # Escolhe aleatoriamente
-                    jogo.vitima_noite = random.choice(alvos_possiveis)
-                    nome_escolhido = nomes_vivos.get(jogo.vitima_noite, "???")
-                    await ass_m.send(f"⏰ Tempo esgotado! A Vampy escolheu **{nome_escolhido}** pra você!! 🔪")
-                    await ch.send("🔪 *O assassino fez sua escolha na escuridão...* 🌙🦇")
-            except Exception:
-                if alvos_possiveis:
-                    jogo.vitima_noite = random.choice(alvos_possiveis)
-
-        # Anjo age
-        anjos = [uid for uid, r in jogo.jogadores.items() if r == "anjo" and uid in jogo.vivos]
-        if anjos:
-            anjo_uid = anjos[0]
-            anjo_m   = jogo.guild.get_member(anjo_uid)
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in vivos_list)
-            try:
-                await anjo_m.send(embed=discord.Embed(
-                    title="😇 É a sua vez, Anjo!!",
-                    description=(
-                        f"Escolha quem salvar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que deseja proteger!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0x00ff99,
-                    timestamp=datetime.utcnow()
-                ))
-                def check_anjo(m):
-                    if m.author.id != anjo_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in vivos_list)
-                try:
-                    resp = await bot.wait_for("message", check=check_anjo, timeout=45)
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower():
-                            jogo.salvo_noite = uid
-                            await anjo_m.send(f"✅ Você escolheu proteger **{nome}**!! 😇")
-                            await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
-                            break
-                except asyncio.TimeoutError:
-                    jogo.salvo_noite = anjo_uid
-                    await anjo_m.send("⏰ Tempo esgotado! A Vampy te escolheu pra você salvar a si mesmo!! 😇")
-                    await ch.send("😇 *Um anjo silencioso estende suas asas sobre alguém...* ✨🦇")
-            except Exception:
-                pass
-
-        # Detetive age
-        dets = [uid for uid, r in jogo.jogadores.items() if r == "detetive" and uid in jogo.vivos]
-        if dets:
-            det_uid = dets[0]
-            det_m   = jogo.guild.get_member(det_uid)
-            alvos_det = [uid for uid in vivos_list if uid != det_uid]
-            lista_alvos = "\n".join(f"• **{nomes_vivos[uid]}**" for uid in alvos_det)
-            try:
-                await det_m.send(embed=discord.Embed(
-                    title="🔎 É a sua vez, Detetive!!",
-                    description=(
-                        f"Escolha quem investigar esta noite!!\n\n"
-                        f"**Jogadores vivos:**\n{lista_alvos}\n\n"
-                        "Digite o **nome exato** do jogador que quer investigar!!\n"
-                        "*(Você tem 45 segundos)*"
-                    ),
-                    color=0x3498db,
-                    timestamp=datetime.utcnow()
-                ))
-                def check_det(m):
-                    if m.author.id != det_uid or not isinstance(m.channel, discord.DMChannel):
-                        return False
-                    return any(nomes_vivos[uid].lower() == m.content.lower() for uid in alvos_det)
-                try:
-                    resp = await bot.wait_for("message", check=check_det, timeout=45)
-                    for uid, nome in nomes_vivos.items():
-                        if nome.lower() == resp.content.lower() and uid != det_uid:
-                            jogo.investigado = uid
-                            role_inv = jogo.jogadores.get(uid, "cidadao")
-                            eh_assassino = role_inv == "assassino"
-                            await det_m.send(embed=discord.Embed(
-                                title=f"🔎 Investigação de {nome}",
-                                description=(
-                                    f"**{nome}** é {'🔪 **O ASSASSINO!!** ⚠️' if eh_assassino else '✅ **Inocente** — não é o assassino'}!!"
-                                ),
-                                color=0xff0000 if eh_assassino else 0x00ff99
-                            ))
-                            await ch.send("🔎 *O detetive farejou a escuridão e obteve uma pista...* 🕵️🦇")
-                            break
-                except asyncio.TimeoutError:
-                    await det_m.send("⏰ Tempo esgotado! Nenhuma investigação esta noite.")
-                    await ch.send("🔎 *O detetive não conseguiu investigar esta noite...* 😴🦇")
-            except Exception:
-                pass
-
-        await asyncio.sleep(3)
-
-        # ── DIA ──────────────────────────────────────────────────────────
-        # Resolve a noite
-        foi_eliminado = None
-        if jogo.vitima_noite and jogo.vitima_noite != jogo.salvo_noite:
-            foi_eliminado = jogo.vitima_noite
-            jogo.vivos.discard(foi_eliminado)
-            jogo.mortos.add(foi_eliminado)
-            # Muta o morto permanentemente
-            m_morto = jogo.guild.get_member(foi_eliminado)
-            if m_morto and m_morto.voice:
-                try:
-                    await m_morto.edit(mute=True)
-                except Exception:
-                    pass
-
-        await jogo.mutar_todos(False)
-
-        if foi_eliminado:
-            m_elim = jogo.guild.get_member(foi_eliminado)
-            nome_elim = m_elim.display_name if m_elim else "???"
-            role_elim = CIDADE_ROLES.get(jogo.jogadores.get(foi_eliminado, "cidadao"), "???")
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    f"A cidade acorda e descobre que **{nome_elim}** foi encontrado(a) sem vida!! 😱🦇\n\n"
-                    f"**Papel revelado:** {role_elim}\n\n"
-                    f"*{nome_elim} está eliminado(a) e não pode mais falar durante o jogo.*\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0xf39c12,
-                timestamp=datetime.utcnow()
-            ))
-        elif jogo.vitima_noite and jogo.vitima_noite == jogo.salvo_noite:
-            salvo_m = jogo.guild.get_member(jogo.salvo_noite)
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    "A cidade acorda e... **ninguém morreu esta noite!!** 😇✨\n\n"
-                    "O Anjo salvou alguém a tempo!!\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0x00ff99,
-                timestamp=datetime.utcnow()
-            ))
-        else:
-            await ch.send(embed=discord.Embed(
-                title=f"☀️ O dia amanhece — Noite {jogo.rodada}",
-                description=(
-                    "A cidade acorda e **ninguém foi eliminado esta noite!!** 🦇\n\n"
-                    "Agora discutam e votem em quem vocês acham que é o assassino!!\n"
-                    "**Vocês têm 90 segundos pra votar!!** 🗳️"
-                ),
-                color=0xf39c12,
-                timestamp=datetime.utcnow()
-            ))
-
-        # Checa fim após eliminação da noite
-        resultado = jogo.verificar_fim()
-        if resultado:
-            await _encerrar_cidade_dorme(jogo, resultado)
-            return
-
-        # Votação do dia
-        membros_vivos = [jogo.guild.get_member(uid) for uid in jogo.vivos if jogo.guild.get_member(uid)]
-        membros_vivos = [m for m in membros_vivos if m]
-        if membros_vivos:
-            view_voto = CidadeVotoDiaView(jogo, membros_vivos)
-            msg_voto = await ch.send(
-                "🗳️ **Votem em quem querem eliminar:** *(Clique no botão com o nome da pessoa)*",
-                view=view_voto
-            )
-            await asyncio.sleep(90)
-            view_voto.stop()
-            for item in view_voto.children:
-                item.disabled = True
-            try:
-                await msg_voto.edit(view=view_voto)
-            except Exception:
-                pass
-
-            # Conta votos
-            if view_voto.votos:
-                from collections import Counter
-                contagem = Counter(view_voto.votos.values())
-                eliminado_uid = contagem.most_common(1)[0][0]
-                jogo.vivos.discard(eliminado_uid)
-                jogo.mortos.add(eliminado_uid)
-                m_elim = jogo.guild.get_member(eliminado_uid)
-                if m_elim and m_elim.voice:
-                    try:
-                        await m_elim.edit(mute=True)
-                    except Exception:
-                        pass
-                nome_elim = m_elim.display_name if m_elim else "???"
-                role_elim = CIDADE_ROLES.get(jogo.jogadores.get(eliminado_uid, "cidadao"), "???")
-                await ch.send(embed=discord.Embed(
-                    title="🗳️ Votação encerrada!!",
-                    description=(
-                        f"A cidade votou e **{nome_elim}** foi eliminado(a)!! 🦇\n\n"
-                        f"**Papel revelado:** {role_elim}"
-                    ),
-                    color=0xe74c3c,
-                    timestamp=datetime.utcnow()
-                ))
-            else:
-                await ch.send("⏰ Ninguém votou! A cidade não eliminou ninguém hoje... 🦇")
-
-        # Checa fim após votação do dia
-        resultado = jogo.verificar_fim()
-        if resultado:
-            await _encerrar_cidade_dorme(jogo, resultado)
-            return
-
-        await ch.send(embed=discord.Embed(
-            title="🌙 A noite está chegando novamente...",
-            description="A próxima noite começa em **10 segundos**!! Preparem-se!! 😴🦇",
-            color=0x1a1a2e,
-            timestamp=datetime.utcnow()
-        ))
-        await asyncio.sleep(10)
-
-    # Se saiu do loop sem encerrar formalmente
-    await jogo.mutar_todos(False)
-
-
-async def _encerrar_cidade_dorme(jogo: CidadeDormeJogo, vencedor: str):
-    """Anuncia o vencedor e encerra o jogo."""
-    ch = jogo.text_ch
-    _cidade_jogos.pop(jogo.guild.id, None)
-    await jogo.mutar_todos(False)
-
-    if vencedor == "cidadaos":
-        titulo = "🏆 OS CIDADÃOS VENCERAM!!"
-        desc   = "Os cidadãos conseguiram eliminar todos os assassinos!! Parabéns!! 🦇🎉"
-        cor    = 0x00ff99
-    else:
-        titulo = "🔪 OS ASSASSINOS VENCERAM!!"
-        desc   = "Os assassinos dominaram a cidade... melhor sorte na próxima!! 🦇💀"
-        cor    = 0xff0000
-
-    # Revela todos os papéis
-    lista_final = "\n".join(
-        f"• **{jogo.guild.get_member(uid).display_name if jogo.guild.get_member(uid) else uid}** — {CIDADE_ROLES.get(r, r)} {'💀' if uid in jogo.mortos else '✅'}"
-        for uid, r in jogo.jogadores.items()
-    )
-
-    await ch.send(embed=discord.Embed(
-        title=titulo,
-        description=f"{desc}\n\n**Papéis revelados:**\n{lista_final}",
-        color=cor,
-        timestamp=datetime.utcnow()
-    ))
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🦇  COG — VOICEMASTER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class VoiceMasterCog(commands.Cog, name="VampyVoiceMaster"):
-    """VAMPY VOICEMASTER — Calls Fofas v1.0 🦇"""
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.vm_channels: dict[int, dict] = {}   # {ch_id: {owner, locked, hidden, permanent, banned, lobby_id}}
-        self.vm_lobbies:  dict[int, int]  = {}   # {guild_id: lobby_ch_id}
-        self._painel_view = VMPainelView(self)
-        bot.add_view(self._painel_view)
-
-    # ── Utilitário ────────────────────────────────
-
-    async def _log(self, guild: discord.Guild) -> discord.TextChannel | None:
-        return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
-
-    def _nome(self, member: discord.Member) -> str:
-        return VM_DEFAULT_NAME.format(user=member.display_name)
-
-    # ── 🟢 Boot ───────────────────────────────────
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        await asyncio.sleep(6)  # ligeiramente após o Security
-        for guild in self.bot.guilds:
-            # ── Verificar se já existe o lobby pelo nome na categoria ──
-            categoria = guild.get_channel(VM_CATEGORY_ID)
-            existing  = discord.utils.get(guild.voice_channels, name=VM_LOBBY_NAME)
-
-            if existing:
-                # Já existe — só registrar
-                self.vm_lobbies[guild.id] = existing.id
-            else:
-                # Não existe — criar automaticamente na categoria certa
-                try:
-                    lobby = await guild.create_voice_channel(
-                        name=VM_LOBBY_NAME,
-                        category=categoria,
-                        reason="Vampy VoiceMaster — criação automática no boot"
-                    )
-                    self.vm_lobbies[guild.id] = lobby.id
-                except discord.Forbidden:
-                    pass
-
-            log_ch = await self._log(guild)
-            if not log_ch:
-                continue
-            lobby_id = self.vm_lobbies.get(guild.id)
-            lobby    = guild.get_channel(lobby_id) if lobby_id else None
-            embed = discord.Embed(
-                title="🎙️ Vampy VoiceMaster Online!!",
-                description=(
-                    "```\n"
-                    "╔══════════════════════════════════════╗\n"
-                    "║   VAMPY VOICEMASTER  🦇          ║\n"
-                    "║     — Calls Fofas v1.0 —            ║\n"
-                    "║       ✅  ONLINE  ✅                 ║\n"
-                    "╚══════════════════════════════════════╝\n"
-                    "```"
-                ),
-                color=_VM_COR_OK,
-                timestamp=datetime.utcnow()
-            )
-            embed.add_field(
-                name="🎙️ Status",
-                value=(
-                    f"**Lobby:** {lobby.mention if lobby else '❌ Sem permissão pra criar!!'}\n"
-                    f"**Categoria:** {categoria.name if categoria else '❌ ID não encontrado'}\n"
-                    f"**Servidor:** `{guild.name}` | **Membros:** `{guild.member_count}`"
-                ),
-                inline=False
-            )
-            embed.add_field(
-                name="📋 Comandos",
-                value="`v!vm painel` • `!vm reset` • `!vm info`",
-                inline=False
-            )
-            embed.set_footer(text="🦇 Vampy VoiceMaster • Calls com muito amor!!")
-            await log_ch.send(embed=embed)
-
-    # ── 🎙️ Entrou/saiu de voz ─────────────────────
-
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        guild = member.guild
-
-        # Entrou em um canal
-        if after.channel:
-            lobby_id = self.vm_lobbies.get(guild.id)
-            if lobby_id and after.channel.id == lobby_id:
-                await self._criar_call(member, after.channel)
-
-        # Saiu de um canal gerenciado
-        if before.channel and before.channel.id in self.vm_channels:
-            ch   = before.channel
-            info = self.vm_channels[ch.id]
-            await asyncio.sleep(VM_EMPTY_DELAY)
-            ch = guild.get_channel(ch.id)
-            if ch and len(ch.members) == 0 and not info.get("permanent"):
-                await self._deletar_call(ch)
-
-    async def _criar_call(self, member: discord.Member, lobby: discord.VoiceChannel):
-        guild = member.guild
-        try:
-            categoria = guild.get_channel(VM_CATEGORY_ID) or lobby.category
-            novo = await guild.create_voice_channel(
-                name=self._nome(member),
-                category=categoria,
-                user_limit=VM_DEFAULT_LIMIT,
-                reason=f"Vampy VoiceMaster: call de {member}"
-            )
-            await novo.set_permissions(member, connect=True, manage_channels=True, move_members=True)
-            self.vm_channels[novo.id] = {
-                "owner": member.id, "locked": False, "hidden": False,
-                "permanent": False, "banned": [], "lobby_id": lobby.id,
-                "created_at": datetime.utcnow()
-            }
-            try:
-                await member.move_to(novo, reason="Vampy VoiceMaster")
-            except discord.HTTPException:
-                pass
-
-            # ── Enviar painel de controle no chat de texto da call ──
-            try:
-                embed_call = discord.Embed(
-                    title="🎙️ Painel de Controle — Calls da Vampy",
-                    description=(
-                        f"Oi, {member.mention}!! Sua call foi criada!! 🥳🦇\n"
-                        "Use os botões abaixo pra gerenciar ela!! 💕\n\n"
-                        "```\n"
-                        "╔══════════════════════════════════════╗\n"
-                        "║   VAMPY VOICEMASTER  🦇          ║\n"
-                        "║     — Calls Fofas v1.0 —            ║\n"
-                        "╚══════════════════════════════════════╝\n"
-                        "```"
-                    ),
-                    color=_VM_COR_FOFA,
-                    timestamp=datetime.utcnow()
-                )
-                campos_call = [
-                    ("✏️ Renomear",    "Muda o nome da call"),
-                    ("👥 Limite",      "Define qtd máxima de pessoas"),
-                    ("🔒 Trancar",     "Bloqueia novas entradas"),
-                    ("👻 Ocultar",     "Esconde a call de todos"),
-                    ("👋 Kickar",      "Remove alguém da call"),
-                    ("🚫 Banir",       "Bloqueia alguém de entrar"),
-                    ("✅ Permitir",    "Desbanir / liberar alguém"),
-                    ("👑 Transferir",  "Passa o dono pra outra pessoa"),
-                    ("💌 Convidar",    "Envia convite na DM de alguém"),
-                    ("📝 Status",      "Define o status/tema da call"),
-                    ("📊 Info",        "Mostra detalhes da call"),
-                    ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
-                    ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
-                    ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
-                ]
-                for titulo, desc in campos_call:
-                    embed_call.add_field(name=titulo, value=desc, inline=True)
-                embed_call.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
-                # Envia no chat de texto interno do canal de voz
-                await novo.send(embed=embed_call, view=VMPainelView(self))
-            except (discord.Forbidden, discord.HTTPException):
-                pass  # sem permissão ou canal sem chat — ignora
-
-            # Log
-            log_ch = await self._log(guild)
-            if log_ch:
-                embed = discord.Embed(
-                    title="🎙️ Nova Call Criada!!",
-                    description=f"{member.mention} criou a call **{novo.name}**!! 🥳🦇",
-                    color=_VM_COR_OK, timestamp=datetime.utcnow()
-                )
-                embed.set_thumbnail(url=member.display_avatar.url)
-                embed.set_footer(text="🦇 Vampy VoiceMaster")
-                await log_ch.send(embed=embed)
-        except discord.Forbidden:
-            pass
-
-    async def _deletar_call(self, channel: discord.VoiceChannel):
-        self.vm_channels.pop(channel.id, None)
-        try:
-            await channel.delete(reason="Vampy VoiceMaster: call vazia")
-        except (discord.NotFound, discord.Forbidden):
-            pass
-
-    # ── 🎛️ Painel ─────────────────────────────────
-
-    async def _enviar_painel(self, channel: discord.TextChannel):
-        embed = discord.Embed(
-            title="🎙️ Painel de Controle — Calls da Vampy",
-            description=(
-                "Gerencie sua call com os botinhos aqui embaixo!! 🦇\n"
-                "Você precisa ser **dono(a)** de uma call e estar **dentro dela** pra usar!! 💕\n\n"
-                "```\n"
-                "╔══════════════════════════════════════╗\n"
-                "║   VAMPY VOICEMASTER  🦇          ║\n"
-                "║     — Calls Fofas v1.0 —            ║\n"
-                "╚══════════════════════════════════════╝\n"
-                "```"
-            ),
-            color=_VM_COR_FOFA, timestamp=datetime.utcnow()
-        )
-        campos = [
-            ("✏️ Renomear",    "Muda o nome da call"),
-            ("👥 Limite",      "Define qtd máxima de pessoas"),
-            ("🔒 Trancar",     "Bloqueia novas entradas"),
-            ("👻 Ocultar",     "Esconde a call de todos"),
-            ("👋 Kickar",      "Remove alguém da call"),
-            ("🚫 Banir",       "Bloqueia alguém de entrar"),
-            ("✅ Permitir",    "Desbanir / liberar alguém"),
-            ("👑 Transferir",  "Passa o dono pra outra pessoa"),
-            ("💌 Convidar",    "Envia convite na DM de alguém"),
-            ("📊 Info",        "Mostra detalhes da call"),
-            ("🎙️ Bitrate",     "Muda a qualidade do áudio"),
-            ("📝 Status",      "Define o status/tema da call"),
-            ("🏳️ Reivindicar", "Assume a call se o dono saiu"),
-            ("🎮 Jogos de Call", "Inicia jogos interativos na call"),
-        ]
-        for titulo, desc in campos:
-            embed.add_field(name=titulo, value=desc, inline=True)
-        embed.set_footer(text="🦇 Vampy VoiceMaster • Feito com muito amor!!")
-        view = VMPainelView(self)
-        return await channel.send(embed=embed, view=view)
-
-    # ── 🔧 Comandos !vm ───────────────────────────
-
-    @commands.group(name="vm", aliases=["voicemaster", "call"], invoke_without_command=True)
-    async def vm_group(self, ctx: commands.Context):
-        await ctx.send(embed=_vm_embed_info(
-            "🎙️ Vampy VoiceMaster",
-            "`v!vm setup` • `!vm painel` • `!vm reset` • `!vm info`\n\nOu use os botões no painel de controle!! 🦇"
-        ), delete_after=15)
-
-    @vm_group.command(name="setup")
-    @commands.has_permissions(administrator=True)
-    async def vm_setup(self, ctx: commands.Context):
-        guild = ctx.guild
-        if guild.id in self.vm_lobbies:
-            existing = guild.get_channel(self.vm_lobbies[guild.id])
-            if existing:
-                await ctx.send(embed=_vm_embed_erro(_vm_msg("setup_existe")), delete_after=10)
-                return
-        try:
-            categoria = guild.get_channel(VM_CATEGORY_ID)
-            lobby = await guild.create_voice_channel(name=VM_LOBBY_NAME, category=categoria, reason="Vampy VoiceMaster Setup")
-            self.vm_lobbies[guild.id] = lobby.id
-            await self._enviar_painel(ctx.channel)
-            embed = discord.Embed(
-                title="🎉 VoiceMaster Configurado!!",
-                description=f"Tudo prontinha!! 🥳🦇\n\n**Canal Lobby:** {lobby.mention}\n\nPeça pras pessoas entrarem em {lobby.mention} pra criar uma call!!",
-                color=_VM_COR_OK, timestamp=datetime.utcnow()
-            )
-            embed.set_footer(text="🦇 Vampy VoiceMaster")
-            await ctx.send(embed=embed, delete_after=20)
-            log_ch = await self._log(guild)
-            if log_ch:
-                await log_ch.send(embed=discord.Embed(
-                    title="✅ VoiceMaster Ativado!!",
-                    description=f"Configurado por **{ctx.author.mention}**!! Lobby: {lobby.mention} 🎙️🦇",
-                    color=_VM_COR_OK, timestamp=datetime.utcnow()
-                ))
-        except discord.Forbidden:
-            await ctx.send(embed=_vm_embed_erro("Sem permissão pra criar canais!! 😢🦇"), delete_after=10)
-
-    @vm_group.command(name="painel")
-    @commands.has_permissions(manage_channels=True)
-    async def vm_painel(self, ctx: commands.Context):
-        await self._enviar_painel(ctx.channel)
-        try:
-            await ctx.message.delete()
-        except Exception:
-            pass
-
-    @vm_group.command(name="reset")
-    @commands.has_permissions(administrator=True)
-    async def vm_reset(self, ctx: commands.Context):
-        guild   = ctx.guild
-        deletadas = 0
-        lobby_id  = self.vm_lobbies.pop(guild.id, None)
-        for ch_id in list(self.vm_channels.keys()):
-            info = self.vm_channels.get(ch_id, {})
-            if info.get("lobby_id") == lobby_id:
-                ch = guild.get_channel(ch_id)
-                if ch:
-                    try:
-                        await ch.delete(reason="Vampy VoiceMaster Reset")
-                        deletadas += 1
-                    except Exception:
-                        pass
-                self.vm_channels.pop(ch_id, None)
-        if lobby_id:
-            old = guild.get_channel(lobby_id)
-            if old:
-                try:
-                    await old.delete(reason="Vampy VoiceMaster Reset")
-                except Exception:
-                    pass
-        await ctx.send(embed=_vm_embed_ok("🧹 Resetado!!", f"Limpei **{deletadas}** call(s)!! Use `!vm setup` pra configurar de novo!! 🦇"), delete_after=15)
-
-    @vm_group.command(name="info")
-    @commands.has_permissions(manage_channels=True)
-    async def vm_info(self, ctx: commands.Context):
-        guild    = ctx.guild
-        lobby_id = self.vm_lobbies.get(guild.id)
-        lobby    = guild.get_channel(lobby_id) if lobby_id else None
-        ativas   = sum(1 for ch_id in self.vm_channels if guild.get_channel(ch_id))
-        perms    = sum(1 for ch_id, i in self.vm_channels.items() if i.get("permanent") and guild.get_channel(ch_id))
-        tran     = sum(1 for ch_id, i in self.vm_channels.items() if i.get("locked")    and guild.get_channel(ch_id))
-        embed = discord.Embed(title="📊 Vampy VoiceMaster — Info", color=_VM_COR_FOFA, timestamp=datetime.utcnow())
-        embed.add_field(name="🎙️ Canal Lobby",  value=lobby.mention if lobby else "❌ Não configurado", inline=False)
-        embed.add_field(name="📞 Calls Ativas", value=f"`{ativas}`",  inline=True)
-        embed.add_field(name="💎 Permanentes",  value=f"`{perms}`",   inline=True)
-        embed.add_field(name="🔒 Trancadas",    value=f"`{tran}`",    inline=True)
-        embed.set_footer(text="🦇 Vampy VoiceMaster")
-        await ctx.send(embed=embed)
-
-    @vm_group.error
-    async def vm_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send(embed=_vm_embed_erro("Você não tem permissão pra usar esse comando!! 🥺🦇"), delete_after=8)
-
-
-# ══════════════════════════════════════════════════════════════════
-# FIM DO VOICEMASTER
-# ══════════════════════════════════════════════════════════════════
-
-# ══════════════════════════════════════════════════════════════════
-# 🧹 COMANDO — LIMPAR CANAL COMPLETO
-# ══════════════════════════════════════════════════════════════════
-
-@bot.command(name="ativarlimpezacanal", aliases=["limparchat", "clearchat", "purgecanal"])
-@commands.has_permissions(manage_messages=True)
-async def ativar_limpeza_canal(ctx: commands.Context):
-    """Apaga TODAS as mensagens do canal onde o comando foi executado."""
-
-    canal = ctx.channel
-
-    # ── Confirmação antes de limpar ──────────────────────────────
-    embed_confirm = discord.Embed(
-        title="🧹 Limpar Canal — Confirmação",
-        description=(
-            f"Você tem certeza que quer apagar **TODAS** as mensagens de {canal.mention}??\n\n"
-            "⚠️ **Essa ação não pode ser desfeita!!** 🦇\n\n"
-            "Responda com `sim` nos próximos **15 segundos** pra confirmar!!"
-        ),
-        color=0xffaa00,
-        timestamp=datetime.utcnow()
-    )
-    embed_confirm.set_footer(text="🦇 Vampy Security • Limpeza de Canal")
-    await ctx.send(embed=embed_confirm)
-
-    def check(m):
-        return m.author == ctx.author and m.channel == canal and m.content.lower() in ("sim", "não", "nao", "cancelar")
-
-    try:
-        resposta = await bot.wait_for("message", timeout=15.0, check=check)
-    except asyncio.TimeoutError:
-        await ctx.send(embed=discord.Embed(
-            title="⏰ Tempo esgotado!!",
-            description="Limpeza cancelada por falta de confirmação!! 🦇",
-            color=0x888888,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-        return
-
-    if resposta.content.lower() not in ("sim",):
-        await ctx.send(embed=discord.Embed(
-            title="❌ Limpeza Cancelada!!",
-            description="Operação cancelada!! Nenhuma mensagem foi apagada!! 🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-        return
-
-    # ── Executar a limpeza ────────────────────────────────────────
-    await ctx.send(embed=discord.Embed(
-        title="⏳ Limpando canal...",
-        description="Aguarda um segundo, tô apagando tudo!! 🧹🦇",
-        color=0xffaa00,
-        timestamp=datetime.utcnow()
-    ))
-
-    try:
-        deletadas = await canal.purge(limit=None, bulk=True)
-        total = len(deletadas)
-
-        embed_ok = discord.Embed(
-            title="✅ Canal Limpo!!",
-            description=(
-                f"🧹 **{total} mensagens** foram apagadas de {canal.mention}!!\n\n"
-                f"👤 Executado por: {ctx.author.mention}\n"
-                f"📅 Horário (UTC): `{datetime.utcnow().strftime('%d/%m/%Y às %H:%M:%S')}`"
-            ),
-            color=0x00ff99,
-            timestamp=datetime.utcnow()
-        )
-        embed_ok.set_footer(text="🦇 Vampy Security • Limpeza Concluída")
-        await canal.send(embed=embed_ok, delete_after=10)
-
-    except discord.Forbidden:
-        await ctx.send(embed=discord.Embed(
-            title="❌ Sem Permissão!!",
-            description="Não tenho permissão pra apagar mensagens nesse canal!! 😢🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=10)
-
-    except discord.HTTPException as e:
-        await ctx.send(embed=discord.Embed(
-            title="⚠️ Erro ao Limpar!!",
-            description=f"Ocorreu um erro durante a limpeza!!\n`{e}`\n\nTenta de novo!! 🦇",
-            color=0xff8800,
-            timestamp=datetime.utcnow()
-        ), delete_after=10)
-
-
-@ativar_limpeza_canal.error
-async def limpeza_canal_error(ctx: commands.Context, error: Exception):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(embed=discord.Embed(
-            title="🚫 Sem Permissão!!",
-            description="Você precisa da permissão **Gerenciar Mensagens** pra usar esse comando!! 🥺🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-
-
-# ══════════════════════════════════════════════════════════════════
-# FIM DA LIMPEZA DE CANAL
-# ══════════════════════════════════════════════════════════════════
-
-
-# ══════════════════════════════════════════════════════════════════
-# 🔄 COMANDO — CLONAR / RECRIAR CANAL (NUKE + CLONE)
-# ══════════════════════════════════════════════════════════════════
-
-@bot.command(name="clonarcanal", aliases=["nukechannel", "recriarcanal", "resetcanal"])
-@commands.has_permissions(manage_channels=True)
-async def clonar_canal(ctx: commands.Context):
-    """
-    Apaga o canal atual e recria uma cópia EXATA no mesmo lugar.
-    Preserva: nome, categoria, posição, tópico, slowmode, NSFW e permissões.
-    """
-
-    canal = ctx.channel
-
-    # Garante que é um canal de texto
-    if not isinstance(canal, discord.TextChannel):
-        await ctx.send(embed=discord.Embed(
-            title="❌ Canal Incompatível!!",
-            description="Esse comando só funciona em canais de texto!! 🥺🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-        return
-
-    # ── Confirmação ──────────────────────────────────────────────
-    embed_confirm = discord.Embed(
-        title="🔄 Recriar Canal — Confirmação",
-        description=(
-            f"Você tem certeza que quer **apagar e recriar** {canal.mention}??\n\n"
-            "🧹 Todas as mensagens serão **permanentemente apagadas**!!\n"
-            "✅ O canal será recriado **exatamente igual** no mesmo lugar!!\n\n"
-            "⚠️ **Essa ação não pode ser desfeita!!** 🦇\n\n"
-            "Responda com `sim` nos próximos **20 segundos** pra confirmar!!"
-        ),
-        color=0xffaa00,
-        timestamp=datetime.utcnow()
-    )
-    embed_confirm.set_footer(text="🦇 Vampy Security • Recriar Canal")
-    msg_confirm = await ctx.send(embed=embed_confirm)
-
-    def check(m):
-        return (
-            m.author == ctx.author
-            and m.channel == canal
-            and m.content.lower() in ("sim", "não", "nao", "cancelar")
-        )
-
-    try:
-        resposta = await bot.wait_for("message", timeout=20.0, check=check)
-    except asyncio.TimeoutError:
-        await msg_confirm.delete()
-        await ctx.send(embed=discord.Embed(
-            title="⏰ Tempo esgotado!!",
-            description="Operação cancelada por falta de confirmação!! 🦇",
-            color=0x888888,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-        return
-
-    if resposta.content.lower() not in ("sim",):
-        await msg_confirm.delete()
-        await ctx.send(embed=discord.Embed(
-            title="❌ Operação Cancelada!!",
-            description="O canal **não** foi modificado!! 🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-        return
-
-    # ── Salvar todas as configurações do canal ───────────────────
-    nome         = canal.name
-    topico       = canal.topic
-    slowmode     = canal.slowmode_delay
-    nsfw         = canal.is_nsfw()
-    categoria    = canal.category
-    posicao      = canal.position
-    overwrites   = canal.overwrites   # todas as permissões de cargos/membros
-    guild        = canal.guild
-    executador   = ctx.author
-
-    # Avisa que vai começar
-    await ctx.send(embed=discord.Embed(
-        title="⏳ Recriando canal...",
-        description="Salvei as configurações, vou apagar e recriar agora!! 🔄🦇",
-        color=0xffaa00,
-        timestamp=datetime.utcnow()
-    ))
-
-    await asyncio.sleep(1.5)  # pequena pausa pra mensagem ser vista
-
-    try:
-        # ── 1. Apagar o canal original ───────────────────────────
-        await canal.delete(reason=f"Vampy ClonarCanal — executado por {executador}")
-
-        # ── 2. Recriar o canal com as configs salvas ─────────────
-        novo_canal = await guild.create_text_channel(
-            name         = nome,
-            topic        = topico,
-            slowmode_delay = slowmode,
-            nsfw         = nsfw,
-            category     = categoria,
-            overwrites   = overwrites,
-            reason       = f"Vampy ClonarCanal — recriado por {executador}"
-        )
-
-        # ── 3. Ajustar a posição exata ───────────────────────────
-        await novo_canal.edit(position=posicao)
-
-        # ── 4. Enviar confirmação no novo canal ──────────────────
-        embed_ok = discord.Embed(
-            title="✅ Canal Recriado com Sucesso!!",
-            description=(
-                f"🔄 O canal foi **apagado e recriado** com a configuração original!!\n\n"
-                f"📛 **Nome:** `{nome}`\n"
-                f"📁 **Categoria:** `{categoria.name if categoria else 'Sem categoria'}`\n"
-                f"📍 **Posição:** `{posicao}`\n"
-                f"🐢 **Slowmode:** `{slowmode}s`\n"
-                f"🔞 **NSFW:** `{'Sim' if nsfw else 'Não'}`\n"
-                f"🔒 **Permissões:** `{len(overwrites)} cargo(s)/membro(s) copiado(s)`\n\n"
-                f"👤 Executado por: {executador.mention}\n"
-                f"📅 Horário (UTC): `{datetime.utcnow().strftime('%d/%m/%Y às %H:%M:%S')}`"
-            ),
-            color=0x00ff99,
-            timestamp=datetime.utcnow()
-        )
-        embed_ok.set_footer(text="🦇 Vampy Security • Canal Recriado")
-        await novo_canal.send(embed=embed_ok)
-
-    except discord.Forbidden:
-        # Se falhar, tenta mandar no log
-        log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
-        target = log_ch or guild.system_channel
-        if target:
-            await target.send(embed=discord.Embed(
-                title="❌ Erro ao Recriar Canal!!",
-                description=f"Não tenho permissão pra apagar/criar canais!! 😢🦇\nCanal original: `{nome}`",
-                color=0xff4444,
-                timestamp=datetime.utcnow()
-            ))
-
-    except discord.HTTPException as e:
-        log_ch = discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
-        target = log_ch or guild.system_channel
-        if target:
-            await target.send(embed=discord.Embed(
-                title="⚠️ Erro HTTP ao Recriar Canal!!",
-                description=f"Ocorreu um erro inesperado!!\n`{e}`\n\nTenta de novo!! 🦇",
-                color=0xff8800,
-                timestamp=datetime.utcnow()
-            ))
-
-
-@clonar_canal.error
-async def clonar_canal_error(ctx: commands.Context, error: Exception):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(embed=discord.Embed(
-            title="🚫 Sem Permissão!!",
-            description="Você precisa da permissão **Gerenciar Canais** pra usar esse comando!! 🥺🦇",
-            color=0xff4444,
-            timestamp=datetime.utcnow()
-        ), delete_after=8)
-
-
-# ══════════════════════════════════════════════════════════════════
-# FIM DO CLONAR CANAL
-# ══════════════════════════════════════════════════════════════════
-
-
-
-
-# ══════════════════════════════════════════════════════════════════
-#  🦇  COMANDOS FOFOS — Amber Edition
-# ══════════════════════════════════════════════════════════════════
-
-AMBER_ID = 918222382840291369
-CARGOS_GERAL_NOMES = ["Reviver chat", "Bora call", "Cinema", "Gravação"]
-
-def _achar_cargo(guild: discord.Guild, nome: str):
-    """Busca cargo por nome exato ou parcial (ignora emojis no final)."""
-    for role in guild.roles:
-        if role.name == nome or role.name.startswith(nome):
-            return role
-    return None
-
-class DarCargoGeralView(discord.ui.View):
-    def __init__(self, guild: discord.Guild):
-        super().__init__(timeout=60)
-        self.guild = guild
-        for nome in CARGOS_GERAL_NOMES:
-            self.add_item(DarCargoBtn(nome, False))
-        self.add_item(DarCargoBtn("✨ Todos", True))
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-
-class DarCargoBtn(discord.ui.Button):
-    def __init__(self, label: str, todos: bool):
-        cor = discord.ButtonStyle.success if todos else discord.ButtonStyle.primary
-        super().__init__(label=label, style=cor)
-        self.todos = todos
-        self.nome_cargo = label
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        membros = [m for m in guild.members if not m.bot]
-
-        if self.todos:
-            nomes = CARGOS_GERAL_NOMES
-        else:
-            nomes = [self.nome_cargo]
-
-        cargos = [_achar_cargo(guild, n) for n in nomes]
-        cargos = [c for c in cargos if c]
-
-        if not cargos:
-            await interaction.followup.send("❌ Nenhum cargo encontrado!", ephemeral=True)
-            return
-
-        count = 0
-        erros = 0
-        for membro in membros:
-            faltam = [c for c in cargos if c not in membro.roles]
-            if faltam:
-                try:
-                    await membro.add_roles(*faltam, reason="v!darcargogeral pela Amber/dono")
-                    count += 1
-                    await asyncio.sleep(0.5)
-                except Exception:
-                    erros += 1
-
-        nomes_str = " + ".join([c.name for c in cargos])
-        eh_amber = interaction.user.id == AMBER_ID
-        if eh_amber:
-            msg = f"feito Amberzinha!! 🦇💚 dei **{nomes_str}** pra **{count}** membros!! tá tudo certinho ✨🫶"
-        else:
-            msg = f"✅ Cargo(s) **{nomes_str}** dado(s) pra **{count}** membros!!"
-        await interaction.followup.send(msg, ephemeral=True)
-        for item in self.view.children:
-            item.disabled = True
-        await interaction.message.edit(view=self.view)
-
-@bot.command(name="fecharticket", aliases=["fechart", "closet"])
-async def fecharticket(ctx: commands.Context):
-    """Fecha (deleta) o canal de ticket atual. Uso: v!fecharticket"""
-    canal = ctx.channel
-    if "ticket" not in canal.name.lower():
-        return await ctx.send("❌ Esse canal não parece ser um ticket! 🦇", delete_after=5)
-    await ctx.send("🔒 Fechando ticket em 3 segundos... 🦇💚")
-    await asyncio.sleep(3)
-    await canal.delete(reason=f"Ticket fechado por {ctx.author}")
-
-
-@bot.command(name="darcargogeral")
-async def darcargogeral(ctx: commands.Context):
-    """Dá um cargo de notificação pra todos os membros do servidor."""
-    eh_amber = ctx.author.id == AMBER_ID
-    if eh_amber:
-        embed = discord.Embed(
-            title="🦇💚 oi Amberzinha!!",
-            description=(
-                "aaaa que bom que você apareceu!! 🥺✨\n\n"
-                "qual carguinho você quer dar pra galera toda??\n"
-                "é só escolher aqui embaixo que eu já mando pra todo mundo!! 🦇💖"
-            ),
-            color=0x9b59b6
-        )
-    else:
-        embed = discord.Embed(
-            title="🦇 Dar cargo geral",
-            description="Escolha qual cargo dar pra todos os membros do servidor:",
-            color=0x7c3aed
-        )
-    embed.set_footer(text="🦇 Vampy • expira em 60s")
-    await ctx.send(embed=embed, view=DarCargoGeralView(ctx.guild))
-
-
-async def _main():
-    async with bot:
-        await bot.add_cog(VampyCog(bot))
-        await bot.add_cog(VoiceMasterCog(bot))
-        await bot.add_cog(BanAppealCog(bot))
-        bot.add_view(BanirMembroView())          # intercepta botões existentes no Discord
-        bot.loop.create_task(_setup_linha_indireta())
-        await bot.start(TOKEN)
-
-_asyncio.run(_main())
+# ============== START =================
+if __name__ == "__main__":
+    bot.run(TOKEN)
